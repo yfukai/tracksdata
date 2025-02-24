@@ -2,7 +2,6 @@ import abc
 
 from tracksdata._graph import BaseGraphBackend
 
-
 DEFAULT_EDGE_WEIGHT_KEY = "weight"
 
 
@@ -11,6 +10,7 @@ class BaseEdgesInitializer(abc.ABC):
     Base class indicating methods required to insert edges into a graph.
     It will interact with a `BaseGraphBackend` to do so.
     """
+
     def __init__(self, graph: BaseGraphBackend):
         self._graph = graph
 

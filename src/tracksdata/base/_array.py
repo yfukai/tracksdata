@@ -3,7 +3,6 @@ import abc
 import numpy as np
 from numpy.typing import ArrayLike
 
-
 ArrayIndex = ArrayLike | int | slice | tuple[ArrayLike | int | slice, ...]
 
 
@@ -11,10 +10,11 @@ class BaseReadOnlyArray(abc.ABC):
     """
     Base class for read-only array-like objects.
     """
+
     def __len__(self) -> int:
         """Returns the length of the first dimension of the array."""
         return self.shape[0]
-    
+
     @property
     @abc.abstractmethod
     def shape(self) -> tuple[int, ...]:
@@ -26,10 +26,7 @@ class BaseReadOnlyArray(abc.ABC):
         """Returns the dtype of the array."""
 
     @abc.abstractmethod
-    def __getitem__(
-        self,
-        index: ArrayIndex
-    ) -> ArrayLike:
+    def __getitem__(self, index: ArrayIndex) -> ArrayLike:
         """Returns a slice of the array."""
 
 
@@ -37,6 +34,7 @@ class BaseWritableArray(BaseReadOnlyArray):
     """
     Base class for writable array-like objects.
     """
+
     @abc.abstractmethod
     def __setitem__(
         self,

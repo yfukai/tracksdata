@@ -2,7 +2,6 @@ import abc
 
 from tracksdata._graph import BaseGraphBackend
 
-
 DEFAULT_SOLUTION_KEY = "solution"
 
 
@@ -12,9 +11,10 @@ class BaseSolver(abc.ABC):
     It should return a subset of nodes and edges that are part of the solution.
     This class will interact with a `BaseGraphBackend` to do so.
     """
+
     def __init__(self, graph: BaseGraphBackend):
         self._graph = graph
-    
+
     @abc.abstractmethod
     def solve(self, solution_key: str = DEFAULT_SOLUTION_KEY) -> None:
         """
