@@ -1,0 +1,64 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "tracksdata"
+dynamic = ["version"]
+description = ''
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+keywords = []
+authors = [
+  { name = "Jordao Bragantini", email = "jordao.bragantini@czbiohub.org" },
+  { name = "Teun Huijben", email = "teun.huijben@czbiohub.org" },
+  { name = "Caroline Malin-Mayor", email = "malinmayorc@janelia.hhmi.org" },
+  { name = "Anniek Stokkermans", email = "a.stokkermans@hubrecht.eu" },
+]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Programming Language :: Python",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: Implementation :: CPython",
+  "Programming Language :: Python :: Implementation :: PyPy",
+]
+dependencies = [
+  "numpy>2",
+]
+
+[project.urls]
+Documentation = "https://github.com/jookuma/tracksdata#readme"
+Issues = "https://github.com/jookuma/tracksdata/issues"
+Source = "https://github.com/jookuma/tracksdata"
+
+[tool.hatch.version]
+path = "src/tracksdata/__about__.py"
+
+[tool.hatch.envs.types]
+extra-dependencies = [
+  "mypy>=1.0.0",
+]
+[tool.hatch.envs.types.scripts]
+check = "mypy --install-types --non-interactive {args:src/tracksdata tests}"
+
+[tool.coverage.run]
+source_pkgs = ["tracksdata", "tests"]
+branch = true
+parallel = true
+omit = [
+  "src/tracksdata/__about__.py",
+]
+
+[tool.coverage.paths]
+tracksdata = ["src/tracksdata"]
+tests = ["src/tracksdata/**/_tests"]
+
+[tool.coverage.report]
+exclude_lines = [
+  "no cov",
+  "if __name__ == .__main__.:",
+  "if TYPE_CHECKING:",
+]
