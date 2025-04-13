@@ -1,9 +1,9 @@
 import abc
 
-from tracksdata._graph import BaseGraphBackend
+from tracksdata.graph._base_graph import BaseGraphBackend
 
 
-class BaseNodesInitializer(abc.ABC):
+class BaseNodesOperator(abc.ABC):
     """
     Base class indicating methods required to insert nodes into a graph.
     It will interact with a `BaseGraphBackend` to do so.

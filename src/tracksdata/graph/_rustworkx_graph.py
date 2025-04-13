@@ -35,7 +35,11 @@ class RustWorkXGraphBackend(BaseGraphBackend):
         **kwargs: Any,
     ) -> int:
         # TODO doc
-        node_id = self._graph.add_node(t=t, **kwargs)
+
+        # avoiding copying kwargs on purpose, it could be a problem in the future
+        kwargs["t"] = t
+        node_id = self._graph.add_node(kwargs)
+
         self._time_to_nodes.setdefault(t, []).append(node_id)
    
     def add_edge(
