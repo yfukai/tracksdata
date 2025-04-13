@@ -13,14 +13,12 @@ from tracksdata.utils._processing import maybe_show_progress
 class RegionPropsOperator(BaseNodesOperator):
     def __init__(
         self,
-        graph: BaseGraphBackend,
         cache: bool = True,
         extra_properties: list[str | Callable[[RegionProperties], Any]] | None = None,
         spacing: tuple[float, float] | None = None,
         show_progress: bool = True,
     ):
-        super().__init__(graph)
-        self._graph = graph
+        super().__init__()
         self._cache = cache
         self._extra_properties = extra_properties or []
         self._spacing = spacing
@@ -28,6 +26,7 @@ class RegionPropsOperator(BaseNodesOperator):
 
     def __call__(
         self,
+        graph: BaseGraphBackend,
         labels: ArrayLike, 
         t: int | None = None,
         intensity_image: ArrayLike | None = None,
@@ -38,6 +37,8 @@ class RegionPropsOperator(BaseNodesOperator):
 
         Parameters
         ----------
+        graph : BaseGraphBackend
+            The graph to initialize the nodes in.
         labels : ArrayLike
             The labels of the nodes to be initialized.
         t : int | None
@@ -51,9 +52,9 @@ class RegionPropsOperator(BaseNodesOperator):
                 show_progress=self._show_progress,
             ):
                 if intensity_image is not None:
-                    self(labels[t], t=t, intensity_image=intensity_image[t])
+                    self(graph, labels[t], t=t, intensity_image=intensity_image[t])
                 else:
-                    self(labels[t], t=t)
+                    self(graph, labels[t], t=t)
             return
         
         if labels.ndim == 2:
@@ -86,7 +87,7 @@ class RegionPropsOperator(BaseNodesOperator):
                 else:
                     attributes[prop] = getattr(obj, prop)
 
-            self._graph.add_node(
+            graph.add_node(
                 t=t, 
                 mask=obj.image,
                 bbox=obj.bbox,

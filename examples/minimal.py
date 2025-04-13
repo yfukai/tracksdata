@@ -21,10 +21,10 @@ def main() -> None:
         ],
     )
 
-    graph = RustWorkXGraphBackend()
-    nodes_operator = RegionPropsOperator(graph, show_progress=True)
+    nodes_operator = RegionPropsOperator(show_progress=True)
 
-    nodes_operator(labels=labels)
+    graph = RustWorkXGraphBackend()
+    nodes_operator(graph, labels=labels)
     
 
 if __name__ == "__main__":
