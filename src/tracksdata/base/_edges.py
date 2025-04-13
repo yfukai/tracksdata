@@ -1,4 +1,5 @@
 import abc
+from typing import Sequence
 
 from tracksdata._graph import BaseGraphBackend
 
@@ -10,12 +11,13 @@ class BaseEdgesInitializer(abc.ABC):
     Base class indicating methods required to insert edges into a graph.
     It will interact with a `BaseGraphBackend` to do so.
     """
-
-    def __init__(self, graph: BaseGraphBackend):
-        self._graph = graph
-
     @abc.abstractmethod
-    def init_edges(self, time: int, weight_key: str = DEFAULT_EDGE_WEIGHT_KEY) -> None:
+    def __call__(
+        self,
+        graph: BaseGraphBackend,
+        time: int | None = None,
+        weight_key: Sequence[str] = (DEFAULT_EDGE_WEIGHT_KEY,),
+    ) -> None:
         """
         Initialize the edges from nodes of given `time` to nodes in neighboring times (`time` + `\delta time`)
 

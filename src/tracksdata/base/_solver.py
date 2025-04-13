@@ -12,11 +12,8 @@ class BaseSolver(abc.ABC):
     This class will interact with a `BaseGraphBackend` to do so.
     """
 
-    def __init__(self, graph: BaseGraphBackend):
-        self._graph = graph
-
     @abc.abstractmethod
-    def solve(self, solution_key: str = DEFAULT_SOLUTION_KEY) -> None:
+    def __call__(self, graph: BaseGraphBackend, solution_key: str = DEFAULT_SOLUTION_KEY) -> None:
         """
         Solve the tracking problem and add the result to the graph with key `solution_key`.
 

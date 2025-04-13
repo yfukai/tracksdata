@@ -13,7 +13,7 @@ class BaseNodesInitializer(abc.ABC):
         self._graph = graph
 
     @abc.abstractmethod
-    def init_nodes(self, time: int) -> None:
+    def __call__(self, time: int | None = None) -> None:
         """
         Initialize the nodes for a given time.
         """
