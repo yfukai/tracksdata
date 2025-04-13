@@ -15,7 +15,7 @@ class BaseEdgesInitializer(abc.ABC):
     def __call__(
         self,
         graph: BaseGraphBackend,
-        time: int | None = None,
+        t: int | None = None,
         weight_key: Sequence[str] = (DEFAULT_EDGE_WEIGHT_KEY,),
     ) -> None:
         """
@@ -23,7 +23,7 @@ class BaseEdgesInitializer(abc.ABC):
 
         Parameters
         ----------
-        time: int
+        t: int
             The time of the nodes to initialize the edges from.
         weight_key: str
             The key to add the edge weights to.
