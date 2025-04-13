@@ -175,3 +175,9 @@ cython_debug/
 
 # image files
 *.tif
+
+# CTC files
+man_track.txt
+
+# macOS files
+.DS_Store
