@@ -34,14 +34,25 @@ class RustWorkXGraphBackend(BaseGraphBackend):
         t: int,
         **kwargs: Any,
     ) -> int:
-        # TODO doc
+        """
+        Add a node to the graph at time t.
 
+        Parameters
+        ----------
+        t : int
+            The time at which to add the node.
+        **kwargs : Any
+            The attributes of the node to be added.
+            The keys of the kwargs will be used as the attributes of the node.
+            For example:
+            >>> `graph.add_node(t=0, label='A', intensity=100)`
+        """
         # avoiding copying kwargs on purpose, it could be a problem in the future
         kwargs["t"] = t
         node_id = self._graph.add_node(kwargs)
-
         self._time_to_nodes.setdefault(t, []).append(node_id)
-   
+        return node_id
+
     def add_edge(
         self,
         source_id: int,

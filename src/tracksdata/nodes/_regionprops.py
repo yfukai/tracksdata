@@ -24,7 +24,7 @@ class RegionPropsOperator(BaseNodesOperator):
         self._spacing = spacing
         self._show_progress = show_progress
 
-    def __call__(
+    def add_nodes(
         self,
         graph: BaseGraphBackend,
         labels: ArrayLike, 
