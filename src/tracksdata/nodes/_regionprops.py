@@ -11,6 +11,8 @@ from tracksdata.utils._processing import maybe_show_progress
 
 
 class RegionPropsOperator(BaseNodesOperator):
+    """Operator that adds nodes to a graph using scikit-image's regionprops."""
+
     def __init__(
         self,
         cache: bool = True,
