@@ -24,9 +24,12 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Install uv
-        uses: astral/setup-uv@v0
+        uses: astral/setup-uv@v6
         with:
+          version: latest
           python-version: ${{ matrix.python-version }}
+          install-uv: true
+          activate-environment: true
 
       - name: Install dependencies
         run: |
