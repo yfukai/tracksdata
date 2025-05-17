@@ -1,4 +1,5 @@
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 import numpy as np
 from numpy.typing import ArrayLike
@@ -43,6 +44,9 @@ class RegionPropsOperator(BaseNodesOperator):
         t : int | None
             The time at which to initialize the nodes.
             If None, labels are considered to be a timelapse where axis=0 is time.
+        intensity_image : ArrayLike | None
+            The intensity image to use for the region properties.
+            If None, the intensity image is not used.
         """
         if t is None:
             for t in maybe_show_progress(
@@ -78,7 +82,7 @@ class RegionPropsOperator(BaseNodesOperator):
             show_progress=self._show_progress,
             desc=f"Processing regions of time {t}",
         ):
-            attributes = {c: v for c, v in zip(axis_names, obj.centroid)}
+            attributes = dict(zip(axis_names, obj.centroid, strict=False))
 
             for prop in self._extra_properties:
                 if callable(prop):

@@ -84,7 +84,7 @@ class RustWorkXGraphBackend(BaseGraphBackend):
     def subgraph(
         self,
         *,
-        node_ids: list[int] = None,
+        node_ids: list[int] | None = None,
         **filter_kwargs,
     ) -> RustWorkXReadOnlyGraph:
         # TODO doc

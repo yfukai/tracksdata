@@ -6,7 +6,7 @@ from typing import Any
 # - nodes have a t, and space
 
 
-class BaseReadOnlyGraph(abc.ABC):
+class BaseReadOnlyGraph(abc.ABC):  # noqa: B024
     """
     Base class for viewing a graph.
     """
@@ -25,6 +25,7 @@ class BaseGraphBackend(abc.ABC):
     Base class for a graph backend.
     """
 
+    @abc.abstractmethod
     def add_node(
         self,
         *,
@@ -54,6 +55,7 @@ class BaseGraphBackend(abc.ABC):
             The ID of the added node.
         """
 
+    @abc.abstractmethod
     def add_edge(
         self,
         source_id: int,
@@ -78,6 +80,7 @@ class BaseGraphBackend(abc.ABC):
             The ID of the added edge.
         """
 
+    @abc.abstractmethod
     def filter_nodes_by_attribute(
         self,
         **kwargs: Any,
@@ -96,6 +99,7 @@ class BaseGraphBackend(abc.ABC):
             A new graph with the filtered nodes.
         """
 
+    @abc.abstractmethod
     def subgraph(
         self,
         *,

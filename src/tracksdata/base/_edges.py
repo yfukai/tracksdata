@@ -1,5 +1,5 @@
 import abc
-from typing import Sequence
+from collections.abc import Sequence
 
 from tracksdata._graph import BaseGraphBackend
 
@@ -19,11 +19,14 @@ class BaseEdgesOperator(abc.ABC):
         t: int | None = None,
         weight_key: Sequence[str] = (DEFAULT_EDGE_WEIGHT_KEY,),
     ) -> None:
-        """
-        Initialize the edges from nodes of given `time` to nodes in neighboring times (`time` + `\delta time`)
+        r"""
+        Initialize the edges from nodes of given `time` to nodes in neighboring
+        times (`time` + `\delta time`)
 
         Parameters
         ----------
+        graph : BaseGraphBackend
+            The graph to initialize the edges in.
         t: int
             The time of the nodes to initialize the edges from.
         weight_key: str
