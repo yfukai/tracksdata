@@ -1,10 +1,12 @@
 from typing import Any
+
 import rustworkx as rx
+
 from tracksdata.graph._base_graph import BaseGraphBackend, BaseReadOnlyGraph
 
-
-# TODO: 
+# TODO:
 # - use a better name for the default graph backend
+
 
 class RustWorkXReadOnlyGraph(BaseReadOnlyGraph):
     def __init__(
@@ -27,7 +29,7 @@ class RustWorkXGraphBackend(BaseGraphBackend):
         """
         self._graph = rx.PyDiGraph()
         self._time_to_nodes: dict[int, list[int]] = {}
-    
+
     def add_node(
         self,
         *,
@@ -76,8 +78,9 @@ class RustWorkXGraphBackend(BaseGraphBackend):
                 except KeyError:
                     return False
             return True
+
         return list(self._graph.filter_nodes(_filter_func))
-    
+
     def subgraph(
         self,
         *,

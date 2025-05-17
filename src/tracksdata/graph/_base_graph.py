@@ -1,10 +1,10 @@
 import abc
-from typing import Any, Dict, List
-import numpy as np
+from typing import Any
 
 # NOTE:
 # - maybe a single basegraph is better
 # - nodes have a t, and space
+
 
 class BaseReadOnlyGraph(abc.ABC):
     """
@@ -24,6 +24,7 @@ class BaseGraphBackend(abc.ABC):
     """
     Base class for a graph backend.
     """
+
     def add_node(
         self,
         *,
@@ -39,20 +40,20 @@ class BaseGraphBackend(abc.ABC):
             The time of the node.
         kwargs : Any
             Additional attributes for the node.
-        
+
         TODO: make add additional attributes
             - x and y
             - z=0
             - mask=None
             - bbox=None
         thoughts?
-        
+
         Returns
         -------
         int
             The ID of the added node.
         """
-  
+
     def add_edge(
         self,
         source_id: int,
@@ -70,7 +71,7 @@ class BaseGraphBackend(abc.ABC):
             The ID of the target node.
         kwargs : Any
             Additional attributes for the edge.
-        
+
         Returns
         -------
         int
@@ -88,13 +89,13 @@ class BaseGraphBackend(abc.ABC):
         ----------
         kwargs : Any
             Attributes to filter by.
-        
+
         Returns
         -------
         BaseGraphBackend
             A new graph with the filtered nodes.
         """
-    
+
     def subgraph(
         self,
         *,
@@ -117,4 +118,3 @@ class BaseGraphBackend(abc.ABC):
         BaseReadOnlyGraph
             A new graph with the specified nodes.
         """
-

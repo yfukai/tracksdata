@@ -11,6 +11,7 @@ class BaseEdgesOperator(abc.ABC):
     Base class indicating methods required to insert edges into a graph.
     It will interact with a `BaseGraphBackend` to do so.
     """
+
     @abc.abstractmethod
     def __call__(
         self,

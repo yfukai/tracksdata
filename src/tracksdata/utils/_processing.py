@@ -1,4 +1,5 @@
 from typing import Any, Iterable, TypeVar
+
 from tqdm import tqdm
 
 T = TypeVar("T")
@@ -22,7 +23,7 @@ def maybe_show_progress(
         Additional arguments to pass to tqdm.
         See tqdm documentation for more details.
         https://tqdm.github.io/docs/tqdm/
-    
+
     Returns
     -------
     tqdm | Iterable[T]

@@ -2,8 +2,7 @@ from typing import Any, Callable
 
 import numpy as np
 from numpy.typing import ArrayLike
-
-from skimage.measure._regionprops import regionprops, RegionProperties
+from skimage.measure._regionprops import RegionProperties, regionprops
 
 from tracksdata.graph._base_graph import BaseGraphBackend
 from tracksdata.nodes._base_nodes import BaseNodesOperator
@@ -27,7 +26,7 @@ class RegionPropsOperator(BaseNodesOperator):
     def add_nodes(
         self,
         graph: BaseGraphBackend,
-        labels: ArrayLike, 
+        labels: ArrayLike,
         t: int | None = None,
         intensity_image: ArrayLike | None = None,
     ) -> None:
@@ -56,7 +55,7 @@ class RegionPropsOperator(BaseNodesOperator):
                 else:
                     self(graph, labels[t], t=t)
             return
-        
+
         if labels.ndim == 2:
             axis_names = ["y", "x"]
         elif labels.ndim == 3:
@@ -69,17 +68,17 @@ class RegionPropsOperator(BaseNodesOperator):
         labels = np.asarray(labels)
 
         for obj in maybe_show_progress(
-            list(regionprops(
-                labels, 
-                intensity_image=intensity_image,
-                spacing=self._spacing,
-            )),
+            list(
+                regionprops(
+                    labels,
+                    intensity_image=intensity_image,
+                    spacing=self._spacing,
+                )
+            ),
             show_progress=self._show_progress,
             desc=f"Processing regions of time {t}",
         ):
-            attributes = {
-                c: v for c, v in zip(axis_names, obj.centroid)
-            }
+            attributes = {c: v for c, v in zip(axis_names, obj.centroid)}
 
             for prop in self._extra_properties:
                 if callable(prop):
@@ -88,7 +87,7 @@ class RegionPropsOperator(BaseNodesOperator):
                     attributes[prop] = getattr(obj, prop)
 
             graph.add_node(
-                t=t, 
+                t=t,
                 mask=obj.image,
                 bbox=obj.bbox,
                 **attributes,
