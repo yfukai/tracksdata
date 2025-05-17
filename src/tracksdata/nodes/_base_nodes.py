@@ -1,4 +1,5 @@
 import abc
+from typing import Any
 
 from tracksdata.graph._base_graph import BaseGraphBackend
 
@@ -13,7 +14,9 @@ class BaseNodesOperator(abc.ABC):
     def add_nodes(
         self,
         graph: BaseGraphBackend,
+        *,
         t: int | None = None,
+        **kwargs: Any,
     ) -> None:
         """
         Initialize the nodes for a given time.

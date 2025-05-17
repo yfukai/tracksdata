@@ -1,5 +1,5 @@
 from collections.abc import Callable
-from typing import Any
+from typing import Any, override
 
 import numpy as np
 from numpy.typing import ArrayLike
@@ -24,9 +24,12 @@ class RegionPropsOperator(BaseNodesOperator):
         self._spacing = spacing
         self._show_progress = show_progress
 
+    @override
+    # pylint: disable=arguments-differ
     def add_nodes(
         self,
         graph: BaseGraphBackend,
+        *,
         labels: ArrayLike,
         t: int | None = None,
         intensity_image: ArrayLike | None = None,
@@ -55,9 +58,18 @@ class RegionPropsOperator(BaseNodesOperator):
                 show_progress=self._show_progress,
             ):
                 if intensity_image is not None:
-                    self(graph, labels[t], t=t, intensity_image=intensity_image[t])
+                    self.add_nodes(
+                        graph=graph,
+                        labels=labels[t],
+                        t=t,
+                        intensity_image=intensity_image[t],
+                    )
                 else:
-                    self(graph, labels[t], t=t)
+                    self.add_nodes(
+                        graph=graph,
+                        labels=labels[t],
+                        t=t,
+                    )
             return
 
         if labels.ndim == 2:
