@@ -2,7 +2,7 @@ from collections.abc import Callable
 from typing import Any, override
 
 import numpy as np
-from numpy.typing import ArrayLike
+from numpy.typing import NDArray
 from skimage.measure._regionprops import RegionProperties, regionprops
 
 from tracksdata.graph._base_graph import BaseGraphBackend
@@ -26,15 +26,22 @@ class RegionPropsOperator(BaseNodesOperator):
         self._spacing = spacing
         self._show_progress = show_progress
 
+    def features_keys(self) -> list[str]:
+        """
+        Get the keys of the features of the nodes.
+        """
+        return [
+            prop.__name__ if callable(prop) else prop for prop in self._extra_properties
+        ]
+
     @override
-    # pylint: disable=arguments-differ
     def add_nodes(
         self,
         graph: BaseGraphBackend,
         *,
-        labels: ArrayLike,
+        labels: NDArray[np.integer],
         t: int | None = None,
-        intensity_image: ArrayLike | None = None,
+        intensity_image: NDArray | None = None,
     ) -> None:
         """
         Initialize the nodes in the provided graph using skimage's region properties.
@@ -44,12 +51,12 @@ class RegionPropsOperator(BaseNodesOperator):
         ----------
         graph : BaseGraphBackend
             The graph to initialize the nodes in.
-        labels : ArrayLike
+        labels : NDArray[np.integer]
             The labels of the nodes to be initialized.
         t : int | None
             The time at which to initialize the nodes.
             If None, labels are considered to be a timelapse where axis=0 is time.
-        intensity_image : ArrayLike | None
+        intensity_image : NDArray | None
             The intensity image to use for the region properties.
             If None, the intensity image is not used.
         """

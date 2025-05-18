@@ -1,5 +1,7 @@
+from collections.abc import Sequence
 from typing import Any
 
+import polars as pl
 import rustworkx as rx
 
 from tracksdata.graph._base_graph import BaseGraphBackend, BaseReadOnlyGraph
@@ -29,6 +31,7 @@ class RustWorkXGraphBackend(BaseGraphBackend):
         """
         self._graph = rx.PyDiGraph()
         self._time_to_nodes: dict[int, list[int]] = {}
+        self._features_keys: list[str] = []
 
     def add_node(
         self,
@@ -70,6 +73,14 @@ class RustWorkXGraphBackend(BaseGraphBackend):
         **kwargs: Any,
     ) -> list[int]:
         # TODO doc
+
+        if "t" in kwargs:
+            selected_nodes = self._time_to_nodes.get(kwargs.pop("t"), [])
+            if len(kwargs) == 0:
+                return selected_nodes
+
+            return self.filter_nodes_by_attribute(**kwargs)
+
         def _filter_func(node_id: int) -> bool:
             for key, value in kwargs.items():
                 try:
@@ -83,15 +94,84 @@ class RustWorkXGraphBackend(BaseGraphBackend):
 
     def subgraph(
         self,
-        *,
-        node_ids: list[int] | None = None,
-        **filter_kwargs,
+        node_ids: list[int],
     ) -> RustWorkXReadOnlyGraph:
-        # TODO doc
-        if node_ids is not None:
-            subgraph = self._graph.subgraph(node_ids)
-        else:
-            subgraph = self._graph.subgraph(
-                filter_nodes=filter_kwargs,
-            )
+        subgraph = self._graph.subgraph(node_ids)
         return RustWorkXReadOnlyGraph(graph=subgraph)
+
+    def time_points(self) -> list[int]:
+        """
+        Get the unique time points in the graph.
+        """
+        return list(self._time_to_nodes.keys())
+
+    @property
+    def features_keys(self) -> list[str]:
+        """
+        Get the keys of the features of the nodes.
+        """
+        return self._features_keys
+
+    def add_new_feature_key(self, key: str, default_value: Any) -> None:
+        """
+        Add a new feature key to the graph.
+        All existing nodes will have the default value for the new feature key.
+
+        Parameters
+        ----------
+        key : str
+            The key of the new feature.
+        default_value : Any
+            The default value for the new feature.
+        """
+        if key in self._features_keys:
+            raise ValueError(f"Feature key {key} already exists")
+
+        self._features_keys.append(key)
+        for node_id in self._graph.node_indices():
+            self._graph[node_id][key] = default_value
+
+    def features(
+        self,
+        node_ids: list[int] | None = None,
+        feature_keys: Sequence[str] | None = None,
+    ) -> pl.DataFrame:
+        """
+        Get the features of the nodes as a polars DataFrame.
+
+        Parameters
+        ----------
+        node_ids : list[int] | None
+            The IDs of the nodes to get the features for.
+            If None, all nodes are used.
+        feature_keys : Sequence[str] | None
+            The feature keys to get.
+            If None, all the features of the first node are used.
+
+        Returns
+        -------
+        pl.DataFrame
+            A polars DataFrame with the features of the nodes.
+        """
+        # If no node_ids provided, use all nodes
+        if node_ids is None:
+            node_ids = list(self._graph.node_indices())
+
+        if len(node_ids) == 0:
+            raise ValueError("Empty graph, there are no nodes to get features from")
+
+        if feature_keys is None:
+            feature_keys = self.features_keys
+
+        # Create columns directly instead of building intermediate dictionaries
+        columns = {key: [] for key in feature_keys}
+        columns["node_id"] = sorted(node_ids)
+
+        # Build columns in a vectorized way
+        for node_id in columns["node_id"]:
+            node_data = self._graph[node_id]
+            for key in feature_keys:
+                columns[key].append(node_data.get(key))
+
+        # Create DataFrame and set node_id as index in one shot
+        return pl.DataFrame(columns).set_sorted("node_id")

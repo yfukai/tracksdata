@@ -30,6 +30,8 @@ dependencies = [
   "scikit-image >= 0.24.0",
   "rustworkx",
   "tqdm",
+  "polars",
+  "rich",
 ]
 
 [project.urls]

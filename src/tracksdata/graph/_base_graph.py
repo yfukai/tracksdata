@@ -1,5 +1,8 @@
 import abc
+from collections.abc import Sequence
 from typing import Any
+
+import polars as pl
 
 # NOTE:
 # - maybe a single basegraph is better
@@ -102,23 +105,62 @@ class BaseGraphBackend(abc.ABC):
     @abc.abstractmethod
     def subgraph(
         self,
-        *,
-        node_ids: list[int] | None = None,
-        **filter_kwargs: Any,
+        node_ids: list[int],
     ) -> "BaseReadOnlyGraph":
         """
-        Create a subgraph from the graph from the given node IDs or by filtering
-        the nodes by attributes -- both cannot be used at the same time.
+        Create a subgraph from the graph from the given node IDs.
 
         Parameters
         ----------
-        node_ids : List[int] | None
-            If provided, the IDs of the nodes to include in the subgraph.
-        filter_kwargs : Any
-            Attributes to filter by the nodes of the original graph.
+        node_ids : List[int]
+            The IDs of the nodes to include in the subgraph.
 
         Returns
         -------
         BaseReadOnlyGraph
             A new graph with the specified nodes.
+        """
+
+    @abc.abstractmethod
+    def time_points(self) -> list[int]:
+        """
+        Get the unique time points in the graph.
+        """
+
+    @abc.abstractmethod
+    def features(
+        self,
+        node_ids: list[int] | None = None,
+        feature_keys: Sequence[str] | None = None,
+    ) -> pl.DataFrame:
+        """
+        Get the features of the nodes as a pandas DataFrame.
+
+        Parameters
+        ----------
+        node_ids : list[int] | None
+            The IDs of the nodes to get the features for.
+            If None, all nodes are used.
+        feature_keys : Sequence[str] | None
+            The feature keys to get.
+            If None, all features are used.
+
+        Returns
+        -------
+        pl.DataFrame
+            A polars DataFrame with the features of the nodes.
+        """
+
+    @property
+    @abc.abstractmethod
+    def features_keys(self) -> list[str]:
+        """
+        Get the keys of the features of the nodes.
+        """
+
+    @abc.abstractmethod
+    def add_new_feature_key(self, key: str, default_value: Any) -> None:
+        """
+        Add a new feature key to the graph.
+        All existing nodes will have the default value for the new feature key.
         """
