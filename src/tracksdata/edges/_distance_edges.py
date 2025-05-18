@@ -85,8 +85,8 @@ class DistanceEdgesOperator(BaseEdgesOperator):
         else:
             feature_keys = self.feature_keys
 
-        prev_node_ids = graph.filter_nodes_by_attribute(t=t - 1)
-        cur_node_ids = graph.filter_nodes_by_attribute(t=t)
+        prev_node_ids = np.asarray(graph.filter_nodes_by_attribute(t=t - 1))
+        cur_node_ids = np.asarray(graph.filter_nodes_by_attribute(t=t))
 
         if len(prev_node_ids) == 0:
             LOG.warning(
@@ -109,24 +109,28 @@ class DistanceEdgesOperator(BaseEdgesOperator):
 
         prev_kdtree = KDTree(prev_features.to_numpy())
 
-        distances, prev_node_ids = prev_kdtree.query(
+        distances, prev_neigh_ids = prev_kdtree.query(
             cur_features.to_numpy(),
             k=self.n_neighbors,
             distance_upper_bound=self.distance_threshold,
         )
+        is_valid = ~np.isinf(distances)
+
+        # kdtree return from 0 to n-1
+        # converting back to arbitrary indexing
+        prev_neigh_ids[is_valid] = prev_node_ids[prev_neigh_ids[is_valid]]
 
         count = 0
-        for cur_node_id, prev_neigh_ids, prev_neigh_dist in zip(
-            cur_node_ids, prev_node_ids, distances, strict=False
+        for cur_id, neigh_ids, neigh_dist, neigh_valid in zip(
+            cur_node_ids, prev_neigh_ids, distances, is_valid, strict=True
         ):
-            is_valid = ~np.isinf(prev_neigh_dist)
-            for prev_id, prev_dist in zip(
-                prev_neigh_ids[is_valid], prev_neigh_dist[is_valid], strict=False
+            for neigh_id, dist in zip(
+                neigh_ids[neigh_valid], neigh_dist[neigh_valid], strict=True
             ):
                 graph.add_edge(
-                    cur_node_id,
-                    prev_id,
-                    attributes={weight_key: prev_dist},
+                    neigh_id,
+                    cur_id,
+                    attributes={weight_key: dist},
                 )
                 count += 1
 
