@@ -31,7 +31,8 @@ class RustWorkXGraphBackend(BaseGraphBackend):
         """
         self._graph = rx.PyDiGraph()
         self._time_to_nodes: dict[int, list[int]] = {}
-        self._features_keys: list[str] = []
+        self._node_features_keys: list[str] = []
+        self._edge_features_keys: list[str] = []
 
     def add_node(
         self,
@@ -62,10 +63,26 @@ class RustWorkXGraphBackend(BaseGraphBackend):
         self,
         source_id: int,
         target_id: int,
-        **kwargs: Any,
+        attributes: dict[str, Any],
     ) -> int:
-        # TODO doc
-        edge_id = self._graph.add_edge(source_id, target_id, **kwargs)
+        """
+        Add an edge to the graph.
+
+        Parameters
+        ----------
+        source_id : int
+            The ID of the source node.
+        target_id : int
+            The ID of the target node.
+        attributes : dict[str, Any]
+            The attributes of the edge to be added.
+            The keys of the attributes will be used as the attributes of the edge.
+        """
+        for key in attributes.keys():
+            if key not in self.edge_features_keys:
+                raise ValueError(f"Edge feature key {key} not found")
+
+        edge_id = self._graph.add_edge(source_id, target_id, attributes)
         return edge_id
 
     def filter_nodes_by_attribute(
@@ -106,13 +123,20 @@ class RustWorkXGraphBackend(BaseGraphBackend):
         return list(self._time_to_nodes.keys())
 
     @property
-    def features_keys(self) -> list[str]:
+    def node_features_keys(self) -> list[str]:
         """
         Get the keys of the features of the nodes.
         """
-        return self._features_keys
+        return self._node_features_keys
 
-    def add_new_feature_key(self, key: str, default_value: Any) -> None:
+    @property
+    def edge_features_keys(self) -> list[str]:
+        """
+        Get the keys of the features of the edges.
+        """
+        return self._edge_features_keys
+
+    def add_new_node_feature_key(self, key: str, default_value: Any) -> None:
         """
         Add a new feature key to the graph.
         All existing nodes will have the default value for the new feature key.
@@ -122,14 +146,33 @@ class RustWorkXGraphBackend(BaseGraphBackend):
         key : str
             The key of the new feature.
         default_value : Any
-            The default value for the new feature.
+            The default value for existing nodes for the new feature key.
         """
-        if key in self._features_keys:
+        if key in self._node_features_keys:
             raise ValueError(f"Feature key {key} already exists")
 
-        self._features_keys.append(key)
+        self._node_features_keys.append(key)
         for node_id in self._graph.node_indices():
             self._graph[node_id][key] = default_value
+
+    def add_new_edge_feature_key(self, key: str, default_value: Any) -> None:
+        """
+        Add a new feature key to the graph.
+        All existing edges will have the default value for the new feature key.
+
+        Parameters
+        ----------
+        key : str
+            The key of the new feature.
+        default_value : Any
+            The default value for existing edges for the new feature key.
+        """
+        if key in self._edge_features_keys:
+            raise ValueError(f"Feature key {key} already exists")
+
+        self._edge_features_keys.append(key)
+        for edge_id in self._graph.edge_indices():
+            self._graph[edge_id][key] = default_value
 
     def features(
         self,
@@ -161,17 +204,30 @@ class RustWorkXGraphBackend(BaseGraphBackend):
             raise ValueError("Empty graph, there are no nodes to get features from")
 
         if feature_keys is None:
-            feature_keys = self.features_keys
+            feature_keys = self.node_features_keys
 
         # Create columns directly instead of building intermediate dictionaries
         columns = {key: [] for key in feature_keys}
-        columns["node_id"] = sorted(node_ids)
 
         # Build columns in a vectorized way
-        for node_id in columns["node_id"]:
+        for node_id in node_ids:
             node_data = self._graph[node_id]
             for key in feature_keys:
                 columns[key].append(node_data.get(key))
 
         # Create DataFrame and set node_id as index in one shot
-        return pl.DataFrame(columns).set_sorted("node_id")
+        return pl.DataFrame(columns)
+
+    @property
+    def num_edges(self) -> int:
+        """
+        The number of edges in the graph.
+        """
+        return self._graph.num_edges()
+
+    @property
+    def num_nodes(self) -> int:
+        """
+        The number of nodes in the graph.
+        """
+        return self._graph.num_nodes()

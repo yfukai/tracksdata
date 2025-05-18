@@ -4,6 +4,7 @@ from pathlib import Path
 import numpy as np
 from tifffile import imread
 
+from tracksdata.edges._distance_edges import DistanceEdgesOperator
 from tracksdata.graph._rustworkx_graph import RustWorkXGraphBackend
 from tracksdata.nodes._regionprops import RegionPropsOperator
 
@@ -18,9 +19,14 @@ def main() -> None:
     )
 
     nodes_operator = RegionPropsOperator(show_progress=True)
+    dist_operator = DistanceEdgesOperator(distance_threshold=15.0, n_neighbors=5)
 
     graph = RustWorkXGraphBackend()
     nodes_operator.add_nodes(graph, labels=labels)
+    print(f"Number of nodes: {graph.num_nodes}")
+
+    dist_operator.add_edges(graph)
+    print(f"Number of edges: {graph.num_edges}")
 
 
 if __name__ == "__main__":

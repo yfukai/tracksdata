@@ -1,7 +1,8 @@
 import abc
 from collections.abc import Sequence
+from typing import Any
 
-from tracksdata._graph import BaseGraphBackend
+from tracksdata.graph._base_graph import BaseGraphBackend
 
 DEFAULT_EDGE_WEIGHT_KEY = "weight"
 
@@ -13,11 +14,13 @@ class BaseEdgesOperator(abc.ABC):
     """
 
     @abc.abstractmethod
-    def __call__(
+    def add_edges(
         self,
         graph: BaseGraphBackend,
+        *,
         t: int | None = None,
-        weight_key: Sequence[str] = (DEFAULT_EDGE_WEIGHT_KEY,),
+        weight_key: Sequence[str] | str = DEFAULT_EDGE_WEIGHT_KEY,
+        **kwargs: Any,
     ) -> None:
         r"""
         Initialize the edges from nodes of given `time` to nodes in neighboring
@@ -31,4 +34,6 @@ class BaseEdgesOperator(abc.ABC):
             The time of the nodes to initialize the edges from.
         weight_key: str
             The key to add the edge weights to.
+        **kwargs: Any
+            Additional keyword arguments to pass to the `add_edges` method.
         """

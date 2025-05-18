@@ -63,7 +63,7 @@ class BaseGraphBackend(abc.ABC):
         self,
         source_id: int,
         target_id: int,
-        **kwargs: Any,
+        attributes: dict[str, Any],
     ) -> int:
         """
         Add an edge to the graph.
@@ -74,7 +74,7 @@ class BaseGraphBackend(abc.ABC):
             The ID of the source node.
         target_id : int
             The ID of the target node.
-        kwargs : Any
+        attributes : dict[str, Any]
             Additional attributes for the edge.
 
         Returns
@@ -153,14 +153,42 @@ class BaseGraphBackend(abc.ABC):
 
     @property
     @abc.abstractmethod
-    def features_keys(self) -> list[str]:
+    def node_features_keys(self) -> list[str]:
         """
         Get the keys of the features of the nodes.
         """
 
+    @property
     @abc.abstractmethod
-    def add_new_feature_key(self, key: str, default_value: Any) -> None:
+    def edge_features_keys(self) -> list[str]:
+        """
+        Get the keys of the features of the edges.
+        """
+
+    @abc.abstractmethod
+    def add_new_node_feature_key(self, key: str, default_value: Any) -> None:
         """
         Add a new feature key to the graph.
         All existing nodes will have the default value for the new feature key.
+        """
+
+    @abc.abstractmethod
+    def add_new_edge_feature_key(self, key: str, default_value: Any) -> None:
+        """
+        Add a new feature key to the graph.
+        All existing edges will have the default value for the new feature key.
+        """
+
+    @property
+    @abc.abstractmethod
+    def num_edges(self) -> int:
+        """
+        The number of edges in the graph.
+        """
+
+    @property
+    @abc.abstractmethod
+    def num_nodes(self) -> int:
+        """
+        The number of nodes in the graph.
         """
