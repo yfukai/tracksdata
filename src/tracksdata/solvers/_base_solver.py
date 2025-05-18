@@ -1,6 +1,6 @@
 import abc
 
-from tracksdata._graph import BaseGraphBackend
+from tracksdata.graph._base_graph import BaseGraphBackend
 
 DEFAULT_SOLUTION_KEY = "solution"
 
@@ -13,7 +13,7 @@ class BaseSolver(abc.ABC):
     """
 
     @abc.abstractmethod
-    def __call__(
+    def solve(
         self, graph: BaseGraphBackend, solution_key: str = DEFAULT_SOLUTION_KEY
     ) -> None:
         """

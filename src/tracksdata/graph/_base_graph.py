@@ -2,6 +2,7 @@ import abc
 from collections.abc import Sequence
 from typing import Any
 
+import numpy as np
 import polars as pl
 
 # NOTE:
@@ -84,6 +85,12 @@ class BaseGraphBackend(abc.ABC):
         """
 
     @abc.abstractmethod
+    def node_ids(self) -> list[int]:
+        """
+        Get the IDs of all nodes in the graph.
+        """
+
+    @abc.abstractmethod
     def filter_nodes_by_attribute(
         self,
         **kwargs: Any,
@@ -128,7 +135,7 @@ class BaseGraphBackend(abc.ABC):
         """
 
     @abc.abstractmethod
-    def features(
+    def node_features(
         self,
         node_ids: list[int] | None = None,
         feature_keys: Sequence[str] | None = None,
@@ -151,6 +158,25 @@ class BaseGraphBackend(abc.ABC):
             A polars DataFrame with the features of the nodes.
         """
 
+    @abc.abstractmethod
+    def edge_features(
+        self,
+        node_ids: list[int] | None = None,
+        feature_keys: Sequence[str] | None = None,
+    ) -> pl.DataFrame:
+        """
+        Get the features of the edges as a polars DataFrame.
+
+        Parameters
+        ----------
+        node_ids : list[int] | None
+            The IDs of the subgraph to get the edge features for.
+            If None, all edges of the graph are used.
+        feature_keys : Sequence[str] | None
+            The feature keys to get.
+            If None, all features are used.
+        """
+
     @property
     @abc.abstractmethod
     def node_features_keys(self) -> list[str]:
@@ -166,14 +192,14 @@ class BaseGraphBackend(abc.ABC):
         """
 
     @abc.abstractmethod
-    def add_new_node_feature_key(self, key: str, default_value: Any) -> None:
+    def add_node_feature_key(self, key: str, default_value: Any) -> None:
         """
         Add a new feature key to the graph.
         All existing nodes will have the default value for the new feature key.
         """
 
     @abc.abstractmethod
-    def add_new_edge_feature_key(self, key: str, default_value: Any) -> None:
+    def add_edge_feature_key(self, key: str, default_value: Any) -> None:
         """
         Add a new feature key to the graph.
         All existing edges will have the default value for the new feature key.
@@ -191,4 +217,21 @@ class BaseGraphBackend(abc.ABC):
     def num_nodes(self) -> int:
         """
         The number of nodes in the graph.
+        """
+
+    @abc.abstractmethod
+    def update_edge_features(
+        self,
+        edge_ids: list[int] | np.ndarray,
+        attributes: dict[str, Any],
+    ) -> None:
+        """
+        Update the features of the edges.
+
+        Parameters
+        ----------
+        edge_ids : list[int] | np.ndarray
+            The IDs of the edges to update.
+        attributes : dict[str, Any]
+            Attributes to be updated.
         """

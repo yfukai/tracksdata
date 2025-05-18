@@ -75,7 +75,7 @@ class DistanceEdgesOperator(BaseEdgesOperator):
 
         if weight_key not in graph.edge_features_keys:
             # negative value to indicate that the edge is not valid
-            graph.add_new_edge_feature_key(weight_key, -1.0)
+            graph.add_edge_feature_key(weight_key, -1.0)
 
         if self.feature_keys is None:
             if "z" in graph.node_features_keys:
@@ -102,10 +102,12 @@ class DistanceEdgesOperator(BaseEdgesOperator):
             )
             return
 
-        prev_features = graph.features(
+        prev_features = graph.node_features(
             node_ids=prev_node_ids, feature_keys=feature_keys
         )
-        cur_features = graph.features(node_ids=cur_node_ids, feature_keys=feature_keys)
+        cur_features = graph.node_features(
+            node_ids=cur_node_ids, feature_keys=feature_keys
+        )
 
         prev_kdtree = KDTree(prev_features.to_numpy())
 

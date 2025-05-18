@@ -1,6 +1,7 @@
 from collections.abc import Sequence
 from typing import Any
 
+import numpy as np
 import polars as pl
 import rustworkx as rx
 
@@ -109,6 +110,12 @@ class RustWorkXGraphBackend(BaseGraphBackend):
 
         return list(self._graph.filter_nodes(_filter_func))
 
+    def node_ids(self) -> list[int]:
+        """
+        Get the IDs of all nodes in the graph.
+        """
+        return list(self._graph.node_indices())
+
     def subgraph(
         self,
         node_ids: list[int],
@@ -136,7 +143,7 @@ class RustWorkXGraphBackend(BaseGraphBackend):
         """
         return self._edge_features_keys
 
-    def add_new_node_feature_key(self, key: str, default_value: Any) -> None:
+    def add_node_feature_key(self, key: str, default_value: Any) -> None:
         """
         Add a new feature key to the graph.
         All existing nodes will have the default value for the new feature key.
@@ -155,7 +162,7 @@ class RustWorkXGraphBackend(BaseGraphBackend):
         for node_id in self._graph.node_indices():
             self._graph[node_id][key] = default_value
 
-    def add_new_edge_feature_key(self, key: str, default_value: Any) -> None:
+    def add_edge_feature_key(self, key: str, default_value: Any) -> None:
         """
         Add a new feature key to the graph.
         All existing edges will have the default value for the new feature key.
@@ -171,10 +178,10 @@ class RustWorkXGraphBackend(BaseGraphBackend):
             raise ValueError(f"Feature key {key} already exists")
 
         self._edge_features_keys.append(key)
-        for edge_id in self._graph.edge_indices():
-            self._graph[edge_id][key] = default_value
+        for _, _, edge_attr in self._graph.weighted_edge_list():
+            edge_attr[key] = default_value
 
-    def features(
+    def node_features(
         self,
         node_ids: list[int] | None = None,
         feature_keys: Sequence[str] | None = None,
@@ -218,6 +225,47 @@ class RustWorkXGraphBackend(BaseGraphBackend):
         # Create DataFrame and set node_id as index in one shot
         return pl.DataFrame(columns)
 
+    def edge_features(
+        self,
+        node_ids: list[int] | None = None,
+        feature_keys: Sequence[str] | None = None,
+    ) -> pl.DataFrame:
+        """
+        Get the features of the edges as a polars DataFrame.
+
+        Parameters
+        ----------
+        node_ids : list[int] | None
+            The IDs of the subgraph to get the edge features for.
+            If None, all edges of the graph are used.
+        feature_keys : Sequence[str] | None
+            The feature keys to get.
+            If None, all features are used.
+        """
+        if node_ids is None:
+            graph = self._graph
+        else:
+            graph = self._graph.subgraph(node_ids)
+
+        if feature_keys is None:
+            feature_keys = self.edge_features_keys
+
+        edge_map = graph.edge_index_map()
+        source, target, data = zip(*edge_map.values(), strict=False)
+
+        columns = {key: [] for key in feature_keys}
+        columns["edge_id"] = list(edge_map.keys())
+        columns["source"] = source
+        columns["target"] = target
+
+        for row in data:
+            for key in feature_keys:
+                columns[key].append(row[key])
+
+        columns = {k: np.asarray(v) for k, v in columns.items()}
+
+        return pl.DataFrame(columns)
+
     @property
     def num_edges(self) -> int:
         """
@@ -231,3 +279,42 @@ class RustWorkXGraphBackend(BaseGraphBackend):
         The number of nodes in the graph.
         """
         return self._graph.num_nodes()
+
+    def update_edge_features(
+        self,
+        edge_ids: list[int] | np.ndarray,
+        attributes: dict[str, Any],
+    ) -> None:
+        """
+        Update the features of the edges.
+
+        Parameters
+        ----------
+        edge_ids : list[int] | np.ndarray
+            The IDs of the edges to update.
+        attributes : dict[str, Any]
+            Attributes to be updated.
+        """
+        size = len(edge_ids)
+        for key, value in attributes.items():
+            if key not in self.edge_features_keys:
+                raise ValueError(
+                    f"Edge feature key '{key}' not found in graph. "
+                    f"Expected '{self.edge_features_keys}'"
+                )
+
+            if np.isscalar(value):
+                attributes[key] = np.full(size, value)
+
+            elif len(attributes[key]) != size:
+                raise ValueError(
+                    f"Attribute '{key}' has wrong size. "
+                    f"Expected {size}, got {len(attributes[key])}"
+                )
+
+        edge_map = self._graph.edge_index_map()
+
+        for i, edge_id in enumerate(edge_ids):
+            edge_attr = edge_map[edge_id][2]  # 0=source, 1=target, 2=attributes
+            for key, value in attributes.items():
+                edge_attr[key] = value[i]

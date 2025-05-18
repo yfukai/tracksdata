@@ -32,6 +32,7 @@ dependencies = [
   "tqdm",
   "polars",
   "rich",
+  "numba",
 ]
 
 [project.urls]
