@@ -8,15 +8,15 @@ from tracksdata.utils._processing import maybe_show_progress
 
 class IoUEdgesOperator:
     # TODO: define API and inherit
-    def __init__(self, show_progress: bool = True):
+    def __init__(self, mask_key: str = DEFAULT_MASK_KEY, show_progress: bool = True):
         self.show_progress = show_progress
+        self.mask_key = mask_key
 
     def add_weights(
         self,
         graph: BaseGraphBackend,
         *,
         t: int | None = None,
-        mask_key: str = DEFAULT_MASK_KEY,
         weight_key: str,
     ) -> None:
         """
@@ -41,7 +41,7 @@ class IoUEdgesOperator:
                 desc="Adding weights to edges",
                 show_progress=self.show_progress,
             ):
-                self.add_weights(graph, t=t, mask_key=mask_key, weight_key=weight_key)
+                self.add_weights(graph, t=t, weight_key=weight_key)
             return
 
         source_ids = graph.filter_nodes_by_attribute(t=t)
@@ -52,16 +52,16 @@ class IoUEdgesOperator:
             return
 
         source_df = graph.node_features(
-            node_ids=edges_df["source"].to_numpy(), feature_keys=[DEFAULT_MASK_KEY]
+            node_ids=edges_df["source"].to_numpy(), feature_keys=[self.mask_key]
         )
         target_df = graph.node_features(
-            node_ids=edges_df["target"].to_numpy(), feature_keys=[DEFAULT_MASK_KEY]
+            node_ids=edges_df["target"].to_numpy(), feature_keys=[self.mask_key]
         )
 
         weights = np.zeros(len(edges_df), dtype=np.float32)
 
         for i, (source_mask, target_mask) in enumerate(
-            zip(source_df[DEFAULT_MASK_KEY], target_df[DEFAULT_MASK_KEY], strict=True)
+            zip(source_df[self.mask_key], target_df[self.mask_key], strict=True)
         ):
             weights[i] = source_mask.iou(target_mask)
 
