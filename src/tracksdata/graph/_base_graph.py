@@ -136,7 +136,7 @@ class BaseGraphBackend(abc.ABC):
     @abc.abstractmethod
     def node_features(
         self,
-        node_ids: list[int] | None = None,
+        node_ids: Sequence[int] | None = None,
         feature_keys: Sequence[str] | None = None,
     ) -> pl.DataFrame:
         """

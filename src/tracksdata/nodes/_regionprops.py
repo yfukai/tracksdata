@@ -7,7 +7,7 @@ from skimage.measure._regionprops import RegionProperties, regionprops
 
 from tracksdata.graph._base_graph import BaseGraphBackend
 from tracksdata.nodes._base_nodes import BaseNodesOperator
-from tracksdata.nodes._mask import Mask
+from tracksdata.nodes._mask import DEFAULT_MASK_KEY, Mask
 from tracksdata.utils._processing import maybe_show_progress
 
 
@@ -112,8 +112,9 @@ class RegionPropsOperator(BaseNodesOperator):
                 else:
                     attributes[prop] = getattr(obj, prop)
 
+            attributes[DEFAULT_MASK_KEY] = Mask(obj.image, obj.bbox)
+
             graph.add_node(
                 t=t,
-                mask=Mask(obj.image, obj.bbox),
                 **attributes,
             )

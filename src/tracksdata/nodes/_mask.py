@@ -2,6 +2,10 @@ import blosc2
 import numpy as np
 from numpy.typing import NDArray
 
+from tracksdata.functional._iou import fast_iou_with_bbox
+
+DEFAULT_MASK_KEY = "mask"
+
 
 class Mask:
     def __init__(
@@ -44,3 +48,6 @@ class Mask:
         # TODO: make it zarr and tensorstore compatible
         indices = self.mask_indices(offset)
         buffer[indices] = value
+
+    def iou(self, other: "Mask") -> float:
+        return fast_iou_with_bbox(self._bbox, other._bbox, self._mask, other._mask)

@@ -7,6 +7,7 @@ from tifffile import imread
 
 from tracksdata.array._graph_array import GraphArrayView
 from tracksdata.edges._distance_edges import DistanceEdgesOperator
+from tracksdata.edges._iou_edges import IoUEdgesOperator
 from tracksdata.graph._rustworkx_graph import RustWorkXGraphBackend
 from tracksdata.nodes._regionprops import RegionPropsOperator
 from tracksdata.solvers._nearest_neighbors_solver import (
@@ -30,7 +31,10 @@ def main() -> None:
     dist_operator = DistanceEdgesOperator(
         distance_threshold=15.0, n_neighbors=5, show_progress=False
     )
-    solver = NearestNeighborsSolver()
+    iou_operator = IoUEdgesOperator(show_progress=False)
+
+    # TODO: define custom syntax for objective function from weights
+    solver = NearestNeighborsSolver(edge_weight_key="iou")
 
     graph = RustWorkXGraphBackend()
     nodes_operator.add_nodes(graph, labels=labels)
@@ -38,6 +42,7 @@ def main() -> None:
 
     dist_operator.add_edges(graph)
     print(f"Number of edges: {graph.num_edges}")
+    iou_operator.add_weights(graph, weight_key="iou")
 
     solver.solve(graph)
 

@@ -184,7 +184,7 @@ class RustWorkXGraphBackend(BaseGraphBackend):
 
     def node_features(
         self,
-        node_ids: list[int] | None = None,
+        node_ids: Sequence[int] | None = None,
         feature_keys: Sequence[str] | None = None,
     ) -> pl.DataFrame:
         """
@@ -249,12 +249,22 @@ class RustWorkXGraphBackend(BaseGraphBackend):
         if node_ids is None:
             graph = self._graph
         else:
-            graph = self._graph.subgraph(node_ids)
+            selected_nodes = set(node_ids)
+            for node_id in node_ids:
+                neighbors = self._graph.neighbors(node_id)
+                selected_nodes.update(neighbors)
+
+            graph = self._graph.subgraph(list(selected_nodes))
 
         if feature_keys is None:
             feature_keys = self.edge_features_keys
 
         edge_map = graph.edge_index_map()
+        if len(edge_map) == 0:
+            return pl.DataFrame(
+                {key: [] for key in ["edge_id", "source", "target", *feature_keys]}
+            )
+
         source, target, data = zip(*edge_map.values(), strict=False)
 
         columns = {key: [] for key in feature_keys}
