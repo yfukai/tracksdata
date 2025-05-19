@@ -97,7 +97,8 @@ class RustWorkXGraphBackend(BaseGraphBackend):
             if len(kwargs) == 0:
                 return selected_nodes
 
-            return self.filter_nodes_by_attribute(**kwargs)
+            # FIXME: need to decide what's going to be the readonly graph
+            return self.subgraph(selected_nodes).filter_nodes_by_attribute(**kwargs)
 
         def _filter_func(node_id: int) -> bool:
             for key, value in kwargs.items():
@@ -118,7 +119,7 @@ class RustWorkXGraphBackend(BaseGraphBackend):
 
     def subgraph(
         self,
-        node_ids: list[int],
+        node_ids: Sequence[int],
     ) -> RustWorkXReadOnlyGraph:
         subgraph = self._graph.subgraph(node_ids)
         return RustWorkXReadOnlyGraph(graph=subgraph)
@@ -222,6 +223,9 @@ class RustWorkXGraphBackend(BaseGraphBackend):
             for key in feature_keys:
                 columns[key].append(node_data.get(key))
 
+        for key in feature_keys:
+            columns[key] = np.asarray(columns[key])
+
         # Create DataFrame and set node_id as index in one shot
         return pl.DataFrame(columns)
 
@@ -280,9 +284,44 @@ class RustWorkXGraphBackend(BaseGraphBackend):
         """
         return self._graph.num_nodes()
 
+    def update_node_features(
+        self,
+        node_ids: Sequence[int],
+        attributes: dict[str, Any],
+    ) -> None:
+        """
+        Update the features of the nodes.
+
+        Parameters
+        ----------
+        node_ids : Sequence[int]
+            The IDs of the nodes to update.
+        attributes : dict[str, Any]
+            The attributes to update.
+        """
+        for key, value in attributes.items():
+            if key not in self.node_features_keys:
+                raise ValueError(
+                    f"Node feature key '{key}' not found in graph. "
+                    f"Expected '{self.node_features_keys}'"
+                )
+
+            if not np.isscalar(value) and len(attributes[key]) != len(node_ids):
+                raise ValueError(
+                    f"Attribute '{key}' has wrong size. "
+                    f"Expected {len(node_ids)}, got {len(attributes[key])}"
+                )
+
+        for key, value in attributes.items():
+            if np.isscalar(value):
+                value = np.full(len(node_ids), value)
+
+            for node_id, v in zip(node_ids, value, strict=False):
+                self._graph[node_id][key] = v
+
     def update_edge_features(
         self,
-        edge_ids: list[int] | np.ndarray,
+        edge_ids: Sequence[int],
         attributes: dict[str, Any],
     ) -> None:
         """
@@ -290,7 +329,7 @@ class RustWorkXGraphBackend(BaseGraphBackend):
 
         Parameters
         ----------
-        edge_ids : list[int] | np.ndarray
+        edge_ids : Sequence[int]
             The IDs of the edges to update.
         attributes : dict[str, Any]
             Attributes to be updated.

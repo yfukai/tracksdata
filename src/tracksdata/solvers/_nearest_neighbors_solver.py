@@ -89,8 +89,25 @@ class NearestNeighborsSolver(BaseSolver):
         solution = sorted_solution[inverted_indices]
         del sorted_solution, inverted_indices, sorted_indices
 
+        solution_edges_df = edges_df.filter(solution)
+
         graph.add_edge_feature_key(solution_key, False)
         graph.update_edge_features(
-            edges_df["edge_id"].to_numpy()[solution],
+            solution_edges_df["edge_id"].to_numpy(),
+            {solution_key: True},
+        )
+
+        node_ids = np.unique(
+            np.concatenate(
+                [
+                    solution_edges_df["source"].to_numpy(),
+                    solution_edges_df["target"].to_numpy(),
+                ]
+            )
+        )
+
+        graph.add_node_feature_key(solution_key, False)
+        graph.update_node_features(
+            node_ids,
             {solution_key: True},
         )

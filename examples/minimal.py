@@ -1,13 +1,18 @@
 import os
 from pathlib import Path
 
+import napari
 import numpy as np
 from tifffile import imread
 
+from tracksdata.array._graph_array import GraphArrayView
 from tracksdata.edges._distance_edges import DistanceEdgesOperator
 from tracksdata.graph._rustworkx_graph import RustWorkXGraphBackend
 from tracksdata.nodes._regionprops import RegionPropsOperator
-from tracksdata.solvers._nearest_neighbors_solver import NearestNeighborsSolver
+from tracksdata.solvers._nearest_neighbors_solver import (
+    DEFAULT_SOLUTION_KEY,
+    NearestNeighborsSolver,
+)
 
 
 def main() -> None:
@@ -19,8 +24,12 @@ def main() -> None:
         [imread(p) for p in sorted(data_dir.glob("*.tif"))],
     )
 
-    nodes_operator = RegionPropsOperator(show_progress=True)
-    dist_operator = DistanceEdgesOperator(distance_threshold=15.0, n_neighbors=5)
+    print("starting tracking ...")
+
+    nodes_operator = RegionPropsOperator(show_progress=False)
+    dist_operator = DistanceEdgesOperator(
+        distance_threshold=15.0, n_neighbors=5, show_progress=False
+    )
     solver = NearestNeighborsSolver()
 
     graph = RustWorkXGraphBackend()
@@ -31,6 +40,13 @@ def main() -> None:
     print(f"Number of edges: {graph.num_edges}")
 
     solver.solve(graph)
+
+    array_view = GraphArrayView(graph, labels.shape, DEFAULT_SOLUTION_KEY)
+
+    print("opening napari ...")
+
+    napari.view_labels(array_view)
+    napari.run()
 
 
 if __name__ == "__main__":

@@ -2,7 +2,6 @@ import abc
 from collections.abc import Sequence
 from typing import Any
 
-import numpy as np
 import polars as pl
 
 # NOTE:
@@ -112,14 +111,14 @@ class BaseGraphBackend(abc.ABC):
     @abc.abstractmethod
     def subgraph(
         self,
-        node_ids: list[int],
+        node_ids: Sequence[int],
     ) -> "BaseReadOnlyGraph":
         """
         Create a subgraph from the graph from the given node IDs.
 
         Parameters
         ----------
-        node_ids : List[int]
+        node_ids : Sequence[int]
             The IDs of the nodes to include in the subgraph.
 
         Returns
@@ -220,9 +219,26 @@ class BaseGraphBackend(abc.ABC):
         """
 
     @abc.abstractmethod
+    def update_node_features(
+        self,
+        node_ids: Sequence[int],
+        attributes: dict[str, Any],
+    ) -> None:
+        """
+        Update the features of the nodes.
+
+        Parameters
+        ----------
+        node_ids : Sequence[int]
+            The IDs of the nodes to update.
+        attributes : dict[str, Any]
+            The attributes to update.
+        """
+
+    @abc.abstractmethod
     def update_edge_features(
         self,
-        edge_ids: list[int] | np.ndarray,
+        edge_ids: Sequence[int],
         attributes: dict[str, Any],
     ) -> None:
         """
@@ -230,7 +246,7 @@ class BaseGraphBackend(abc.ABC):
 
         Parameters
         ----------
-        edge_ids : list[int] | np.ndarray
+        edge_ids : Sequence[int]
             The IDs of the edges to update.
         attributes : dict[str, Any]
             Attributes to be updated.
