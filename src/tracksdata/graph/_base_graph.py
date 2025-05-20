@@ -1,6 +1,7 @@
 import abc
-from collections.abc import Sequence
-from typing import Any, Literal, Optional
+from collections.abc import Callable, Sequence
+from functools import wraps
+from typing import Any, Literal, Optional, ParamSpec, TypeVar
 
 import numpy as np
 import polars as pl
@@ -103,7 +104,7 @@ class BaseGraphBackend(abc.ABC):
         np.ndarray
             The mapped node IDs.
         """
-        node_ids = np.asarray(node_ids, dtype=int, copy=False)
+        node_ids = np.asarray(node_ids, dtype=int)
 
         if self.parent is None:
             return node_ids
@@ -209,7 +210,7 @@ class BaseGraphBackend(abc.ABC):
         """
 
     @abc.abstractmethod
-    def node_ids(self) -> list[int]:
+    def node_ids(self) -> np.ndarray:
         """
         Get the IDs of all nodes in the graph.
         """
@@ -218,7 +219,7 @@ class BaseGraphBackend(abc.ABC):
     def filter_nodes_by_attribute(
         self,
         attributes: dict[str, Any],
-    ) -> list[int]:
+    ) -> np.ndarray:
         """
         Filter nodes by attributes.
 
@@ -230,13 +231,14 @@ class BaseGraphBackend(abc.ABC):
 
         Returns
         -------
-        list[int]
+        np.ndarray
             The IDs of the filtered nodes.
         """
 
     @abc.abstractmethod
     def subgraph(
         self,
+        *,
         node_ids: Sequence[int],
     ) -> "BaseGraphBackend":
         """
@@ -262,6 +264,7 @@ class BaseGraphBackend(abc.ABC):
     @abc.abstractmethod
     def node_features(
         self,
+        *,
         node_ids: Sequence[int] | None = None,
         feature_keys: Sequence[str] | str | None = None,
     ) -> pl.DataFrame:
@@ -286,6 +289,7 @@ class BaseGraphBackend(abc.ABC):
     @abc.abstractmethod
     def edge_features(
         self,
+        *,
         node_ids: list[int] | None = None,
         feature_keys: Sequence[str] | None = None,
     ) -> pl.DataFrame:
@@ -347,6 +351,7 @@ class BaseGraphBackend(abc.ABC):
     @abc.abstractmethod
     def update_node_features(
         self,
+        *,
         node_ids: Sequence[int],
         attributes: dict[str, Any],
     ) -> None:
@@ -364,6 +369,7 @@ class BaseGraphBackend(abc.ABC):
     @abc.abstractmethod
     def update_edge_features(
         self,
+        *,
         edge_ids: Sequence[int],
         attributes: dict[str, Any],
     ) -> None:
@@ -377,3 +383,75 @@ class BaseGraphBackend(abc.ABC):
         attributes : dict[str, Any]
             Attributes to be updated.
         """
+
+
+P = ParamSpec("P")
+R = TypeVar("R")
+
+
+def remap_input_node_ids(node_param: str) -> Callable[[Callable[P, R]], Callable[P, R]]:
+    """
+    Decorator to remap node IDs from root to child before method execution.
+
+    Parameters
+    ----------
+    node_param : str
+        Name of the parameter containing node IDs to remap
+    """
+
+    def _decorator(func: Callable[P, R]) -> Callable[P, R]:
+        @wraps(func)
+        def _wrapper(self: BaseGraphBackend, **kwargs: P.kwargs) -> R:
+            # Get the node IDs from args or kwargs
+            node_ids = kwargs.get(node_param, None)
+            if node_ids is not None:
+                kwargs[node_param] = self.maybe_map_nodes(node_ids, "root_to_child")
+            return func(self, **kwargs)
+
+        return _wrapper
+
+    return _decorator
+
+
+def remap_output_node_ids(ids_columns: list[str] | None = None) -> Callable[P, R]:
+    """
+    Decorator to remap node IDs from child to root after method execution.
+    Only works for methods that return a sequence of node IDs or a single node ID.
+
+    Parameters
+    ----------
+    ids_columns : list[str] | None
+        Optional list of columns to remap when returning a pl.DataFrame.
+
+    Returns
+    -------
+    Callable[[Callable[P, R]], Callable[P, R]]
+        The decorated function.
+    """
+
+    def _decorator(func: Callable[P, R]) -> Callable[P, R]:
+        @wraps(func)
+        def _wrapper(self: BaseGraphBackend, *args: P.args, **kwargs: P.kwargs) -> R:
+            result = func(self, *args, **kwargs)
+            if isinstance(result, pl.DataFrame):
+                if ids_columns is None:
+                    raise ValueError(
+                        "'node_params' must be provided when returning a pl.DataFrame"
+                    )
+                for node_param in ids_columns:
+                    values = self.maybe_map_nodes(
+                        result[node_param].to_numpy(), "child_to_root"
+                    )
+                    result = result.with_columns(
+                        pl.Series(name=node_param, values=values)
+                    )
+                return result
+            elif isinstance(result, list | np.ndarray | Sequence):
+                return self.maybe_map_nodes(result, "child_to_root")
+            elif isinstance(result, int | np.integer):
+                return int(self.maybe_map_nodes([result], "child_to_root")[0])
+            raise ValueError(f"Invalid return type: {type(result)}")
+
+        return _wrapper
+
+    return _decorator
