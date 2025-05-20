@@ -29,7 +29,7 @@ def main() -> None:
     dist_operator = DistanceEdgesOperator(
         distance_threshold=15.0, n_neighbors=5, show_progress=False
     )
-    iou_operator = IoUEdgesOperator(show_progress=False)
+    iou_operator = IoUEdgesOperator(output_key="iou", show_progress=False)
 
     # TODO: define custom syntax for objective function from weights
     solver = NearestNeighborsSolver(edge_weight_key="iou")
@@ -40,7 +40,7 @@ def main() -> None:
 
     dist_operator.add_edges(graph)
     print(f"Number of edges: {graph.num_edges}")
-    iou_operator.add_weights(graph, weight_key="iou")
+    iou_operator.add_weights(graph)
 
     solver.solve(graph)
 

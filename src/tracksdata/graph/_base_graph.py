@@ -137,7 +137,7 @@ class BaseGraphBackend(abc.ABC):
     def node_features(
         self,
         node_ids: Sequence[int] | None = None,
-        feature_keys: Sequence[str] | None = None,
+        feature_keys: Sequence[str] | str | None = None,
     ) -> pl.DataFrame:
         """
         Get the features of the nodes as a pandas DataFrame.
@@ -147,7 +147,7 @@ class BaseGraphBackend(abc.ABC):
         node_ids : list[int] | None
             The IDs of the nodes to get the features for.
             If None, all nodes are used.
-        feature_keys : Sequence[str] | None
+        feature_keys : Sequence[str] | str | None
             The feature keys to get.
             If None, all features are used.
 

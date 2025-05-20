@@ -186,7 +186,7 @@ class RustWorkXGraphBackend(BaseGraphBackend):
     def node_features(
         self,
         node_ids: Sequence[int] | None = None,
-        feature_keys: Sequence[str] | None = None,
+        feature_keys: Sequence[str] | str | None = None,
     ) -> pl.DataFrame:
         """
         Get the features of the nodes as a polars DataFrame.
@@ -215,6 +215,9 @@ class RustWorkXGraphBackend(BaseGraphBackend):
         if feature_keys is None:
             feature_keys = self.node_features_keys
 
+        if isinstance(feature_keys, str):
+            feature_keys = [feature_keys]
+
         # Create columns directly instead of building intermediate dictionaries
         columns = {key: [] for key in feature_keys}
 
@@ -222,7 +225,7 @@ class RustWorkXGraphBackend(BaseGraphBackend):
         for node_id in node_ids:
             node_data = self._graph[node_id]
             for key in feature_keys:
-                columns[key].append(node_data.get(key))
+                columns[key].append(node_data[key])
 
         for key in feature_keys:
             columns[key] = np.asarray(columns[key])

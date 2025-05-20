@@ -1,77 +1,32 @@
-import numpy as np
-
 from tracksdata.constants import DEFAULT_ATTR_KEYS
-from tracksdata.graph._base_graph import BaseGraphBackend
-from tracksdata.utils._logging import LOG
-from tracksdata.utils._processing import maybe_show_progress
+from tracksdata.edges._generic_edges import GenericFunctionEdgesOperator
+from tracksdata.nodes._mask import Mask
 
 
-class IoUEdgesOperator:
-    # TODO: define API and inherit
+class IoUEdgesOperator(GenericFunctionEdgesOperator):
+    """
+    Add weights to the edges of the graph based on the IoU
+    of the masks of the nodes.
+
+    Parameters
+    ----------
+    output_key : str
+        The key to use for the output of the IoU.
+    mask_key : str
+        The key to use for the masks of the nodes.
+    show_progress : bool
+        Whether to show a progress bar.
+    """
+
     def __init__(
-        self, mask_key: str = DEFAULT_ATTR_KEYS.MASK, show_progress: bool = True
-    ):
-        self.show_progress = show_progress
-        self.mask_key = mask_key
-
-    def add_weights(
         self,
-        graph: BaseGraphBackend,
-        *,
-        t: int | None = None,
-        weight_key: str,
-    ) -> None:
-        """
-        Add weights to the edges of the graph based on the IoU
-        of the masks of the nodes.
-
-        Parameters
-        ----------
-        graph : BaseGraphBackend
-            The graph to add weights to.
-        t : int | None
-            The time point to add weights to.
-        mask_key : str
-            The key to use for the masks of the nodes.
-        weight_key : str
-            The key to use for the computed weights.
-        """
-
-        if t is None:
-            for t in maybe_show_progress(
-                graph.time_points(),
-                desc="Adding weights to edges",
-                show_progress=self.show_progress,
-            ):
-                self.add_weights(graph, t=t, weight_key=weight_key)
-            return
-
-        source_ids = graph.filter_nodes_by_attribute(t=t)
-        edges_df = graph.edge_features(node_ids=source_ids)
-
-        if len(edges_df) == 0:
-            LOG.warning(f"No edges found for time point {t} to sucessors")
-            return
-
-        source_df = graph.node_features(
-            node_ids=edges_df[DEFAULT_ATTR_KEYS.EDGE_SOURCE].to_numpy(),
-            feature_keys=[self.mask_key],
-        )
-        target_df = graph.node_features(
-            node_ids=edges_df[DEFAULT_ATTR_KEYS.EDGE_TARGET].to_numpy(),
-            feature_keys=[self.mask_key],
-        )
-
-        weights = np.zeros(len(edges_df), dtype=np.float32)
-
-        for i, (source_mask, target_mask) in enumerate(
-            zip(source_df[self.mask_key], target_df[self.mask_key], strict=True)
-        ):
-            weights[i] = source_mask.iou(target_mask)
-
-        if weight_key not in graph.edge_features_keys:
-            graph.add_edge_feature_key(weight_key, -1.0)
-
-        graph.update_edge_features(
-            edges_df[DEFAULT_ATTR_KEYS.EDGE_ID].to_numpy(), {weight_key: weights}
+        output_key: str,
+        mask_key: str = DEFAULT_ATTR_KEYS.MASK,
+        show_progress: bool = True,
+    ):
+        super().__init__(
+            func=Mask.iou,
+            feature_keys=mask_key,
+            output_key=output_key,
+            show_progress=show_progress,
         )
