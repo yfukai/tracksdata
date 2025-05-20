@@ -62,7 +62,7 @@ class RustWorkXGraphBackend(BaseGraphBackend):
 
             if "t" not in attributes:
                 raise ValueError(
-                    f"Node attributes must have a 't' key. " f"Got {attributes.keys()}"
+                    f"Node attributes must have a 't' key. Got {attributes.keys()}"
                 )
 
         node_id = self._graph.add_node(attributes)
