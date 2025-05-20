@@ -73,7 +73,12 @@ class AttrExpr:
         # To auto generate operator methods such as `.log()``
         expr_attr = getattr(self.expr, attr)
         if callable(expr_attr):
-            return functools.partialmethod(expr_attr, self._wrap)
+
+            @functools.wraps(expr_attr)
+            def _wrapped(*args, **kwargs):
+                return self._wrap(expr_attr(*args, **kwargs))
+
+            return _wrapped
         return expr_attr
 
     def __repr__(self) -> str:

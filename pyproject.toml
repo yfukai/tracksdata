@@ -37,6 +37,12 @@ dependencies = [
   "imagecodecs",
 ]
 
+[project.optional-dependencies]
+test = [
+  "pytest>=7.0",
+  "pytest-cov",
+]
+
 [project.urls]
 Documentation = "https://github.com/jookuma/tracksdata#readme"
 Issues = "https://github.com/jookuma/tracksdata/issues"
