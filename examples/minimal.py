@@ -9,6 +9,7 @@ from tracksdata.array._graph_array import GraphArrayView
 from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.edges._distance_edges import DistanceEdgesOperator
 from tracksdata.edges._iou_edges import IoUEdgesOperator
+from tracksdata.expr import AttrExpr
 from tracksdata.graph._rustworkx_graph import RustWorkXGraphBackend
 from tracksdata.nodes._regionprops import RegionPropsOperator
 from tracksdata.solvers._nearest_neighbors_solver import NearestNeighborsSolver
@@ -32,7 +33,7 @@ def main() -> None:
     iou_operator = IoUEdgesOperator(output_key="iou", show_progress=False)
 
     # TODO: define custom syntax for objective function from weights
-    solver = NearestNeighborsSolver(edge_weight_key="iou")
+    solver = NearestNeighborsSolver(edge_weight=-AttrExpr("iou"))
 
     graph = RustWorkXGraphBackend()
     nodes_operator.add_nodes(graph, labels=labels)

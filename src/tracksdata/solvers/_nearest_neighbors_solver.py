@@ -3,6 +3,7 @@ import numpy as np
 from numba import typed
 
 from tracksdata.constants import DEFAULT_ATTR_KEYS
+from tracksdata.expr import AttrExpr
 from tracksdata.graph._base_graph import BaseGraphBackend
 from tracksdata.solvers._base_solver import BaseSolver
 
@@ -47,21 +48,34 @@ class NearestNeighborsSolver(BaseSolver):
     ----------
     max_children : int
         The maximum number of children a node can have.
-    edge_weight_key : str
-        The key to get the edge weight from the graph.
-    solution_key : str
+    edge_weight : str | AttrExpr
+        Key to get the edge weight from the graph or an expression to evaluate
+        composing edge attributes of the graph.
+
+        For example:
+        >>> `edge_weight=-AttrExpr("iou")`
+        will use the negative IoU as edge weight.
+
+        >>> `edge_weight=AttrExpr("iou").log() * AttrExpr("weight")`
+        will use the log of IoU times the default weight as edge weight.
+
+    output_key : str
         The key to store the solution in the graph.
     """
 
     def __init__(
         self,
         max_children: int = 2,
-        edge_weight_key: str = DEFAULT_ATTR_KEYS.EDGE_WEIGHT,
-        solution_key: str = DEFAULT_ATTR_KEYS.SOLUTION,
+        edge_weight: str | AttrExpr = DEFAULT_ATTR_KEYS.EDGE_WEIGHT,
+        output_key: str = DEFAULT_ATTR_KEYS.SOLUTION,
     ):
         self.max_children = max_children
-        self.edge_weight_key = edge_weight_key
-        self.solution_key = solution_key
+        self.solution_key = output_key
+
+        if not isinstance(edge_weight, AttrExpr):
+            self.edge_weight_expr = AttrExpr(edge_weight)
+        else:
+            self.edge_weight_expr = edge_weight
 
     def solve(
         self,
@@ -77,8 +91,11 @@ class NearestNeighborsSolver(BaseSolver):
             The graph to solve.
         """
         # get edges and sort them by weight
-        edges_df = graph.edge_features(feature_keys=[self.edge_weight_key])
-        sorted_indices = np.argsort(edges_df[self.edge_weight_key].to_numpy())
+        edges_df = graph.edge_features(
+            feature_keys=self.edge_weight_expr.column_names()
+        )
+        weights = self.edge_weight_expr.evaluate(edges_df).to_numpy()
+        sorted_indices = np.argsort(weights)
 
         sorted_source = edges_df[DEFAULT_ATTR_KEYS.EDGE_SOURCE].to_numpy()[
             sorted_indices
