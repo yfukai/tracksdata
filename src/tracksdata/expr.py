@@ -11,6 +11,21 @@ ExprInput = Union[str, Scalar, "AttrExpr", Expr]
 
 
 class AttrExpr:
+    """
+    A class to compose an attribute expression for graph attributes.
+
+    Parameters
+    ----------
+    value : ExprInput
+        The value to compose the attribute expression from.
+
+    Examples
+    --------
+    >>> `AttrExpr("iou").log()`
+    >>> `AttrExpr(1.0)`
+    >>> `AttrExpr((1 - AttrExpr("iou")) * AttrExpr("distance"))`
+    """
+
     expr: Expr
 
     def __init__(self, value: ExprInput) -> None:
@@ -55,22 +70,17 @@ class AttrExpr:
         return AttrExpr(abs(self.expr))
 
     def __getattr__(self, attr: str) -> Any:
+        # To auto generate operator methods such as `.log()``
         expr_attr = getattr(self.expr, attr)
         if callable(expr_attr):
-
-            @functools.wraps(expr_attr)
-            def method(*args, **kwargs):
-                result = expr_attr(*args, **kwargs)
-                return self._wrap(result)
-
-            return method
+            return functools.partialmethod(expr_attr, self._wrap)
         return expr_attr
 
     def __repr__(self) -> str:
-        return f"ColumnExpr({self.expr})"
+        return f"AttrExpr({self.expr})"
 
 
-# --- Auto-generate operator methods using functools.partialmethod ---
+# Auto-generate operator methods using functools.partialmethod
 
 
 def _add_operator(name: str, op: Callable, reverse: bool = False) -> None:
@@ -80,7 +90,10 @@ def _add_operator(name: str, op: Callable, reverse: bool = False) -> None:
     setattr(AttrExpr, name, method)
 
 
-def _define_ops():
+def _setup_ops() -> None:
+    """
+    Setup the operator methods for the AttrExpr class.
+    """
     bin_ops = {
         "add": operator.add,
         "sub": operator.sub,
@@ -105,4 +118,4 @@ def _define_ops():
         _add_operator(f"__r{op_name}__", op_func, reverse=True)
 
 
-_define_ops()
+_setup_ops()
