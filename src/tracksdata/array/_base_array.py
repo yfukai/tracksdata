@@ -16,6 +16,11 @@ class BaseReadOnlyArray(abc.ABC):
         return self.shape[0]
 
     @property
+    def ndim(self) -> int:
+        """Returns the number of dimensions of the array."""
+        return len(self.shape)
+
+    @property
     @abc.abstractmethod
     def shape(self) -> tuple[int, ...]:
         """Returns the shape of the array."""

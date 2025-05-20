@@ -26,7 +26,21 @@ classifiers = [
   "Programming Language :: Python :: Implementation :: PyPy",
 ]
 dependencies = [
-  "numpy>2",
+  "blosc2",
+  "numpy > 2",
+  "scikit-image >= 0.24.0",
+  "rustworkx",
+  "tqdm",
+  "polars",
+  "rich",
+  "numba",
+  "imagecodecs",
+]
+
+[project.optional-dependencies]
+test = [
+  "pytest>=7.0",
+  "pytest-cov",
 ]
 
 [project.urls]
@@ -37,28 +51,55 @@ Source = "https://github.com/jookuma/tracksdata"
 [tool.hatch.version]
 path = "src/tracksdata/__about__.py"
 
-[tool.hatch.envs.types]
-extra-dependencies = [
-  "mypy>=1.0.0",
+# https://docs.astral.sh/ruff
+[tool.ruff]
+target-version = "py310"
+src = ["src"]
+
+# https://docs.astral.sh/ruff/rules
+[tool.ruff.lint]
+pydocstyle = { convention = "numpy" }
+select = [
+    "E",    # style errors
+    "W",    # style warnings
+    "F",    # flakes
+    "D417", # Missing argument descriptions in Docstrings
+    "I",    # isort
+    "UP",   # pyupgrade
+    "C4",   # flake8-comprehensions
+    "B",    # flake8-bugbear
+    "A001", # flake8-builtins
+    "RUF",  # ruff-specific rules
+    "TID",  # flake8-tidy-imports
 ]
-[tool.hatch.envs.types.scripts]
-check = "mypy --install-types --non-interactive {args:src/tracksdata tests}"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*.py" = ["D", "S"]
+
+# https://docs.astral.sh/ruff/formatter/
+[tool.ruff.format]
+docstring-code-format = true
+skip-magic-trailing-comma = false # default is false
+
+# https://coverage.readthedocs.io/en/6.4/config.html
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+exclude_lines = [
+    "pragma: no cover", # Have to re-enable the standard pragma
+    "def __repr__", # Don't complain about missing debug-only code:
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",  # Ignore type checking
+    "if __name__ == .__main__.:", # Don't complain if non-runnable code isn't run:
+    "@(abc.)?abstractmethod", # Don't complain about abstract methods, they aren't run:
+]
 
 [tool.coverage.run]
-source_pkgs = ["tracksdata", "tests"]
+source = ["src"]
 branch = true
 parallel = true
 omit = [
   "src/tracksdata/__about__.py",
-]
-
-[tool.coverage.paths]
-tracksdata = ["src/tracksdata"]
-tests = ["src/tracksdata/**/_tests"]
-
-[tool.coverage.report]
-exclude_lines = [
-  "no cov",
-  "if __name__ == .__main__.:",
-  "if TYPE_CHECKING:",
+  "**/_test/*.py",
 ]

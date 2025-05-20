@@ -1,8 +1,7 @@
 import abc
 
-from tracksdata._graph import BaseGraphBackend
-
-DEFAULT_SOLUTION_KEY = "solution"
+from tracksdata.constants import DEFAULT_ATTR_KEYS
+from tracksdata.graph._base_graph import BaseGraphBackend
 
 
 class BaseSolver(abc.ABC):
@@ -13,12 +12,17 @@ class BaseSolver(abc.ABC):
     """
 
     @abc.abstractmethod
-    def __call__(self, graph: BaseGraphBackend, solution_key: str = DEFAULT_SOLUTION_KEY) -> None:
+    def solve(
+        self, graph: BaseGraphBackend, solution_key: str = DEFAULT_ATTR_KEYS.SOLUTION
+    ) -> None:
         """
-        Solve the tracking problem and add the result to the graph with key `solution_key`.
+        Solve the tracking problem and add the result to the graph with
+        key `solution_key`.
 
         Parameters
         ----------
+        graph : BaseGraphBackend
+            The graph to solve the tracking problem on.
         solution_key: str
             The edge and node attributes key to add the solution to.
         """
