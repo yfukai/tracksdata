@@ -81,15 +81,22 @@ select = [
 docstring-code-format = true
 skip-magic-trailing-comma = false # default is false
 
-[tool.hatch.envs.types]
-extra-dependencies = [
-  "mypy>=1.0.0",
+# https://coverage.readthedocs.io/en/6.4/config.html
+[tool.coverage.report ]
+show_missing = true
+skip_covered = true
+exclude_lines = [
+    "pragma: no cover", # Have to re-enable the standard pragma
+    "def __repr__", # Don't complain about missing debug-only code:
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",  # Ignore type checking
+    "if __name__ == .__main__.:", # Don't complain if non-runnable code isn't run:
+    "@(abc.)?abstractmethod", # Don't complain about abstract methods, they aren't run:
 ]
-[tool.hatch.envs.types.scripts]
-check = "mypy --install-types --non-interactive {args:src/tracksdata tests}"
 
 [tool.coverage.run]
-source_pkgs = ["tracksdata", "tests"]
+source_pkgs = ["tracksdata"]
 branch = true
 parallel = true
 omit = [
@@ -99,10 +106,3 @@ omit = [
 [tool.coverage.paths]
 tracksdata = ["src/tracksdata"]
 tests = ["src/tracksdata/**/_tests"]
-
-[tool.coverage.report]
-exclude_lines = [
-  "no cov",
-  "if __name__ == .__main__.:",
-  "if TYPE_CHECKING:",
-]
