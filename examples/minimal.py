@@ -6,14 +6,12 @@ import numpy as np
 from tifffile import imread
 
 from tracksdata.array._graph_array import GraphArrayView
+from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.edges._distance_edges import DistanceEdgesOperator
 from tracksdata.edges._iou_edges import IoUEdgesOperator
 from tracksdata.graph._rustworkx_graph import RustWorkXGraphBackend
 from tracksdata.nodes._regionprops import RegionPropsOperator
-from tracksdata.solvers._nearest_neighbors_solver import (
-    DEFAULT_SOLUTION_KEY,
-    NearestNeighborsSolver,
-)
+from tracksdata.solvers._nearest_neighbors_solver import NearestNeighborsSolver
 
 
 def main() -> None:
@@ -46,7 +44,11 @@ def main() -> None:
 
     solver.solve(graph)
 
-    array_view = GraphArrayView(graph, labels.shape, DEFAULT_SOLUTION_KEY)
+    array_view = GraphArrayView(
+        graph,
+        labels.shape,
+        feature_key=DEFAULT_ATTR_KEYS.SOLUTION,
+    )
 
     print("opening napari ...")
 

@@ -3,6 +3,7 @@ from numpy.typing import ArrayLike
 from polars.datatypes.convert import dtype_to_ffiname
 
 from tracksdata.array._base_array import ArrayIndex, BaseReadOnlyArray
+from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.graph._base_graph import BaseGraphBackend
 from tracksdata.nodes._mask import Mask
 
@@ -49,7 +50,7 @@ class GraphArrayView(BaseReadOnlyArray):
             # TODO: this should be a single `subgraph(t=index).node_features(...)` call
             df = self.graph.node_features(
                 node_ids=node_ids,
-                feature_keys=[self._feature_key, "mask"],
+                feature_keys=[self._feature_key, DEFAULT_ATTR_KEYS.MASK],
             )
 
             dtype = np.dtype(dtype_to_ffiname(df[self._feature_key].dtype))
@@ -62,7 +63,9 @@ class GraphArrayView(BaseReadOnlyArray):
             # TODO: reuse buffer
             buffer = np.zeros(self.shape[1:], dtype=self.dtype)
 
-            for mask, value in zip(df["mask"], df[self._feature_key], strict=False):
+            for mask, value in zip(
+                df[DEFAULT_ATTR_KEYS.MASK], df[self._feature_key], strict=False
+            ):
                 mask: Mask
                 mask.paint_buffer(buffer, value)
 

@@ -5,6 +5,7 @@ import numpy as np
 import polars as pl
 import rustworkx as rx
 
+from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.graph._base_graph import BaseGraphBackend, BaseReadOnlyGraph
 
 # TODO:
@@ -262,15 +263,23 @@ class RustWorkXGraphBackend(BaseGraphBackend):
         edge_map = graph.edge_index_map()
         if len(edge_map) == 0:
             return pl.DataFrame(
-                {key: [] for key in ["edge_id", "source", "target", *feature_keys]}
+                {
+                    key: []
+                    for key in [
+                        DEFAULT_ATTR_KEYS.EDGE_ID,
+                        DEFAULT_ATTR_KEYS.EDGE_SOURCE,
+                        DEFAULT_ATTR_KEYS.EDGE_TARGET,
+                        *feature_keys,
+                    ]
+                }
             )
 
         source, target, data = zip(*edge_map.values(), strict=False)
 
         columns = {key: [] for key in feature_keys}
-        columns["edge_id"] = list(edge_map.keys())
-        columns["source"] = source
-        columns["target"] = target
+        columns[DEFAULT_ATTR_KEYS.EDGE_ID] = list(edge_map.keys())
+        columns[DEFAULT_ATTR_KEYS.EDGE_SOURCE] = source
+        columns[DEFAULT_ATTR_KEYS.EDGE_TARGET] = target
 
         for row in data:
             for key in feature_keys:

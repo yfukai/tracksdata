@@ -4,8 +4,6 @@ from numpy.typing import NDArray
 
 from tracksdata.functional._iou import fast_iou_with_bbox
 
-DEFAULT_MASK_KEY = "mask"
-
 
 class Mask:
     def __init__(

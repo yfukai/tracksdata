@@ -2,9 +2,9 @@ import numba as nb
 import numpy as np
 from numba import typed
 
-from tracksdata.edges._base_edges import DEFAULT_EDGE_WEIGHT_KEY
+from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.graph._base_graph import BaseGraphBackend
-from tracksdata.solvers._base_solver import DEFAULT_SOLUTION_KEY, BaseSolver
+from tracksdata.solvers._base_solver import BaseSolver
 
 
 @nb.njit
@@ -42,20 +42,30 @@ class NearestNeighborsSolver(BaseSolver):
     """
     Solver tracking problem with nearest neighbor ordering of edges.
     Each node can have only one parent and up to `max_children` child.
+
+    Parameters
+    ----------
+    max_children : int
+        The maximum number of children a node can have.
+    edge_weight_key : str
+        The key to get the edge weight from the graph.
+    solution_key : str
+        The key to store the solution in the graph.
     """
 
     def __init__(
         self,
         max_children: int = 2,
-        edge_weight_key: str = DEFAULT_EDGE_WEIGHT_KEY,
+        edge_weight_key: str = DEFAULT_ATTR_KEYS.EDGE_WEIGHT,
+        solution_key: str = DEFAULT_ATTR_KEYS.SOLUTION,
     ):
         self.max_children = max_children
         self.edge_weight_key = edge_weight_key
+        self.solution_key = solution_key
 
     def solve(
         self,
         graph: BaseGraphBackend,
-        solution_key: str = DEFAULT_SOLUTION_KEY,
     ) -> None:
         """
         Solve the tracking problem with nearest neighbor ordering of edges.
@@ -65,15 +75,17 @@ class NearestNeighborsSolver(BaseSolver):
         ----------
         graph : BaseGraphBackend
             The graph to solve.
-        solution_key : str
-            The key to store the solution in the graph.
         """
         # get edges and sort them by weight
         edges_df = graph.edge_features(feature_keys=[self.edge_weight_key])
         sorted_indices = np.argsort(edges_df[self.edge_weight_key].to_numpy())
 
-        sorted_source = edges_df["source"].to_numpy()[sorted_indices]
-        sorted_target = edges_df["target"].to_numpy()[sorted_indices]
+        sorted_source = edges_df[DEFAULT_ATTR_KEYS.EDGE_SOURCE].to_numpy()[
+            sorted_indices
+        ]
+        sorted_target = edges_df[DEFAULT_ATTR_KEYS.EDGE_TARGET].to_numpy()[
+            sorted_indices
+        ]
         sorted_solution = np.zeros(len(sorted_source), dtype=bool)
 
         _constrained_nearest_neighbors(
@@ -91,23 +103,23 @@ class NearestNeighborsSolver(BaseSolver):
 
         solution_edges_df = edges_df.filter(solution)
 
-        graph.add_edge_feature_key(solution_key, False)
+        graph.add_edge_feature_key(self.solution_key, False)
         graph.update_edge_features(
-            solution_edges_df["edge_id"].to_numpy(),
-            {solution_key: True},
+            solution_edges_df[DEFAULT_ATTR_KEYS.EDGE_ID].to_numpy(),
+            {self.solution_key: True},
         )
 
         node_ids = np.unique(
             np.concatenate(
                 [
-                    solution_edges_df["source"].to_numpy(),
-                    solution_edges_df["target"].to_numpy(),
+                    solution_edges_df[DEFAULT_ATTR_KEYS.EDGE_SOURCE].to_numpy(),
+                    solution_edges_df[DEFAULT_ATTR_KEYS.EDGE_TARGET].to_numpy(),
                 ]
             )
         )
 
-        graph.add_node_feature_key(solution_key, False)
+        graph.add_node_feature_key(self.solution_key, False)
         graph.update_node_features(
             node_ids,
-            {solution_key: True},
+            {self.solution_key: True},
         )

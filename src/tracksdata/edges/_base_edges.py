@@ -2,9 +2,8 @@ import abc
 from collections.abc import Sequence
 from typing import Any
 
+from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.graph._base_graph import BaseGraphBackend
-
-DEFAULT_EDGE_WEIGHT_KEY = "weight"
 
 
 class BaseEdgesOperator(abc.ABC):
@@ -19,7 +18,7 @@ class BaseEdgesOperator(abc.ABC):
         graph: BaseGraphBackend,
         *,
         t: int | None = None,
-        weight_key: Sequence[str] | str = DEFAULT_EDGE_WEIGHT_KEY,
+        weight_key: Sequence[str] | str = DEFAULT_ATTR_KEYS.EDGE_WEIGHT,
         **kwargs: Any,
     ) -> None:
         r"""

@@ -5,7 +5,8 @@ import numpy as np
 from scipy.spatial import KDTree
 from tqdm import tqdm
 
-from tracksdata.edges._base_edges import DEFAULT_EDGE_WEIGHT_KEY, BaseEdgesOperator
+from tracksdata.constants import DEFAULT_ATTR_KEYS
+from tracksdata.edges._base_edges import BaseEdgesOperator
 from tracksdata.graph._base_graph import BaseGraphBackend
 from tracksdata.utils._logging import LOG
 
@@ -48,7 +49,7 @@ class DistanceEdgesOperator(BaseEdgesOperator):
         graph: BaseGraphBackend,
         *,
         t: int | None = None,
-        weight_key: str = DEFAULT_EDGE_WEIGHT_KEY,
+        weight_key: str = DEFAULT_ATTR_KEYS.EDGE_WEIGHT,
     ) -> None:
         """
         Add edges to a graph based on the distance between nodes.

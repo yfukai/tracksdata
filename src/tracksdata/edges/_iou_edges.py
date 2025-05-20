@@ -1,14 +1,16 @@
 import numpy as np
 
+from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.graph._base_graph import BaseGraphBackend
-from tracksdata.nodes._mask import DEFAULT_MASK_KEY
 from tracksdata.utils._logging import LOG
 from tracksdata.utils._processing import maybe_show_progress
 
 
 class IoUEdgesOperator:
     # TODO: define API and inherit
-    def __init__(self, mask_key: str = DEFAULT_MASK_KEY, show_progress: bool = True):
+    def __init__(
+        self, mask_key: str = DEFAULT_ATTR_KEYS.MASK, show_progress: bool = True
+    ):
         self.show_progress = show_progress
         self.mask_key = mask_key
 
@@ -52,10 +54,12 @@ class IoUEdgesOperator:
             return
 
         source_df = graph.node_features(
-            node_ids=edges_df["source"].to_numpy(), feature_keys=[self.mask_key]
+            node_ids=edges_df[DEFAULT_ATTR_KEYS.EDGE_SOURCE].to_numpy(),
+            feature_keys=[self.mask_key],
         )
         target_df = graph.node_features(
-            node_ids=edges_df["target"].to_numpy(), feature_keys=[self.mask_key]
+            node_ids=edges_df[DEFAULT_ATTR_KEYS.EDGE_TARGET].to_numpy(),
+            feature_keys=[self.mask_key],
         )
 
         weights = np.zeros(len(edges_df), dtype=np.float32)
@@ -69,5 +73,5 @@ class IoUEdgesOperator:
             graph.add_edge_feature_key(weight_key, -1.0)
 
         graph.update_edge_features(
-            edges_df["edge_id"].to_numpy(), {weight_key: weights}
+            edges_df[DEFAULT_ATTR_KEYS.EDGE_ID].to_numpy(), {weight_key: weights}
         )
