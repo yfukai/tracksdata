@@ -82,7 +82,7 @@ docstring-code-format = true
 skip-magic-trailing-comma = false # default is false
 
 # https://coverage.readthedocs.io/en/6.4/config.html
-[tool.coverage.report ]
+[tool.coverage.report]
 show_missing = true
 skip_covered = true
 exclude_lines = [
@@ -96,13 +96,10 @@ exclude_lines = [
 ]
 
 [tool.coverage.run]
-source_pkgs = ["tracksdata"]
+source = ["src"]
 branch = true
 parallel = true
 omit = [
   "src/tracksdata/__about__.py",
+  "**/_test/*.py",
 ]
-
-[tool.coverage.paths]
-tracksdata = ["src/tracksdata"]
-tests = ["src/tracksdata/**/_tests"]
