@@ -1,5 +1,6 @@
 class DefaultAttrKeys:
     NODE_ID = "node_id"
+    T = "t"
     MASK = "mask"
     SOLUTION = "solution"
 

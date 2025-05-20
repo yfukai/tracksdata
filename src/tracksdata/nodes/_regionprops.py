@@ -92,6 +92,13 @@ class RegionPropsOperator(BaseNodesOperator):
                 f"`labels` must be 2D or 3D, got {labels.ndim} dimensions."
             )
 
+        # initialize the feature keys
+        for attr_key in [
+            p.__name__ if callable(p) else p for p in self._extra_properties
+        ] + [axis_names]:
+            if attr_key not in graph.node_features_keys:
+                graph.add_node_feature_key(attr_key, None)
+
         labels = np.asarray(labels)
 
         for obj in maybe_show_progress(
@@ -114,8 +121,6 @@ class RegionPropsOperator(BaseNodesOperator):
                     attributes[prop] = getattr(obj, prop)
 
             attributes[DEFAULT_ATTR_KEYS.MASK] = Mask(obj.image, obj.bbox)
+            attributes[DEFAULT_ATTR_KEYS.T] = t
 
-            graph.add_node(
-                t=t,
-                **attributes,
-            )
+            graph.add_node(attributes, validate_keys=False)

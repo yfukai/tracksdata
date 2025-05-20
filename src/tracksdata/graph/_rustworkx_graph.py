@@ -33,32 +33,40 @@ class RustWorkXGraphBackend(BaseGraphBackend):
         """
         self._graph = rx.PyDiGraph()
         self._time_to_nodes: dict[int, list[int]] = {}
-        self._node_features_keys: list[str] = []
+        self._node_features_keys: list[str] = [DEFAULT_ATTR_KEYS.T]
         self._edge_features_keys: list[str] = []
 
     def add_node(
         self,
-        *,
-        t: int,
-        **kwargs: Any,
+        attributes: dict[str, Any],
+        validate_keys: bool = True,
     ) -> int:
         """
         Add a node to the graph at time t.
 
         Parameters
         ----------
-        t : int
-            The time at which to add the node.
-        **kwargs : Any
-            The attributes of the node to be added.
-            The keys of the kwargs will be used as the attributes of the node.
+        attributes : Any
+            The attributes of the node to be added, must have a "t" key.
+            The keys of the attributes will be used as the attributes of the node.
             For example:
-            >>> `graph.add_node(t=0, label='A', intensity=100)`
+            >>> `graph.add_node(dict(t=0, label='A', intensity=100))`
+        validate_keys : bool
+            Whether to check if the attributes keys are valid.
+            If False, the attributes keys will not be checked,
+            useful to speed up the operation when doing bulk insertions.
         """
-        # avoiding copying kwargs on purpose, it could be a problem in the future
-        kwargs["t"] = t
-        node_id = self._graph.add_node(kwargs)
-        self._time_to_nodes.setdefault(t, []).append(node_id)
+        # avoiding copying attributes on purpose, it could be a problem in the future
+        if validate_keys:
+            self._validate_attributes(attributes, self.node_features_keys, "node")
+
+            if "t" not in attributes:
+                raise ValueError(
+                    f"Node attributes must have a 't' key. " f"Got {attributes.keys()}"
+                )
+
+        node_id = self._graph.add_node(attributes)
+        self._time_to_nodes.setdefault(attributes["t"], []).append(node_id)
         return node_id
 
     def add_edge(
@@ -66,6 +74,7 @@ class RustWorkXGraphBackend(BaseGraphBackend):
         source_id: int,
         target_id: int,
         attributes: dict[str, Any],
+        validate_keys: bool = True,
     ) -> int:
         """
         Add an edge to the graph.
@@ -79,11 +88,13 @@ class RustWorkXGraphBackend(BaseGraphBackend):
         attributes : dict[str, Any]
             The attributes of the edge to be added.
             The keys of the attributes will be used as the attributes of the edge.
+        validate_keys : bool
+            Whether to check if the attributes keys are valid.
+            If False, the attributes keys will not be checked,
+            useful to speed up the operation when doing bulk insertions.
         """
-        for key in attributes.keys():
-            if key not in self.edge_features_keys:
-                raise ValueError(f"Edge feature key {key} not found")
-
+        if validate_keys:
+            self._validate_attributes(attributes, self.edge_features_keys, "edge")
         edge_id = self._graph.add_edge(source_id, target_id, attributes)
         return edge_id
 

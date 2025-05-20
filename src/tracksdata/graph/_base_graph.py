@@ -28,29 +28,54 @@ class BaseGraphBackend(abc.ABC):
     Base class for a graph backend.
     """
 
-    @abc.abstractmethod
-    def add_node(
-        self,
-        *,
-        t: int,
-        **kwargs: Any,
-    ) -> int:
+    @staticmethod
+    def _validate_attributes(
+        attributes: dict[str, Any],
+        reference_keys: list[str],
+        mode: str,
+    ) -> None:
         """
-        Add a node to the graph.
+        Validate the attributes of a node.
 
         Parameters
         ----------
-        t : int
-            The time of the node.
-        kwargs : Any
-            Additional attributes for the node.
+        attributes : dict[str, Any]
+            The attributes to validate.
+        reference_keys : list[str]
+            The keys to validate against.
+        mode : str
+            The mode to validate against, for example "node" or "edge".
+        """
+        for key in attributes.keys():
+            if key not in reference_keys:
+                raise ValueError(
+                    f"{mode} feature key {key} not found in existing keys: "
+                    f"'{reference_keys}'\nInitialize with "
+                    "`graph.add_{mode}_feature_key(key, default_value)`"
+                )
 
-        TODO: make add additional attributes
-            - x and y
-            - z=0
-            - mask=None
-            - bbox=None
-        thoughts?
+    @abc.abstractmethod
+    def add_node(
+        self,
+        attributes: dict[str, Any],
+        validate_keys: bool = True,
+    ) -> int:
+        """
+        Add a node to the graph at time t.
+
+        Parameters
+        ----------
+        attributes : Any
+            The attributes of the node to be added, must have a "t" key.
+            The keys of the attributes will be used as the attributes of the node.
+            For example:
+            >>> `graph.add_node(dict(t=0, label='A', intensity=100))`
+        validate_keys : bool
+            Whether to check if the attributes keys are valid.
+            If False, the attributes keys will not be checked,
+            useful to speed up the operation when doing bulk insertions.
+
+        TODO: should "t" be it's own parameter?
 
         Returns
         -------
@@ -64,6 +89,7 @@ class BaseGraphBackend(abc.ABC):
         source_id: int,
         target_id: int,
         attributes: dict[str, Any],
+        validate_keys: bool = True,
     ) -> int:
         """
         Add an edge to the graph.
@@ -76,6 +102,10 @@ class BaseGraphBackend(abc.ABC):
             The ID of the target node.
         attributes : dict[str, Any]
             Additional attributes for the edge.
+        validate_keys : bool
+            Whether to check if the attributes keys are valid.
+            If False, the attributes keys will not be checked,
+            useful to speed up the operation when doing bulk insertions.
 
         Returns
         -------
