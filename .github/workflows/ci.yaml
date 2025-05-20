@@ -54,6 +54,7 @@ jobs:
         pytest --cov=tracksdata --cov-report=xml
 
     - name: Upload coverage to Codecov
+      if: matrix.python-version == '3.12'
       uses: codecov/codecov-action@v5
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
