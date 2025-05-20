@@ -1,8 +1,11 @@
 import abc
 from collections.abc import Sequence
-from typing import Any
+from typing import Any, Literal, Optional
 
+import numpy as np
 import polars as pl
+from numpy.typing import ArrayLike
+from skimage.util._map_array import ArrayMap
 
 # NOTE:
 # - maybe a single basegraph is better
@@ -27,6 +30,90 @@ class BaseGraphBackend(abc.ABC):
     """
     Base class for a graph backend.
     """
+
+    def __init__(self) -> None:
+        self.set_parent(None, None)
+
+    @property
+    def parent(self) -> Optional["BaseGraphBackend"]:
+        """
+        The parent graph.
+        """
+        return self._parent
+
+    def set_parent(
+        self,
+        parent: Optional["BaseGraphBackend"],
+        node_ids: list[int] | None,
+    ) -> None:
+        """
+        Set the parent graph and computes between the node IDs of
+        the parent and child graphs.
+
+        Parameters
+        ----------
+        parent : Optional[&quot;BaseGraphBackend&quot;]
+            The parent graph.
+        node_ids : Optional[list[int]]
+            The node IDs of the subgraph.
+
+        Raises
+        ------
+        ValueError
+            If 'node_ids' is not provided when 'parent' is not None.
+        """
+
+        # TODO: do we need a edge inversion map?
+        if parent is None:
+            # resetting mapping
+            self._parent = parent
+            self._node_map = None
+            self._node_inv_map = None
+            return
+
+        if node_ids is None or len(node_ids) == 0:
+            raise ValueError("'node_ids' must be provided when setting graph 'parent'")
+
+        node_ids = np.asarray(node_ids, dtype=int, copy=True)
+        self._node_map = node_ids
+        self._node_inv_map = ArrayMap(node_ids, np.arange(len(node_ids)))
+        self._parent = parent
+
+    def maybe_map_nodes(
+        self,
+        node_ids: ArrayLike,
+        direction: Literal["child_to_root", "root_to_child"],
+    ) -> np.ndarray:
+        """
+        Map the node IDs of the root graph to the child subgraph.
+
+        For example:
+
+        {root_graph} -> {intermediate_graph} -> {child_graph}
+
+        Parameters
+        ----------
+        node_ids : ArrayLike
+            The node IDs to map.
+        direction : Literal["child_to_root", "root_to_child"]
+            The direction of the mapping.
+
+        Returns
+        -------
+        np.ndarray
+            The mapped node IDs.
+        """
+        node_ids = np.asarray(node_ids, dtype=int, copy=False)
+
+        if self.parent is None:
+            return node_ids
+
+        if direction == "root_to_child":
+            return self._node_inv_map[node_ids]
+        elif direction == "child_to_root":
+            return self._node_map[node_ids]
+        else:
+            raise ValueError(f"Invalid direction: {direction}")
 
     @staticmethod
     def _validate_attributes(
