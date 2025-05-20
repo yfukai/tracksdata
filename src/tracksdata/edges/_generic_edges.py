@@ -76,7 +76,7 @@ class GenericFunctionEdgesOperator:
                 self.add_weights(graph, t=t)
             return
 
-        source_ids = graph.filter_nodes_by_attribute(t=t)
+        source_ids = graph.filter_nodes_by_attribute({DEFAULT_ATTR_KEYS.T: t})
         edges_df = graph.edge_features(node_ids=source_ids)
 
         if len(edges_df) == 0:

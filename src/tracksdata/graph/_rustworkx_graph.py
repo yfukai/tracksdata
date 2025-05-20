@@ -100,28 +100,46 @@ class RustWorkXGraphBackend(BaseGraphBackend):
 
     def filter_nodes_by_attribute(
         self,
-        **kwargs: Any,
+        attributes: dict[str, Any],
     ) -> list[int]:
-        # TODO doc
+        """
+        Filter nodes by attributes.
 
-        if "t" in kwargs:
-            selected_nodes = self._time_to_nodes.get(kwargs.pop("t"), [])
-            if len(kwargs) == 0:
+        Parameters
+        ----------
+        attributes : dict[str, Any]
+            The attributes to filter by, for example:
+            >>> `graph.filter_nodes_by_attribute(dict(t=0, label='A'))`
+
+        Returns
+        -------
+        list[int]
+            The IDs of the filtered nodes.
+        """
+        rx_graph = self._graph
+        node_map = None
+        # entire graph
+        if DEFAULT_ATTR_KEYS.T in attributes:
+            selected_nodes = self._time_to_nodes.get(
+                attributes.pop(DEFAULT_ATTR_KEYS.T), []
+            )
+            if len(attributes) == 0:
                 return selected_nodes
 
-            # FIXME: need to decide what's going to be the readonly graph
-            return self.subgraph(selected_nodes).filter_nodes_by_attribute(**kwargs)
+            # subgraph of selected nodes
+            rx_graph = rx_graph.subgraph(selected_nodes)
+            node_map = np.asarray(selected_nodes)
 
-        def _filter_func(node_id: int) -> bool:
-            for key, value in kwargs.items():
-                try:
-                    if self._graph[node_id][key] != value:
-                        return False
-                except KeyError:
+        def _filter_func(node_attr: dict[str, Any]) -> bool:
+            for key, value in attributes.items():
+                if node_attr[key] != value:
                     return False
             return True
 
-        return list(self._graph.filter_nodes(_filter_func))
+        if node_map is None:
+            return list(rx_graph.filter_nodes(_filter_func))
+        else:
+            return node_map[rx_graph.filter_nodes(_filter_func)].tolist()
 
     def node_ids(self) -> list[int]:
         """
@@ -132,9 +150,36 @@ class RustWorkXGraphBackend(BaseGraphBackend):
     def subgraph(
         self,
         node_ids: Sequence[int],
-    ) -> RustWorkXReadOnlyGraph:
-        subgraph = self._graph.subgraph(node_ids)
-        return RustWorkXReadOnlyGraph(graph=subgraph)
+    ) -> "RustWorkXGraphBackend":
+        """
+        Create a subgraph from the graph from the given node IDs.
+        FIXME:
+            - This remaps the node IDs to the new IDs in the subgraph.
+            - This MUST BE FIXED!
+
+        Parameters
+        ----------
+        node_ids : Sequence[int]
+            The IDs of the nodes to include in the subgraph.
+
+        Returns
+        -------
+        RustWorkXGraphBackend
+            A new graph with the specified nodes.
+        """
+        raise NotImplementedError("FIXME: need to fix the node IDs")
+
+        subgraph = RustWorkXGraphBackend()
+        subgraph._graph = self._graph.subgraph(node_ids)
+        subgraph._node_features_keys = self._node_features_keys
+        subgraph._edge_features_keys = self._edge_features_keys
+        # TODO: is there a better way to do this?
+        for node_id in node_ids:
+            t = self._graph[node_id][DEFAULT_ATTR_KEYS.T]
+            if t not in subgraph._time_to_nodes:
+                subgraph._time_to_nodes[t] = []
+            subgraph._time_to_nodes[t].append(node_id)
+        return subgraph
 
     def time_points(self) -> list[int]:
         """

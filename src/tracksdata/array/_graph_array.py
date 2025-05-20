@@ -42,7 +42,9 @@ class GraphArrayView(BaseReadOnlyArray):
             index = index[0]
 
         if isinstance(index, int):
-            node_ids = self.graph.filter_nodes_by_attribute(t=index)
+            node_ids = self.graph.filter_nodes_by_attribute(
+                {DEFAULT_ATTR_KEYS.T: index}
+            )
 
             if len(node_ids) == 0:
                 return np.zeros(self.shape[1:], dtype=self.dtype)

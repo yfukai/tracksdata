@@ -86,8 +86,12 @@ class DistanceEdgesOperator(BaseEdgesOperator):
         else:
             feature_keys = self.feature_keys
 
-        prev_node_ids = np.asarray(graph.filter_nodes_by_attribute(t=t - 1))
-        cur_node_ids = np.asarray(graph.filter_nodes_by_attribute(t=t))
+        prev_node_ids = np.asarray(
+            graph.filter_nodes_by_attribute({DEFAULT_ATTR_KEYS.T: t - 1})
+        )
+        cur_node_ids = np.asarray(
+            graph.filter_nodes_by_attribute({DEFAULT_ATTR_KEYS.T: t})
+        )
 
         if len(prev_node_ids) == 0:
             LOG.warning(

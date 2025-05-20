@@ -54,6 +54,14 @@ class BaseGraphBackend(abc.ABC):
                     "`graph.add_{mode}_feature_key(key, default_value)`"
                 )
 
+        for ref_key in reference_keys:
+            if ref_key not in attributes.keys():
+                raise ValueError(
+                    f"Attribute '{ref_key}' not found in attributes: "
+                    f"'{attributes.keys()}'\nAll '{reference_keys}' "
+                    "attributes must be provided."
+                )
+
     @abc.abstractmethod
     def add_node(
         self,
@@ -122,27 +130,28 @@ class BaseGraphBackend(abc.ABC):
     @abc.abstractmethod
     def filter_nodes_by_attribute(
         self,
-        **kwargs: Any,
+        attributes: dict[str, Any],
     ) -> list[int]:
         """
         Filter nodes by attributes.
 
         Parameters
         ----------
-        kwargs : Any
-            Attributes to filter by.
+        attributes : dict[str, Any]
+            Attributes to filter by, for example:
+            >>> `graph.filter_nodes_by_attribute(dict(t=0, label='A'))`
 
         Returns
         -------
-        BaseGraphBackend
-            A new graph with the filtered nodes.
+        list[int]
+            The IDs of the filtered nodes.
         """
 
     @abc.abstractmethod
     def subgraph(
         self,
         node_ids: Sequence[int],
-    ) -> "BaseReadOnlyGraph":
+    ) -> "BaseGraphBackend":
         """
         Create a subgraph from the graph from the given node IDs.
 
@@ -153,7 +162,7 @@ class BaseGraphBackend(abc.ABC):
 
         Returns
         -------
-        BaseReadOnlyGraph
+        BaseGraphBackend
             A new graph with the specified nodes.
         """
 
