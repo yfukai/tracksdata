@@ -48,9 +48,16 @@ jobs:
           const fs = require('fs');
           const results = fs.readFileSync('benchmarks/benchmark_results.txt', 'utf8');
           const comment = `### Benchmark Results\n\n\`\`\`\n${results}\n\`\`\``;
-          github.rest.issues.createComment({
-            issue_number: context.issue.number,
+
+          const { data: pr } = await github.rest.pulls.get({
             owner: context.repo.owner,
-            repo: context.repo.name,
-            body: comment
+            repo: context.repo.repo,
+            pull_number: context.issue.number,
+          });
+
+          await github.rest.issues.createComment({
+            owner: pr.base.repo.owner.login,
+            repo: pr.base.repo.name,
+            issue_number: pr.number,
+            body: comment,
           });
