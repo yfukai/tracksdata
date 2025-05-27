@@ -26,6 +26,7 @@ jobs:
 
     - name: Run benchmarks
       run: |
+        cd benchmarks
         asv machine --yes
         asv run HEAD^..HEAD
         asv compare HEAD^ HEAD --factor 1.1 --split > benchmark_results.txt

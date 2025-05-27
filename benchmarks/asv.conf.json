@@ -12,7 +12,6 @@
     "results_dir": ".asv/results",
     "html_dir": ".asv/html",
     "build_command": [
-        "python -m pip install --upgrade uv",
-        "python -m uv pip install ."
+        "pip install ."
     ]
 }
