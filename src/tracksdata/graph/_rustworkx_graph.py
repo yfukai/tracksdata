@@ -61,9 +61,7 @@ class RustWorkXGraphBackend(BaseGraphBackend):
             self._validate_attributes(attributes, self.node_features_keys, "node")
 
             if "t" not in attributes:
-                raise ValueError(
-                    f"Node attributes must have a 't' key. Got {attributes.keys()}"
-                )
+                raise ValueError(f"Node attributes must have a 't' key. Got {attributes.keys()}")
 
         node_id = self._graph.add_node(attributes)
         self._time_to_nodes.setdefault(attributes["t"], []).append(node_id)
@@ -120,9 +118,7 @@ class RustWorkXGraphBackend(BaseGraphBackend):
         node_map = None
         # entire graph
         if DEFAULT_ATTR_KEYS.T in attributes:
-            selected_nodes = self._time_to_nodes.get(
-                attributes.pop(DEFAULT_ATTR_KEYS.T), []
-            )
+            selected_nodes = self._time_to_nodes.get(attributes.pop(DEFAULT_ATTR_KEYS.T), [])
             if len(attributes) == 0:
                 return selected_nodes
 
@@ -379,15 +375,11 @@ class RustWorkXGraphBackend(BaseGraphBackend):
         """
         for key, value in attributes.items():
             if key not in self.node_features_keys:
-                raise ValueError(
-                    f"Node feature key '{key}' not found in graph. "
-                    f"Expected '{self.node_features_keys}'"
-                )
+                raise ValueError(f"Node feature key '{key}' not found in graph. Expected '{self.node_features_keys}'")
 
             if not np.isscalar(value) and len(attributes[key]) != len(node_ids):
                 raise ValueError(
-                    f"Attribute '{key}' has wrong size. "
-                    f"Expected {len(node_ids)}, got {len(attributes[key])}"
+                    f"Attribute '{key}' has wrong size. Expected {len(node_ids)}, got {len(attributes[key])}"
                 )
 
         for key, value in attributes.items():
@@ -415,19 +407,13 @@ class RustWorkXGraphBackend(BaseGraphBackend):
         size = len(edge_ids)
         for key, value in attributes.items():
             if key not in self.edge_features_keys:
-                raise ValueError(
-                    f"Edge feature key '{key}' not found in graph. "
-                    f"Expected '{self.edge_features_keys}'"
-                )
+                raise ValueError(f"Edge feature key '{key}' not found in graph. Expected '{self.edge_features_keys}'")
 
             if np.isscalar(value):
                 attributes[key] = np.full(size, value)
 
             elif len(attributes[key]) != size:
-                raise ValueError(
-                    f"Attribute '{key}' has wrong size. "
-                    f"Expected {size}, got {len(attributes[key])}"
-                )
+                raise ValueError(f"Attribute '{key}' has wrong size. Expected {size}, got {len(attributes[key])}")
 
         edge_map = self._graph.edge_index_map()
 

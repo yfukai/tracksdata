@@ -39,9 +39,7 @@ def intersects(bbox1: types.int64[:], bbox2: types.int64[:]) -> bool:
 
 
 @njit
-def intersection_with_bbox_2d(
-    bbox1: np.ndarray, bbox2: np.ndarray, mask1: np.ndarray, mask2: np.ndarray
-) -> float:
+def intersection_with_bbox_2d(bbox1: np.ndarray, bbox2: np.ndarray, mask1: np.ndarray, mask2: np.ndarray) -> float:
     y_min = max(bbox1[0], bbox2[0])
     x_min = max(bbox1[1], bbox2[1])
     y_max = min(bbox1[2], bbox2[2])
@@ -61,9 +59,7 @@ def intersection_with_bbox_2d(
 
 
 @njit
-def intersection_with_bbox_3d(
-    bbox1: np.ndarray, bbox2: np.ndarray, mask1: np.ndarray, mask2: np.ndarray
-) -> float:
+def intersection_with_bbox_3d(bbox1: np.ndarray, bbox2: np.ndarray, mask1: np.ndarray, mask2: np.ndarray) -> float:
     z_min = max(bbox1[0], bbox2[0])
     y_min = max(bbox1[1], bbox2[1])
     x_min = max(bbox1[2], bbox2[2])
@@ -87,9 +83,7 @@ def intersection_with_bbox_3d(
 
 
 @njit
-def fast_iou_with_bbox(
-    bbox1: np.ndarray, bbox2: np.ndarray, mask1: np.ndarray, mask2: np.ndarray
-) -> float:
+def fast_iou_with_bbox(bbox1: np.ndarray, bbox2: np.ndarray, mask1: np.ndarray, mask2: np.ndarray) -> float:
     if not intersects(bbox1, bbox2):
         return 0.0
     if mask1.ndim == 2:
