@@ -2,6 +2,8 @@ import numpy as np
 import rustworkx as rx
 from numba import njit, typed, types
 
+NO_PARENT = -1
+
 
 @njit
 def _fast_path_transverse(
@@ -48,7 +50,7 @@ def _fast_path_transverse(
             break
 
         else:
-            raise RuntimeError("Something is wrong. Found node with more than two children when parsing tracks.")
+            raise RuntimeError("Invalid graph structure:\nFound node with more than two children when parsing tracks.")
 
     return path
 
@@ -80,7 +82,7 @@ def _fast_dag_transverse(
     lengths = []
 
     for root in roots:
-        queue = [(root, None)]
+        queue = [(root, NO_PARENT)]
 
         while queue:
             node, parent_track_id = queue.pop()
@@ -94,28 +96,37 @@ def _fast_dag_transverse(
     return paths, track_ids, parent_track_ids, lengths
 
 
-@njit
-def _create_numba_dag(node_ids: np.ndarray, parent_ids: np.ndarray) -> dict[int, list[int]]:
+def _numba_dag(graph: rx.PyDiGraph) -> dict[int, list[int]]:
     """Creates the DAG of track lineages
 
     Parameters
     ----------
-    node_ids : np.ndarray
-        Nodes indices.
-    parent_ids : np.ndarray
-        Parent indices.
+    graph : rx.PyDiGraph
+        Directed acyclic graph of nodes.
 
     Returns
     -------
     dict[int, list[int]]
         DAG where parent maps to their children (parent -> children)
     """
-    forest = {}
-    for parent in parent_ids:
-        forest[parent] = typed.List.empty_list(types.int64)
+    forest = typed.Dict.empty(types.int64, types.ListType(types.int64))
+    forest[NO_PARENT] = typed.List.empty_list(types.int64)
 
-    for i in range(len(parent_ids)):
-        forest[parent_ids[i]].append(node_ids[i])
+    for node in graph.node_indices():
+        children = typed.List.empty_list(types.int64)
+        for child in graph.successor_indices(node):
+            children.append(child)
+
+        if len(children) > 0:
+            forest[node] = children
+
+        in_degree = graph.in_degree(node)
+        if in_degree == 0:
+            forest[NO_PARENT].append(node)
+        elif in_degree > 1:
+            raise RuntimeError(
+                f"Invalid graph structure:\nnode ({node}) with ({in_degree}) parents. Expected at most one parent."
+            )
 
     return forest
 
@@ -142,29 +153,17 @@ def graph_track_ids(
     if graph.num_nodes() == 0:
         raise ValueError("Graph is empty")
 
-    node_ids = np.asarray(graph.node_indices(), dtype=int)
-    no_parent = -1
-
-    parent_ids = []
-    for node in node_ids:
-        parent = graph.predecessor_indices(node)
-        if len(parent) == 0:
-            parent_ids.append(no_parent)
-        elif len(parent) == 1:
-            parent_ids.append(parent[0])
-        else:
-            raise RuntimeError(f"Found node ({node}) with ({parent_ids}) parents. Expected at most one parent.")
-
-    parent_ids = np.asarray(parent_ids, dtype=int)
-
-    dag = _create_numba_dag(node_ids, parent_ids)
-    roots = dag.pop(no_parent)
+    # was it better (faster) when using a numpy array for the digraph as in ultrack?
+    dag = _numba_dag(graph)
+    roots = dag.pop(NO_PARENT)
 
     paths, track_ids, parent_track_ids, lengths = _fast_dag_transverse(roots, dag)
 
     tracks_graph = rx.PyDiGraph(node_count_hint=len(track_ids), edge_count_hint=len(track_ids))
     tracks_graph.add_nodes_from([None] * (len(track_ids) + 1))
-    tracks_graph.add_edges_from_no_data([(p, c) for p, c in zip(parent_track_ids, track_ids, strict=False)])
+    tracks_graph.add_edges_from_no_data(
+        [(p, c) for p, c in zip(parent_track_ids, track_ids, strict=True) if p != NO_PARENT]
+    )
 
     paths = np.concatenate(paths)
     nodes_track_ids = np.repeat(track_ids, lengths)

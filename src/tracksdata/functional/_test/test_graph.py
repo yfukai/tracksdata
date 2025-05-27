@@ -21,10 +21,12 @@ def test_single_path():
     graph.add_edge(nodes[0], nodes[1], None)
     graph.add_edge(nodes[1], nodes[2], None)
 
-    node_ids, track_ids = graph_track_ids(graph)
+    node_ids, track_ids, tracks_graph = graph_track_ids(graph)
 
     assert np.array_equal(node_ids, [0, 1, 2])
     assert np.array_equal(track_ids, [1, 1, 1])
+    assert isinstance(tracks_graph, rx.PyDiGraph)
+    assert tracks_graph.num_nodes() == 1 + 1  # Single track (includes null node (0))
 
 
 def test_branching_path():
@@ -39,16 +41,18 @@ def test_branching_path():
     graph.add_edge(nodes[0], nodes[1], None)
     graph.add_edge(nodes[0], nodes[2], None)
 
-    node_ids, track_ids = graph_track_ids(graph)
+    node_ids, track_ids, tracks_graph = graph_track_ids(graph)
 
     # Should create 2 tracks: one for each branch
     assert len(node_ids) == 3
     assert len(track_ids) == 3
-    assert len(np.unique(track_ids)) == 2  # Two unique track IDs
+    assert len(np.unique(track_ids)) == 3  # Three unique track IDs
+    assert isinstance(tracks_graph, rx.PyDiGraph)
+    assert tracks_graph.num_nodes() == 3 + 1  # Three tracks (includes null node (0))
 
 
 def test_invalid_multiple_parents():
-    """Test graph with invalid structure (node with multiple parents)."""
+    """Test graph with invalid structure (node with multiple parents, merge)."""
     graph = rx.PyDiGraph()
 
     # Add nodes:
@@ -59,7 +63,7 @@ def test_invalid_multiple_parents():
     graph.add_edge(nodes[0], nodes[2], None)
     graph.add_edge(nodes[1], nodes[2], None)
 
-    with pytest.raises(ValueError, match="Node has multiple parents"):
+    with pytest.raises(RuntimeError, match="Invalid graph structure"):
         graph_track_ids(graph)
 
 
@@ -79,11 +83,13 @@ def test_complex_valid_branching():
     graph.add_edge(nodes[1], nodes[3], None)
     graph.add_edge(nodes[2], nodes[4], None)
 
-    node_ids, track_ids = graph_track_ids(graph)
+    node_ids, track_ids, tracks_graph = graph_track_ids(graph)
 
     assert len(node_ids) == 5
     assert len(track_ids) == 5
-    assert len(np.unique(track_ids)) == 2  # Two unique track IDs
+    assert len(np.unique(track_ids)) == 3  # Five unique track IDs
+    assert isinstance(tracks_graph, rx.PyDiGraph)
+    assert tracks_graph.num_nodes() == 3 + 1  # Five tracks (includes null node (0))
 
 
 def test_invalid_three_children():
@@ -99,7 +105,7 @@ def test_invalid_three_children():
     graph.add_edge(nodes[0], nodes[2], None)
     graph.add_edge(nodes[0], nodes[3], None)
 
-    with pytest.raises(ValueError, match="Node has more than two children"):
+    with pytest.raises(RuntimeError, match="Invalid graph structure"):
         graph_track_ids(graph)
 
 
@@ -113,8 +119,10 @@ def test_multiple_roots():
     graph.add_edge(nodes[0], nodes[1], None)
     graph.add_edge(nodes[2], nodes[3], None)
 
-    node_ids, track_ids = graph_track_ids(graph)
+    node_ids, track_ids, tracks_graph = graph_track_ids(graph)
 
     assert len(node_ids) == 4
     assert len(track_ids) == 4
     assert len(np.unique(track_ids)) == 2  # Two unique track IDs
+    assert isinstance(tracks_graph, rx.PyDiGraph)
+    assert tracks_graph.num_nodes() == 2 + 1  # Two separate tracks (includes null node (0))
