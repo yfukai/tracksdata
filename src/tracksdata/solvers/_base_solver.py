@@ -12,9 +12,7 @@ class BaseSolver(abc.ABC):
     """
 
     @abc.abstractmethod
-    def solve(
-        self, graph: BaseGraphBackend, solution_key: str = DEFAULT_ATTR_KEYS.SOLUTION
-    ) -> None:
+    def solve(self, graph: BaseGraphBackend, solution_key: str = DEFAULT_ATTR_KEYS.SOLUTION) -> None:
         """
         Solve the tracking problem and add the result to the graph with
         key `solution_key`.

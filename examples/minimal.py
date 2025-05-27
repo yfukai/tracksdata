@@ -27,9 +27,7 @@ def main() -> None:
     print("starting tracking ...")
 
     nodes_operator = RegionPropsOperator(show_progress=False)
-    dist_operator = DistanceEdgesOperator(
-        distance_threshold=15.0, n_neighbors=5, show_progress=False
-    )
+    dist_operator = DistanceEdgesOperator(distance_threshold=15.0, n_neighbors=5, show_progress=False)
     iou_operator = IoUEdgesOperator(output_key="iou", show_progress=False)
 
     # TODO: define custom syntax for objective function from weights
