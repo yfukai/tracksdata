@@ -11,12 +11,8 @@
     "env_dir": ".asv/env",
     "results_dir": ".asv/results",
     "html_dir": ".asv/html",
-    "environment_variables": {
-        "PIP_PREFER_BINARY": "1"
-    },
     "build_command": [
         "python -m pip install --upgrade uv",
-        "python -m uv pip install {wheel_file}",
-        "python -m uv pip install -r {req_file}"
+        "python -m uv pip install ."
     ]
 }
