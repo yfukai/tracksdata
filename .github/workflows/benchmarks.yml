@@ -13,24 +13,16 @@ jobs:
       with:
         fetch-depth: 0  # Important for asv to access the git history
 
-    - name: Set up Python
-      uses: actions/setup-python@v5
+    - name: Install uv
+      uses: astral-sh/setup-uv@v5
       with:
         python-version: "3.12"
-
-    - name: Cache UV
-      uses: actions/cache@v3
-      with:
-        path: ~/.cache/uv
-        key: ${{ runner.os }}-uv-${{ hashFiles('**/requirements.txt') }}
-        restore-keys: |
-          ${{ runner.os }}-uv-
+        enable-cache: true
 
     - name: Install dependencies
       run: |
-        python -m uv install --upgrade pip
-        uv install asv
-        uv install "."
+        uv pip install asv
+        uv pip install "."
 
     - name: Run benchmarks
       run: |
