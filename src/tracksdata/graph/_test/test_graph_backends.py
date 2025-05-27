@@ -96,9 +96,7 @@ def test_add_edge(graph_backend: BaseGraphBackend) -> None:
 
     # testing adding new add attribute
     graph_backend.add_edge_feature_key("new_feature", 0.0)
-    edge_id = graph_backend.add_edge(
-        node1, node2, attributes={"new_feature": 1.0, "weight": 0.1}
-    )
+    edge_id = graph_backend.add_edge(node1, node2, attributes={"new_feature": 1.0, "weight": 0.1})
     assert isinstance(edge_id, int)
 
     # testing default value was assigned correctly
@@ -216,18 +214,14 @@ def test_update_node_features(graph_backend: BaseGraphBackend) -> None:
     assert df["x"].to_list() == [3.0, 2.0]
 
     # inverted access on purpose
-    graph_backend.update_node_features(
-        node_ids=[node_2, node_1], attributes={"x": [5.0, 6.0]}
-    )
+    graph_backend.update_node_features(node_ids=[node_2, node_1], attributes={"x": [5.0, 6.0]})
 
     df = graph_backend.node_features(node_ids=[node_1, node_2], feature_keys="x")
     assert df["x"].to_list() == [6.0, 5.0]
 
     # wrong length
     with pytest.raises(ValueError):
-        graph_backend.update_node_features(
-            node_ids=[node_1, node_2], attributes={"x": [1.0]}
-        )
+        graph_backend.update_node_features(node_ids=[node_1, node_2], attributes={"x": [1.0]})
 
 
 def test_update_edge_features(graph_backend: BaseGraphBackend) -> None:
@@ -244,9 +238,7 @@ def test_update_edge_features(graph_backend: BaseGraphBackend) -> None:
 
     # wrong length
     with pytest.raises(ValueError):
-        graph_backend.update_edge_features(
-            edge_ids=[edge_id], attributes={"weight": [1.0, 2.0]}
-        )
+        graph_backend.update_edge_features(edge_ids=[edge_id], attributes={"weight": [1.0, 2.0]})
 
 
 def test_num_edges(graph_backend: BaseGraphBackend) -> None:

@@ -32,9 +32,7 @@ class RegionPropsOperator(BaseNodesOperator):
         """
         Get the keys of the features of the nodes.
         """
-        return [
-            prop.__name__ if callable(prop) else prop for prop in self._extra_properties
-        ]
+        return [prop.__name__ if callable(prop) else prop for prop in self._extra_properties]
 
     @override
     def add_nodes(
@@ -88,14 +86,10 @@ class RegionPropsOperator(BaseNodesOperator):
         elif labels.ndim == 3:
             axis_names = ["z", "y", "x"]
         else:
-            raise ValueError(
-                f"`labels` must be 2D or 3D, got {labels.ndim} dimensions."
-            )
+            raise ValueError(f"`labels` must be 2D or 3D, got {labels.ndim} dimensions.")
 
         # initialize the feature keys
-        for attr_key in [
-            p.__name__ if callable(p) else p for p in self._extra_properties
-        ] + [axis_names]:
+        for attr_key in [p.__name__ if callable(p) else p for p in self._extra_properties] + [axis_names]:
             if attr_key not in graph.node_features_keys:
                 graph.add_node_feature_key(attr_key, None)
 

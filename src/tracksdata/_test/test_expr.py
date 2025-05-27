@@ -109,9 +109,7 @@ def test_attr_expr_complex_expression() -> None:
     df = pl.DataFrame({"iou": [0.5, 0.7, 0.9], "distance": [10, 20, 30]})
     expr = (1 - AttrExpr("iou")) * AttrExpr("distance")
     result = expr.evaluate(df)
-    expected = [
-        (1 - iou) * dist for iou, dist in zip(df["iou"], df["distance"], strict=False)
-    ]
+    expected = [(1 - iou) * dist for iou, dist in zip(df["iou"], df["distance"], strict=False)]
     assert result.to_list() == expected
 
 

@@ -91,18 +91,12 @@ class NearestNeighborsSolver(BaseSolver):
             The graph to solve.
         """
         # get edges and sort them by weight
-        edges_df = graph.edge_features(
-            feature_keys=self.edge_weight_expr.column_names()
-        )
+        edges_df = graph.edge_features(feature_keys=self.edge_weight_expr.column_names())
         weights = self.edge_weight_expr.evaluate(edges_df).to_numpy()
         sorted_indices = np.argsort(weights)
 
-        sorted_source = edges_df[DEFAULT_ATTR_KEYS.EDGE_SOURCE].to_numpy()[
-            sorted_indices
-        ]
-        sorted_target = edges_df[DEFAULT_ATTR_KEYS.EDGE_TARGET].to_numpy()[
-            sorted_indices
-        ]
+        sorted_source = edges_df[DEFAULT_ATTR_KEYS.EDGE_SOURCE].to_numpy()[sorted_indices]
+        sorted_target = edges_df[DEFAULT_ATTR_KEYS.EDGE_TARGET].to_numpy()[sorted_indices]
         sorted_solution = np.zeros(len(sorted_source), dtype=bool)
 
         _constrained_nearest_neighbors(

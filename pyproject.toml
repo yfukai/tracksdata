@@ -55,6 +55,7 @@ path = "src/tracksdata/__about__.py"
 [tool.ruff]
 target-version = "py310"
 src = ["src"]
+line-length = 120
 
 # https://docs.astral.sh/ruff/rules
 [tool.ruff.lint]
