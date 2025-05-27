@@ -21,7 +21,7 @@ jobs:
 
     - name: Install dependencies
       run: |
-        uv pip install 'asv<0.6.2'
+        uv pip install 'asv<0.6.2' virtualenv
         uv pip install "."
 
     - name: Run benchmarks
