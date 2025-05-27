@@ -62,7 +62,7 @@ class RandomNodesOperator(BaseNodesOperator):
 
         for c in coords:
             node_id = graph.add_node(
-                {"t": t, **dict(zip(self.spatial_cols, c, strict=False))},
+                {"t": t, **dict(zip(self.spatial_cols, c, strict=True))},
                 validate_keys=False,
                 **kwargs,
             )
