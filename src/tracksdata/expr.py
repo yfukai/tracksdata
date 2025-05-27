@@ -89,9 +89,7 @@ class AttrExpr:
 
 
 def _add_operator(name: str, op: Callable, reverse: bool = False) -> None:
-    method = functools.partialmethod(
-        AttrExpr._delegate_operator, op=op, reverse=reverse
-    )
+    method = functools.partialmethod(AttrExpr._delegate_operator, op=op, reverse=reverse)
     setattr(AttrExpr, name, method)
 
 

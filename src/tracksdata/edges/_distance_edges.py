@@ -64,9 +64,7 @@ class DistanceEdgesOperator(BaseEdgesOperator):
             The key to add the distance to.
         """
         if t is None:
-            for t in tqdm(
-                graph.time_points(), disable=not self.show_progress, desc="Adding edges"
-            ):
+            for t in tqdm(graph.time_points(), disable=not self.show_progress, desc="Adding edges"):
                 self.add_edges(
                     graph,
                     t=t,
@@ -86,12 +84,8 @@ class DistanceEdgesOperator(BaseEdgesOperator):
         else:
             feature_keys = self.feature_keys
 
-        prev_node_ids = np.asarray(
-            graph.filter_nodes_by_attribute({DEFAULT_ATTR_KEYS.T: t - 1})
-        )
-        cur_node_ids = np.asarray(
-            graph.filter_nodes_by_attribute({DEFAULT_ATTR_KEYS.T: t})
-        )
+        prev_node_ids = np.asarray(graph.filter_nodes_by_attribute({DEFAULT_ATTR_KEYS.T: t - 1}))
+        cur_node_ids = np.asarray(graph.filter_nodes_by_attribute({DEFAULT_ATTR_KEYS.T: t}))
 
         if len(prev_node_ids) == 0:
             LOG.warning(
@@ -107,12 +101,8 @@ class DistanceEdgesOperator(BaseEdgesOperator):
             )
             return
 
-        prev_features = graph.node_features(
-            node_ids=prev_node_ids, feature_keys=feature_keys
-        )
-        cur_features = graph.node_features(
-            node_ids=cur_node_ids, feature_keys=feature_keys
-        )
+        prev_features = graph.node_features(node_ids=prev_node_ids, feature_keys=feature_keys)
+        cur_features = graph.node_features(node_ids=cur_node_ids, feature_keys=feature_keys)
 
         prev_kdtree = KDTree(prev_features.to_numpy())
 
@@ -131,9 +121,7 @@ class DistanceEdgesOperator(BaseEdgesOperator):
         for cur_id, neigh_ids, neigh_dist, neigh_valid in zip(
             cur_node_ids, prev_neigh_ids, distances, is_valid, strict=True
         ):
-            for neigh_id, dist in zip(
-                neigh_ids[neigh_valid], neigh_dist[neigh_valid], strict=True
-            ):
+            for neigh_id, dist in zip(neigh_ids[neigh_valid], neigh_dist[neigh_valid], strict=True):
                 graph.add_edge(
                     neigh_id,
                     cur_id,

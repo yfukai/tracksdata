@@ -96,9 +96,7 @@ def test_add_edge(graph_backend: BaseGraphBackend) -> None:
 
     # testing adding new add attribute
     graph_backend.add_edge_feature_key("new_feature", 0.0)
-    edge_id = graph_backend.add_edge(
-        node1, node2, attributes={"new_feature": 1.0, "weight": 0.1}
-    )
+    edge_id = graph_backend.add_edge(node1, node2, attributes={"new_feature": 1.0, "weight": 0.1})
     assert isinstance(edge_id, int)
 
     # testing default value was assigned correctly
