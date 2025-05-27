@@ -1,0 +1,22 @@
+{
+    "version": 1,
+    "project": "tracksdata",
+    "project_url": "https://github.com/royerlab/tracksdata",
+    "repo": "..",
+    "branches": ["main"],
+    "environment_type": "virtualenv",
+    "show_commit_url": "https://github.com/royerlab/tracksdata/commit/",
+    "pythons": ["3.12"],
+    "benchmark_dir": "benchmarks",
+    "env_dir": ".asv/env",
+    "results_dir": ".asv/results",
+    "html_dir": ".asv/html",
+    "environment_variables": {
+        "PIP_PREFER_BINARY": "1"
+    },
+    "build_command": [
+        "python -m pip install --upgrade uv",
+        "python -m uv pip install {wheel_file}",
+        "python -m uv pip install -r {req_file}"
+    ]
+}
