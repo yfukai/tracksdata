@@ -435,16 +435,10 @@ def remap_output_node_ids(ids_columns: list[str] | None = None) -> Callable[P, R
             result = func(self, *args, **kwargs)
             if isinstance(result, pl.DataFrame):
                 if ids_columns is None:
-                    raise ValueError(
-                        "'node_params' must be provided when returning a pl.DataFrame"
-                    )
+                    raise ValueError("'node_params' must be provided when returning a pl.DataFrame")
                 for node_param in ids_columns:
-                    values = self.maybe_map_nodes(
-                        result[node_param].to_numpy(), "child_to_root"
-                    )
-                    result = result.with_columns(
-                        pl.Series(name=node_param, values=values)
-                    )
+                    values = self.maybe_map_nodes(result[node_param].to_numpy(), "child_to_root")
+                    result = result.with_columns(pl.Series(name=node_param, values=values))
                 return result
             elif isinstance(result, list | np.ndarray | Sequence):
                 return self.maybe_map_nodes(result, "child_to_root")
