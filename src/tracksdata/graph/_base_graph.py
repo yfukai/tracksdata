@@ -402,6 +402,9 @@ def remap_input_node_ids(node_param: str) -> Callable[[Callable[P, R]], Callable
     def _decorator(func: Callable[P, R]) -> Callable[P, R]:
         @wraps(func)
         def _wrapper(self: BaseGraphBackend, **kwargs: P.kwargs) -> R:
+            # If there is no parent, the function can be executed as is
+            if self.parent is None:
+                return func(self, **kwargs)
             # Get the node IDs from args or kwargs
             node_ids = kwargs.get(node_param, None)
             if node_ids is not None:
@@ -433,17 +436,22 @@ def remap_output_node_ids(ids_columns: list[str] | None = None) -> Callable[P, R
         @wraps(func)
         def _wrapper(self: BaseGraphBackend, *args: P.args, **kwargs: P.kwargs) -> R:
             result = func(self, *args, **kwargs)
+            # If there is no parent, the result is already in the correct format
+            if self.parent is None:
+                return result
+            # otherwise, we need to remap the node IDs
+            direction = "child_to_root"
             if isinstance(result, pl.DataFrame):
                 if ids_columns is None:
-                    raise ValueError("'node_params' must be provided when returning a pl.DataFrame")
-                for node_param in ids_columns:
-                    values = self.maybe_map_nodes(result[node_param].to_numpy(), "child_to_root")
-                    result = result.with_columns(pl.Series(name=node_param, values=values))
+                    raise ValueError("'ids_columns' must be provided when returning a pl.DataFrame")
+                for id_var in ids_columns:
+                    values = self.maybe_map_nodes(result[id_var].to_numpy(), direction)
+                    result = result.with_columns(pl.Series(name=id_var, values=values))
                 return result
             elif isinstance(result, list | np.ndarray | Sequence):
-                return self.maybe_map_nodes(result, "child_to_root")
+                return self.maybe_map_nodes(result, direction)
             elif isinstance(result, int | np.integer):
-                return int(self.maybe_map_nodes([result], "child_to_root")[0])
+                return int(self.maybe_map_nodes([result], direction)[0])
             raise ValueError(f"Invalid return type: {type(result)}")
 
         return _wrapper
