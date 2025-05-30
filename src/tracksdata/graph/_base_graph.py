@@ -370,7 +370,7 @@ class BaseGraphBackend(abc.ABC):
     def update_edge_features(
         self,
         *,
-        edge_ids: Sequence[int],
+        edge_ids: ArrayLike,
         attributes: dict[str, Any],
     ) -> None:
         """

@@ -4,6 +4,7 @@ from typing import Any
 import numpy as np
 import polars as pl
 import rustworkx as rx
+from numpy.typing import ArrayLike
 
 from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.graph._base_graph import (
@@ -409,7 +410,7 @@ class RustWorkXGraphBackend(BaseGraphBackend):
     def update_edge_features(
         self,
         *,
-        edge_ids: Sequence[int],
+        edge_ids: ArrayLike,
         attributes: dict[str, Any],
     ) -> None:
         """
