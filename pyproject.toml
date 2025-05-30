@@ -41,6 +41,7 @@ dependencies = [
 test = [
   "pytest>=7.0",
   "pytest-cov",
+  "pytest-html",
 ]
 
 [project.urls]
