@@ -305,7 +305,6 @@ class RustWorkXGraphBackend(BaseGraphBackend):
         # Create DataFrame and set node_id as index in one shot
         return pl.DataFrame(columns)
 
-    # TODO: remap edge ids to match nodes
     @remap_input_node_ids("node_ids")
     @remap_output_node_ids([DEFAULT_ATTR_KEYS.EDGE_SOURCE, DEFAULT_ATTR_KEYS.EDGE_TARGET])
     def edge_features(
