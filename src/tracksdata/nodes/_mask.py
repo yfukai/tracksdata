@@ -20,8 +20,8 @@ class Mask:
         return data_dict
 
     def __setstate__(self, state: dict) -> None:
-        self._mask = blosc2.unpack_array(state["_mask"])
-        self.__dict__ = state
+        state["_mask"] = blosc2.unpack_array(state["_mask"])
+        self.__dict__.update(state)
 
     def mask_indices(
         self,

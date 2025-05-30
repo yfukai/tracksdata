@@ -88,6 +88,8 @@ skip-magic-trailing-comma = false # default is false
 show_missing = true
 skip_covered = true
 exclude_lines = [
+    "@njit",  # numba is not supported by coverage
+    "@jitclass",
     "pragma: no cover", # Have to re-enable the standard pragma
     "def __repr__", # Don't complain about missing debug-only code:
     "raise AssertionError",

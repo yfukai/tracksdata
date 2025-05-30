@@ -89,7 +89,9 @@ class RegionPropsOperator(BaseNodesOperator):
             raise ValueError(f"`labels` must be 2D or 3D, got {labels.ndim} dimensions.")
 
         # initialize the feature keys
-        for attr_key in [p.__name__ if callable(p) else p for p in self._extra_properties] + [axis_names]:
+        for attr_key in [DEFAULT_ATTR_KEYS.MASK, *axis_names] + [
+            p.__name__ if callable(p) else p for p in self._extra_properties
+        ]:
             if attr_key not in graph.node_features_keys:
                 graph.add_node_feature_key(attr_key, None)
 

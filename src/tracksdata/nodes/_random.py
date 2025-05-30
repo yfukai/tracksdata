@@ -45,8 +45,10 @@ class RandomNodesOperator(BaseNodesOperator):
                 self.add_nodes(graph, t=t, **kwargs)
             return
 
-        if self.spatial_cols not in graph.node_features_keys:
-            graph.add_node_feature_key(self.spatial_cols, None)
+        # Register each spatial column individually
+        for col in self.spatial_cols:
+            if col not in graph.node_features_keys:
+                graph.add_node_feature_key(col, None)
 
         n_nodes_at_t = self.rng.integers(
             self.n_nodes[0],
@@ -63,7 +65,6 @@ class RandomNodesOperator(BaseNodesOperator):
         for c in coords:
             node_id = graph.add_node(
                 {"t": t, **dict(zip(self.spatial_cols, c, strict=True))},
-                validate_keys=False,
                 **kwargs,
             )
             node_ids.append(node_id)
