@@ -161,9 +161,6 @@ class RustWorkXGraphBackend(BaseGraphBackend):
     ) -> "RustWorkXGraphBackend":
         """
         Create a subgraph from the graph from the given node IDs.
-        FIXME:
-            - This remaps the node IDs to the new IDs in the subgraph.
-            - This MUST BE FIXED!
 
         Parameters
         ----------
@@ -179,12 +176,23 @@ class RustWorkXGraphBackend(BaseGraphBackend):
         subgraph._graph = self._graph.subgraph(node_ids)
         subgraph._node_features_keys = self._node_features_keys
         subgraph._edge_features_keys = self._edge_features_keys
-        # TODO: is there a better way to do this?
-        for node_id in node_ids:
-            t = self._graph[node_id][DEFAULT_ATTR_KEYS.T]
+
+        # Set up parent-child relationship with proper node mapping
+        # The RustWorkX subgraph remaps node IDs, so we need to establish the mapping
+        original_node_ids = list(node_ids)
+        new_node_ids = list(subgraph._graph.node_indices())
+
+        # Set the parent relationship with node mapping
+        subgraph.set_parent(self, original_node_ids)
+
+        # Fix the time_to_nodes mapping using the new (remapped) node IDs
+        subgraph._time_to_nodes = {}
+        for original_node_id, new_node_id in zip(original_node_ids, new_node_ids, strict=True):
+            t = self._graph[original_node_id][DEFAULT_ATTR_KEYS.T]
             if t not in subgraph._time_to_nodes:
                 subgraph._time_to_nodes[t] = []
-            subgraph._time_to_nodes[t].append(node_id)
+            subgraph._time_to_nodes[t].append(new_node_id)
+
         return subgraph
 
     def time_points(self) -> list[int]:

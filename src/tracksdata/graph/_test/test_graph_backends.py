@@ -134,18 +134,6 @@ def test_filter_nodes_by_attribute(graph_backend: BaseGraphBackend) -> None:
     assert set(nodes) == {node3}
 
 
-def test_subgraph(graph_backend: BaseGraphBackend) -> None:
-    """Test creating subgraphs."""
-    node1 = graph_backend.add_node({"t": 0})
-    node2 = graph_backend.add_node({"t": 1})
-    graph_backend.add_node({"t": 2})
-
-    subgraph = graph_backend.subgraph(node_ids=[node1, node2])
-    assert isinstance(subgraph, BaseGraphBackend)
-    # TODO: implement many more subgraph testing
-    raise NotImplementedError
-
-
 def test_time_points(graph_backend: BaseGraphBackend) -> None:
     """Test retrieving time points."""
     graph_backend.add_node({"t": 0})

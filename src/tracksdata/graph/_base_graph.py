@@ -447,12 +447,13 @@ def remap_output_node_ids(ids_columns: list[str] | None = None) -> Callable[P, R
                 for id_var in ids_columns:
                     values = self.maybe_map_nodes(result[id_var].to_numpy(), direction)
                     result = result.with_columns(pl.Series(name=id_var, values=values))
-                return result
             elif isinstance(result, list | np.ndarray | Sequence):
-                return self.maybe_map_nodes(result, direction)
+                result = self.maybe_map_nodes(result, direction)
             elif isinstance(result, int | np.integer):
-                return int(self.maybe_map_nodes([result], direction)[0])
-            raise ValueError(f"Invalid return type: {type(result)}")
+                result = self.maybe_map_nodes([result], direction)[0].item()
+            else:
+                raise ValueError(f"Invalid return type: {type(result)}")
+            return result
 
         return _wrapper
 
