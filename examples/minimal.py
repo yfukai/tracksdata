@@ -11,7 +11,7 @@ from tracksdata.edges._distance_edges import DistanceEdgesOperator
 from tracksdata.edges._iou_edges import IoUEdgeWeights
 from tracksdata.expr import AttrExpr
 from tracksdata.graph._rustworkx_graph import RustWorkXGraphBackend
-from tracksdata.nodes._regionprops import RegionPropsOperator
+from tracksdata.nodes._regionprops import RegionPropsNodes
 from tracksdata.solvers._nearest_neighbors_solver import NearestNeighborsSolver
 
 
@@ -26,7 +26,7 @@ def main() -> None:
 
     print("starting tracking ...")
 
-    nodes_operator = RegionPropsOperator(show_progress=False)
+    nodes_operator = RegionPropsNodes(show_progress=False)
     dist_operator = DistanceEdgesOperator(distance_threshold=15.0, n_neighbors=5, show_progress=False)
     iou_operator = IoUEdgeWeights(output_key="iou", show_progress=False)
 

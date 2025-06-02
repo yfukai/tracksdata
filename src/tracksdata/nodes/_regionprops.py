@@ -12,7 +12,7 @@ from tracksdata.nodes._mask import Mask
 from tracksdata.utils._processing import maybe_show_progress
 
 
-class RegionPropsOperator(BaseNodesOperator):
+class RegionPropsNodes(BaseNodesOperator):
     """Operator that adds nodes to a graph using scikit-image's regionprops."""
 
     def __init__(
