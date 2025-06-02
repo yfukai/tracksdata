@@ -34,7 +34,9 @@ class GraphArrayView(BaseReadOnlyArray):
         return self._dtype
 
     def __getitem__(self, index: ArrayIndex) -> ArrayLike:
-        # FIXME: just for testing
+        # FIXME:
+        # - just for testing, not final implementation
+        # - make use of offset
         if isinstance(index, tuple):
             index = index[0]
 
