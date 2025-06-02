@@ -1,9 +1,9 @@
 from collections.abc import Sequence
-from typing import override
 
 import numpy as np
 from scipy.spatial import KDTree
 from tqdm import tqdm
+from typing_extensions import override
 
 from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.edges._base_edges import BaseEdgesOperator

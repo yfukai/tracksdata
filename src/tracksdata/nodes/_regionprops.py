@@ -1,9 +1,10 @@
 from collections.abc import Callable
-from typing import Any, override
+from typing import Any
 
 import numpy as np
 from numpy.typing import NDArray
 from skimage.measure._regionprops import RegionProperties, regionprops
+from typing_extensions import override
 
 from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.graph._base_graph import BaseGraphBackend
