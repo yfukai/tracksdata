@@ -65,7 +65,7 @@ class GraphArrayView(BaseReadOnlyArray):
 
             for mask, value in zip(df[DEFAULT_ATTR_KEYS.MASK], df[self._feature_key], strict=False):
                 mask: Mask
-                mask.paint_buffer(buffer, value)
+                mask.paint_buffer(buffer, value, offset=self._offset)
 
             return buffer
         else:
