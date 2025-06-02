@@ -1,6 +1,5 @@
-import numba as nb
 import numpy as np
-from numba import typed
+from numba import njit, typed
 
 from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.expr import AttrExpr
@@ -8,7 +7,7 @@ from tracksdata.graph._base_graph import BaseGraphBackend
 from tracksdata.solvers._base_solver import BaseSolver
 
 
-@nb.njit
+@njit
 def _constrained_nearest_neighbors(
     sorted_source: np.ndarray,
     sorted_target: np.ndarray,
