@@ -9,7 +9,7 @@ from tracksdata.functional._iou import (
 )
 
 
-def test_intersects_2d_overlapping():
+def test_intersects_2d_overlapping() -> None:
     """Test intersects function with overlapping 2D bounding boxes."""
     bbox1 = np.array([0, 0, 4, 4], dtype=np.int64)  # (y_min, x_min, y_max, x_max)
     bbox2 = np.array([2, 2, 6, 6], dtype=np.int64)
@@ -18,7 +18,7 @@ def test_intersects_2d_overlapping():
     assert intersects(bbox2, bbox1) is True
 
 
-def test_intersects_2d_non_overlapping():
+def test_intersects_2d_non_overlapping() -> None:
     """Test intersects function with non-overlapping 2D bounding boxes."""
     bbox1 = np.array([0, 0, 2, 2], dtype=np.int64)
     bbox2 = np.array([3, 3, 5, 5], dtype=np.int64)
@@ -27,7 +27,7 @@ def test_intersects_2d_non_overlapping():
     assert intersects(bbox2, bbox1) is False
 
 
-def test_intersects_2d_touching():
+def test_intersects_2d_touching() -> None:
     """Test intersects function with touching 2D bounding boxes."""
     bbox1 = np.array([0, 0, 2, 2], dtype=np.int64)
     bbox2 = np.array([2, 2, 4, 4], dtype=np.int64)
@@ -37,7 +37,7 @@ def test_intersects_2d_touching():
     assert intersects(bbox2, bbox1) is False
 
 
-def test_intersects_2d_edge_touching():
+def test_intersects_2d_edge_touching() -> None:
     """Test intersects function with edge-touching 2D bounding boxes."""
     bbox1 = np.array([0, 0, 3, 2], dtype=np.int64)
     bbox2 = np.array([1, 2, 4, 4], dtype=np.int64)
@@ -47,7 +47,7 @@ def test_intersects_2d_edge_touching():
     assert intersects(bbox2, bbox1) is False
 
 
-def test_intersects_2d_contained():
+def test_intersects_2d_contained() -> None:
     """Test intersects function with one bbox contained in another."""
     bbox1 = np.array([0, 0, 6, 6], dtype=np.int64)  # Larger box
     bbox2 = np.array([2, 2, 4, 4], dtype=np.int64)  # Smaller box inside
@@ -56,7 +56,7 @@ def test_intersects_2d_contained():
     assert intersects(bbox2, bbox1) is True  # Should be symmetric
 
 
-def test_intersects_3d_overlapping():
+def test_intersects_3d_overlapping() -> None:
     """Test intersects function with overlapping 3D bounding boxes."""
     bbox1 = np.array([0, 0, 0, 4, 4, 4], dtype=np.int64)  # (z_min, y_min, x_min, z_max, y_max, x_max)
     bbox2 = np.array([2, 2, 2, 6, 6, 6], dtype=np.int64)
@@ -65,7 +65,7 @@ def test_intersects_3d_overlapping():
     assert intersects(bbox2, bbox1) is True
 
 
-def test_intersects_3d_non_overlapping():
+def test_intersects_3d_non_overlapping() -> None:
     """Test intersects function with non-overlapping 3D bounding boxes."""
     bbox1 = np.array([0, 0, 0, 2, 2, 2], dtype=np.int64)
     bbox2 = np.array([3, 3, 3, 5, 5, 5], dtype=np.int64)
@@ -74,7 +74,7 @@ def test_intersects_3d_non_overlapping():
     assert intersects(bbox2, bbox1) is False
 
 
-def test_intersects_3d_partial_overlap():
+def test_intersects_3d_partial_overlap() -> None:
     """Test intersects function with partial overlap in 3D."""
     bbox1 = np.array([0, 0, 0, 3, 3, 3], dtype=np.int64)
     bbox2 = np.array([2, 0, 0, 5, 2, 2], dtype=np.int64)  # Overlap in z and y, but not full x
@@ -83,7 +83,7 @@ def test_intersects_3d_partial_overlap():
     assert intersects(bbox2, bbox1) is True
 
 
-def test_intersection_with_bbox_2d_basic():
+def test_intersection_with_bbox_2d_basic() -> None:
     """Test 2D intersection calculation with basic overlap."""
     bbox1 = np.array([0, 0, 4, 4], dtype=np.int64)
     bbox2 = np.array([2, 2, 6, 6], dtype=np.int64)
@@ -97,7 +97,7 @@ def test_intersection_with_bbox_2d_basic():
     assert intersection == 4.0
 
 
-def test_intersection_with_bbox_2d_no_mask_overlap():
+def test_intersection_with_bbox_2d_no_mask_overlap() -> None:
     """Test 2D intersection with overlapping bboxes but non-overlapping masks."""
     bbox1 = np.array([0, 0, 4, 4], dtype=np.int64)
     bbox2 = np.array([2, 2, 6, 6], dtype=np.int64)
@@ -115,7 +115,7 @@ def test_intersection_with_bbox_2d_no_mask_overlap():
     assert intersection == 0.0
 
 
-def test_intersection_with_bbox_2d_partial_mask_overlap():
+def test_intersection_with_bbox_2d_partial_mask_overlap() -> None:
     """Test 2D intersection with partial mask overlap."""
     bbox1 = np.array([0, 0, 4, 4], dtype=np.int64)
     bbox2 = np.array([2, 2, 6, 6], dtype=np.int64)
@@ -136,7 +136,7 @@ def test_intersection_with_bbox_2d_partial_mask_overlap():
     assert intersection == 4.0
 
 
-def test_intersection_with_bbox_3d_basic():
+def test_intersection_with_bbox_3d_basic() -> None:
     """Test 3D intersection calculation with basic overlap."""
     bbox1 = np.array([0, 0, 0, 4, 4, 4], dtype=np.int64)
     bbox2 = np.array([2, 2, 2, 6, 6, 6], dtype=np.int64)
@@ -150,7 +150,7 @@ def test_intersection_with_bbox_3d_basic():
     assert intersection == 8.0
 
 
-def test_intersection_with_bbox_3d_no_mask_overlap():
+def test_intersection_with_bbox_3d_no_mask_overlap() -> None:
     """Test 3D intersection with overlapping bboxes but non-overlapping masks."""
     bbox1 = np.array([0, 0, 0, 4, 4, 4], dtype=np.int64)
     bbox2 = np.array([2, 2, 2, 6, 6, 6], dtype=np.int64)
@@ -168,7 +168,7 @@ def test_intersection_with_bbox_3d_no_mask_overlap():
     assert intersection == 0.0
 
 
-def test_fast_iou_with_bbox_2d_no_intersection():
+def test_fast_iou_with_bbox_2d_no_intersection() -> None:
     """Test fast IoU with non-intersecting 2D bounding boxes."""
     bbox1 = np.array([0, 0, 2, 2], dtype=np.int64)
     bbox2 = np.array([3, 3, 5, 5], dtype=np.int64)
@@ -181,7 +181,7 @@ def test_fast_iou_with_bbox_2d_no_intersection():
     assert iou == 0.0
 
 
-def test_fast_iou_with_bbox_2d_perfect_overlap():
+def test_fast_iou_with_bbox_2d_perfect_overlap() -> None:
     """Test fast IoU with perfectly overlapping 2D masks."""
     bbox1 = np.array([0, 0, 3, 3], dtype=np.int64)
     bbox2 = np.array([0, 0, 3, 3], dtype=np.int64)
@@ -194,7 +194,7 @@ def test_fast_iou_with_bbox_2d_perfect_overlap():
     assert iou == 1.0
 
 
-def test_fast_iou_with_bbox_2d_partial_overlap():
+def test_fast_iou_with_bbox_2d_partial_overlap() -> None:
     """Test fast IoU with partial overlap in 2D."""
     bbox1 = np.array([0, 0, 4, 4], dtype=np.int64)
     bbox2 = np.array([2, 2, 6, 6], dtype=np.int64)
@@ -211,7 +211,7 @@ def test_fast_iou_with_bbox_2d_partial_overlap():
     assert abs(iou - expected_iou) < 1e-6
 
 
-def test_fast_iou_with_bbox_3d_basic():
+def test_fast_iou_with_bbox_3d_basic() -> None:
     """Test fast IoU with 3D masks."""
     bbox1 = np.array([0, 0, 0, 3, 3, 3], dtype=np.int64)
     bbox2 = np.array([1, 1, 1, 4, 4, 4], dtype=np.int64)
@@ -228,7 +228,7 @@ def test_fast_iou_with_bbox_3d_basic():
     assert abs(iou - expected_iou) < 1e-6
 
 
-def test_fast_iou_with_bbox_zero_intersection():
+def test_fast_iou_with_bbox_zero_intersection() -> None:
     """Test fast IoU when masks don't actually overlap despite bbox intersection."""
     bbox1 = np.array([0, 0, 4, 4], dtype=np.int64)
     bbox2 = np.array([2, 2, 6, 6], dtype=np.int64)
@@ -245,7 +245,7 @@ def test_fast_iou_with_bbox_zero_intersection():
     assert iou == 0.0
 
 
-def test_fast_iou_with_bbox_unsupported_dimensions():
+def test_fast_iou_with_bbox_unsupported_dimensions() -> None:
     """Test fast IoU with unsupported mask dimensions."""
     bbox1 = np.array([0, 0, 0, 0, 2, 2, 2, 2], dtype=np.int64)  # 4D bbox
     bbox2 = np.array([1, 1, 1, 1, 3, 3, 3, 3], dtype=np.int64)
@@ -257,7 +257,7 @@ def test_fast_iou_with_bbox_unsupported_dimensions():
         fast_iou_with_bbox(bbox1, bbox2, mask1, mask2)
 
 
-def test_fast_iou_with_bbox_empty_masks():
+def test_fast_iou_with_bbox_empty_masks() -> None:
     """Test fast IoU with empty masks."""
     bbox1 = np.array([0, 0, 3, 3], dtype=np.int64)
     bbox2 = np.array([1, 1, 4, 4], dtype=np.int64)
@@ -270,7 +270,7 @@ def test_fast_iou_with_bbox_empty_masks():
     assert iou == 0.0
 
 
-def test_fast_iou_with_bbox_identical_masks():
+def test_fast_iou_with_bbox_identical_masks() -> None:
     """Test fast IoU with identical masks and bboxes."""
     bbox = np.array([1, 1, 4, 4], dtype=np.int64)
 
@@ -285,7 +285,7 @@ def test_fast_iou_with_bbox_identical_masks():
     assert iou == 1.0
 
 
-def test_intersects_edge_cases():
+def test_intersects_edge_cases() -> None:
     """Test intersects function with various edge cases."""
     # Same bbox
     bbox = np.array([1, 1, 3, 3], dtype=np.int64)

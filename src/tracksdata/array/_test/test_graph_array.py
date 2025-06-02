@@ -11,7 +11,7 @@ from tracksdata.nodes._mask import Mask
 #  - https://github.com/royerlab/ultrack/blob/main/ultrack/utils/_test/test_utils_array.py
 
 
-def test_graph_array_view_init():
+def test_graph_array_view_init() -> None:
     """Test GraphArrayView initialization."""
     graph = RustWorkXGraphBackend()
 
@@ -29,7 +29,7 @@ def test_graph_array_view_init():
     assert len(array_view) == 10
 
 
-def test_graph_array_view_init_invalid_feature_key():
+def test_graph_array_view_init_invalid_feature_key() -> None:
     """Test GraphArrayView initialization with invalid feature key."""
     graph = RustWorkXGraphBackend()
 
@@ -37,7 +37,7 @@ def test_graph_array_view_init_invalid_feature_key():
         GraphArrayView(graph=graph, shape=(10, 100, 100), feature_key="invalid_key")
 
 
-def test_graph_array_view_getitem_empty_time():
+def test_graph_array_view_getitem_empty_time() -> None:
     """Test __getitem__ with empty time point (no nodes)."""
     graph = RustWorkXGraphBackend()
     graph.add_node_feature_key("label", 0)
@@ -53,7 +53,7 @@ def test_graph_array_view_getitem_empty_time():
     assert result.dtype == np.int32
 
 
-def test_graph_array_view_getitem_with_nodes():
+def test_graph_array_view_getitem_with_nodes() -> None:
     """Test __getitem__ with nodes at time point."""
     graph = RustWorkXGraphBackend()
 
@@ -88,7 +88,7 @@ def test_graph_array_view_getitem_with_nodes():
     assert result[50, 50] == 0
 
 
-def test_graph_array_view_getitem_multiple_nodes():
+def test_graph_array_view_getitem_multiple_nodes() -> None:
     """Test __getitem__ with multiple nodes at same time point."""
     graph = RustWorkXGraphBackend()
 
@@ -123,7 +123,7 @@ def test_graph_array_view_getitem_multiple_nodes():
     assert result[50, 50] == 0
 
 
-def test_graph_array_view_getitem_boolean_dtype():
+def test_graph_array_view_getitem_boolean_dtype() -> None:
     """Test __getitem__ with boolean feature values."""
     graph = RustWorkXGraphBackend()
 
@@ -149,7 +149,7 @@ def test_graph_array_view_getitem_boolean_dtype():
     assert result[0, 0] == 0  # False -> 0
 
 
-def test_graph_array_view_dtype_inference():
+def test_graph_array_view_dtype_inference() -> None:
     """Test that dtype is properly inferred from data."""
     graph = RustWorkXGraphBackend()
 

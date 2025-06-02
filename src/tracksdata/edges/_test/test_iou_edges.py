@@ -6,7 +6,7 @@ from tracksdata.graph._rustworkx_graph import RustWorkXGraphBackend
 from tracksdata.nodes._mask import Mask
 
 
-def test_iou_edges_init_default():
+def test_iou_edges_init_default() -> None:
     """Test IoUEdgesOperator initialization with default parameters."""
     operator = IoUEdgeWeights(output_key="iou_score")
 
@@ -16,7 +16,7 @@ def test_iou_edges_init_default():
     assert operator.func == Mask.iou
 
 
-def test_iou_edges_init_custom():
+def test_iou_edges_init_custom() -> None:
     """Test IoUEdgesOperator initialization with custom parameters."""
     operator = IoUEdgeWeights(output_key="custom_iou", mask_key="custom_mask", show_progress=False)
 
@@ -26,7 +26,7 @@ def test_iou_edges_init_custom():
     assert operator.func == Mask.iou
 
 
-def test_iou_edges_add_weights():
+def test_iou_edges_add_weights() -> None:
     """Test adding IoU weights to edges."""
     graph = RustWorkXGraphBackend()
 
@@ -68,7 +68,7 @@ def test_iou_edges_add_weights():
     assert abs(edge_iou[edge_id] - expected_iou) < 1e-6
 
 
-def test_iou_edges_no_overlap():
+def test_iou_edges_no_overlap() -> None:
     """Test IoU calculation with non-overlapping masks."""
     graph = RustWorkXGraphBackend()
 
@@ -107,7 +107,7 @@ def test_iou_edges_no_overlap():
     assert edge_iou[edge_id] == 0.0
 
 
-def test_iou_edges_perfect_overlap():
+def test_iou_edges_perfect_overlap() -> None:
     """Test IoU calculation with perfectly overlapping masks."""
     graph = RustWorkXGraphBackend()
 
@@ -143,7 +143,7 @@ def test_iou_edges_perfect_overlap():
     assert edge_iou[edge_id] == 1.0
 
 
-def test_iou_edges_custom_mask_key():
+def test_iou_edges_custom_mask_key() -> None:
     """Test IoU edges operator with custom mask key."""
     graph = RustWorkXGraphBackend()
 
