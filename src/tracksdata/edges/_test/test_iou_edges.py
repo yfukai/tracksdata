@@ -1,14 +1,14 @@
 import numpy as np
 
 from tracksdata.constants import DEFAULT_ATTR_KEYS
-from tracksdata.edges._iou_edges import IoUEdgesOperator
+from tracksdata.edges._iou_edges import IoUEdgeWeights
 from tracksdata.graph._rustworkx_graph import RustWorkXGraphBackend
 from tracksdata.nodes._mask import Mask
 
 
 def test_iou_edges_init_default():
     """Test IoUEdgesOperator initialization with default parameters."""
-    operator = IoUEdgesOperator(output_key="iou_score")
+    operator = IoUEdgeWeights(output_key="iou_score")
 
     assert operator.output_key == "iou_score"
     assert operator.feature_keys == DEFAULT_ATTR_KEYS.MASK
@@ -18,7 +18,7 @@ def test_iou_edges_init_default():
 
 def test_iou_edges_init_custom():
     """Test IoUEdgesOperator initialization with custom parameters."""
-    operator = IoUEdgesOperator(output_key="custom_iou", mask_key="custom_mask", show_progress=False)
+    operator = IoUEdgeWeights(output_key="custom_iou", mask_key="custom_mask", show_progress=False)
 
     assert operator.output_key == "custom_iou"
     assert operator.feature_keys == "custom_mask"
@@ -49,7 +49,7 @@ def test_iou_edges_add_weights():
     edge_id = graph.add_edge(node1, node2, {DEFAULT_ATTR_KEYS.EDGE_WEIGHT: 0.0})
 
     # Create operator and add weights
-    operator = IoUEdgesOperator(output_key="iou_score", show_progress=False)
+    operator = IoUEdgeWeights(output_key="iou_score", show_progress=False)
     operator.add_weights(graph)
 
     # Check that IoU weights were added
@@ -91,7 +91,7 @@ def test_iou_edges_no_overlap():
     edge_id = graph.add_edge(node1, node2, {DEFAULT_ATTR_KEYS.EDGE_WEIGHT: 0.0})
 
     # Create operator and add weights
-    operator = IoUEdgesOperator(output_key="iou_score", show_progress=False)
+    operator = IoUEdgeWeights(output_key="iou_score", show_progress=False)
     operator.add_weights(graph)
 
     # Check that IoU is 0 for non-overlapping masks
@@ -128,7 +128,7 @@ def test_iou_edges_perfect_overlap():
     edge_id = graph.add_edge(node1, node2, {DEFAULT_ATTR_KEYS.EDGE_WEIGHT: 0.0})
 
     # Create operator and add weights
-    operator = IoUEdgesOperator(output_key="iou_score", show_progress=False)
+    operator = IoUEdgeWeights(output_key="iou_score", show_progress=False)
     operator.add_weights(graph)
 
     edges_df = graph.edge_features()
@@ -166,7 +166,7 @@ def test_iou_edges_custom_mask_key():
     edge_id = graph.add_edge(node1, node2, {DEFAULT_ATTR_KEYS.EDGE_WEIGHT: 0.0})
 
     # Create operator with custom mask key
-    operator = IoUEdgesOperator(output_key="iou_score", mask_key="custom_mask", show_progress=False)
+    operator = IoUEdgeWeights(output_key="iou_score", mask_key="custom_mask", show_progress=False)
     operator.add_weights(graph)
 
     # Check that IoU weights were calculated
