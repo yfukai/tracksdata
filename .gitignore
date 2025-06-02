@@ -184,3 +184,6 @@ man_track.txt
 
 # ASV
 .asv/
+
+# uv
+uv.lock

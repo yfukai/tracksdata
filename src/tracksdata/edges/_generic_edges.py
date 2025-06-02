@@ -9,7 +9,7 @@ from tracksdata.utils._logging import LOG
 from tracksdata.utils._processing import maybe_show_progress
 
 
-class GenericFunctionEdgesOperator:
+class GenericFunctionEdgeWeights:
     """
     Add weights to the edges of the graph based on the output of a function.
 
