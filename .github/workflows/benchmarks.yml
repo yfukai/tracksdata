@@ -1,0 +1,52 @@
+name: Benchmarks
+
+on:
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Important for asv to access the git history
+        ref: ${{ github.ref }}
+
+    - name: Fetch main branch
+      run: |
+        git fetch origin main
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v5
+      with:
+        python-version: "3.12"
+        enable-cache: true
+
+    - name: Install dependencies
+      run: |
+        uv pip install 'asv<0.6.2' virtualenv
+        uv pip install "."
+
+    - name: Run benchmarks
+      id: benchmark_output
+      run: |
+        cd benchmarks
+        asv machine --yes
+        asv run --python=same > benchmark_results.txt
+        cat benchmark_results.txt
+        echo "benchmark-results<<EOF" >> $GITHUB_OUTPUT
+        cat benchmark_results.txt >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+
+    - name: Comment PR with benchmark results
+      uses: peter-evans/create-or-update-comment@v4
+      with:
+        issue-number: ${{ github.event.pull_request.number }}
+        body: |
+          ### Benchmark Results
+
+          ```
+          ${{ steps.benchmark_output.outputs.benchmark-results }}
+          ```

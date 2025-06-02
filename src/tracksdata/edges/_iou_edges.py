@@ -1,9 +1,9 @@
 from tracksdata.constants import DEFAULT_ATTR_KEYS
-from tracksdata.edges._generic_edges import GenericFunctionEdgesOperator
+from tracksdata.edges._generic_edges import GenericFunctionEdgeWeights
 from tracksdata.nodes._mask import Mask
 
 
-class IoUEdgesOperator(GenericFunctionEdgesOperator):
+class IoUEdgeWeights(GenericFunctionEdgeWeights):
     """
     Add weights to the edges of the graph based on the IoU
     of the masks of the nodes.

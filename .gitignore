@@ -181,3 +181,9 @@ man_track.txt
 
 # macOS files
 .DS_Store
+
+# ASV
+.asv/
+
+# uv
+uv.lock

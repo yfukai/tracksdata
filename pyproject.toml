@@ -35,12 +35,14 @@ dependencies = [
   "rich",
   "numba",
   "imagecodecs",
+  "typing-extensions",
 ]
 
 [project.optional-dependencies]
 test = [
   "pytest>=7.0",
   "pytest-cov",
+  "pytest-html",
 ]
 
 [project.urls]
@@ -87,6 +89,8 @@ skip-magic-trailing-comma = false # default is false
 show_missing = true
 skip_covered = true
 exclude_lines = [
+    "@njit",  # numba is not supported by coverage
+    "@jitclass",
     "pragma: no cover", # Have to re-enable the standard pragma
     "def __repr__", # Don't complain about missing debug-only code:
     "raise AssertionError",

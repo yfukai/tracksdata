@@ -9,7 +9,7 @@ from tracksdata.utils._logging import LOG
 from tracksdata.utils._processing import maybe_show_progress
 
 
-class GenericFunctionEdgesOperator:
+class GenericFunctionEdgeWeights:
     """
     Add weights to the edges of the graph based on the output of a function.
 
@@ -118,4 +118,7 @@ class GenericFunctionEdgesOperator:
         if self.output_key not in graph.edge_features_keys:
             graph.add_edge_feature_key(self.output_key, -1.0)
 
-        graph.update_edge_features(edges_df[DEFAULT_ATTR_KEYS.EDGE_ID].to_numpy(), {self.output_key: weights})
+        graph.update_edge_features(
+            edge_ids=edges_df[DEFAULT_ATTR_KEYS.EDGE_ID].to_numpy(),
+            attributes={self.output_key: weights},
+        )

@@ -1,11 +1,11 @@
 import numpy as np
 from numpy.typing import ArrayLike
-from polars.datatypes.convert import dtype_to_ffiname
 
 from tracksdata.array._base_array import ArrayIndex, BaseReadOnlyArray
 from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.graph._base_graph import BaseGraphBackend
 from tracksdata.nodes._mask import Mask
+from tracksdata.utils._convert import polars_dtype_to_numpy_dtype
 
 
 class GraphArrayView(BaseReadOnlyArray):
@@ -34,7 +34,9 @@ class GraphArrayView(BaseReadOnlyArray):
         return self._dtype
 
     def __getitem__(self, index: ArrayIndex) -> ArrayLike:
-        # FIXME: just for testing
+        # FIXME:
+        # - just for testing, not final implementation
+        # - make use of offset
         if isinstance(index, tuple):
             index = index[0]
 
@@ -50,9 +52,10 @@ class GraphArrayView(BaseReadOnlyArray):
                 feature_keys=[self._feature_key, DEFAULT_ATTR_KEYS.MASK],
             )
 
-            dtype = np.dtype(dtype_to_ffiname(df[self._feature_key].dtype))
+            dtype = polars_dtype_to_numpy_dtype(df[self._feature_key].dtype)
+
+            # napari support for bool is limited
             if np.issubdtype(dtype, bool):
-                # napari expects uint8 labels
                 dtype = np.uint8
 
             self._dtype = dtype
@@ -62,7 +65,7 @@ class GraphArrayView(BaseReadOnlyArray):
 
             for mask, value in zip(df[DEFAULT_ATTR_KEYS.MASK], df[self._feature_key], strict=False):
                 mask: Mask
-                mask.paint_buffer(buffer, value)
+                mask.paint_buffer(buffer, value, offset=self._offset)
 
             return buffer
         else:

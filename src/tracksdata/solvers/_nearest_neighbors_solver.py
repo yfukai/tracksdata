@@ -1,6 +1,5 @@
-import numba as nb
 import numpy as np
-from numba import typed
+from numba import njit, typed
 
 from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.expr import AttrExpr
@@ -8,7 +7,7 @@ from tracksdata.graph._base_graph import BaseGraphBackend
 from tracksdata.solvers._base_solver import BaseSolver
 
 
-@nb.njit
+@njit
 def _constrained_nearest_neighbors(
     sorted_source: np.ndarray,
     sorted_target: np.ndarray,
@@ -19,22 +18,25 @@ def _constrained_nearest_neighbors(
         key_type=np.int64,
         value_type=np.int64,
     )
-    seen = set()
+    seen_targets = set()  # Track targets that already have a parent
     size = len(sorted_source)
 
     for i in range(size):
         source_id = sorted_source[i]
         target_id = sorted_target[i]
 
-        if source_id in seen:
+        # Check if target already has a parent (one parent constraint)
+        if target_id in seen_targets:
             continue
 
-        target_count = children_counter.get(target_id, 0)
-        if target_count >= max_children:
+        # Check if source already has max_children (max children constraint)
+        source_children_count = children_counter.get(source_id, np.int64(0))
+        if source_children_count >= max_children:
             continue
 
-        seen.add(source_id)
-        children_counter[target_id] = target_count + 1
+        # Accept this edge
+        seen_targets.add(target_id)
+        children_counter[source_id] = source_children_count + 1
 
         solution[i] = True
 
@@ -95,8 +97,8 @@ class NearestNeighborsSolver(BaseSolver):
         weights = self.edge_weight_expr.evaluate(edges_df).to_numpy()
         sorted_indices = np.argsort(weights)
 
-        sorted_source = edges_df[DEFAULT_ATTR_KEYS.EDGE_SOURCE].to_numpy()[sorted_indices]
-        sorted_target = edges_df[DEFAULT_ATTR_KEYS.EDGE_TARGET].to_numpy()[sorted_indices]
+        sorted_source = edges_df[DEFAULT_ATTR_KEYS.EDGE_SOURCE].to_numpy()[sorted_indices].astype(np.int64)
+        sorted_target = edges_df[DEFAULT_ATTR_KEYS.EDGE_TARGET].to_numpy()[sorted_indices].astype(np.int64)
         sorted_solution = np.zeros(len(sorted_source), dtype=bool)
 
         _constrained_nearest_neighbors(
@@ -116,8 +118,8 @@ class NearestNeighborsSolver(BaseSolver):
 
         graph.add_edge_feature_key(self.solution_key, False)
         graph.update_edge_features(
-            solution_edges_df[DEFAULT_ATTR_KEYS.EDGE_ID].to_numpy(),
-            {self.solution_key: True},
+            edge_ids=solution_edges_df[DEFAULT_ATTR_KEYS.EDGE_ID].to_numpy(),
+            attributes={self.solution_key: True},
         )
 
         node_ids = np.unique(
@@ -131,6 +133,6 @@ class NearestNeighborsSolver(BaseSolver):
 
         graph.add_node_feature_key(self.solution_key, False)
         graph.update_node_features(
-            node_ids,
-            {self.solution_key: True},
+            node_ids=node_ids,
+            attributes={self.solution_key: True},
         )
