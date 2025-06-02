@@ -11,7 +11,7 @@ from tracksdata.graph._base_graph import BaseGraphBackend
 from tracksdata.utils._logging import LOG
 
 
-class DistanceEdgesOperator(BaseEdgesOperator):
+class DistanceEdges(BaseEdgesOperator):
     """
     Operator that adds edges to a graph based on the distance between nodes.
 

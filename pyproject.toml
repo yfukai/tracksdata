@@ -35,6 +35,7 @@ dependencies = [
   "rich",
   "numba",
   "imagecodecs",
+  "typing-extensions",
 ]
 
 [project.optional-dependencies]

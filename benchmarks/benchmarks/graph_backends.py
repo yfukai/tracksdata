@@ -1,4 +1,4 @@
-from tracksdata.edges._distance_edges import DistanceEdgesOperator
+from tracksdata.edges._distance_edges import DistanceEdges
 from tracksdata.graph._base_graph import BaseGraphBackend
 from tracksdata.graph._rustworkx_graph import RustWorkXGraphBackend
 from tracksdata.nodes._random import RandomNodes
@@ -28,7 +28,7 @@ class GraphBackendSuite:
             n_dim=3,
             show_progress=False,
         )
-        self.edges_operator = DistanceEdgesOperator(
+        self.edges_operator = DistanceEdges(
             distance_threshold=10,
             n_neighbors=3,
             show_progress=False,
