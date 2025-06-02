@@ -7,7 +7,7 @@ from tracksdata.nodes._base_nodes import BaseNodesOperator
 from tracksdata.utils._processing import maybe_show_progress
 
 
-class RandomNodesOperator(BaseNodesOperator):
+class RandomNodes(BaseNodesOperator):
     def __init__(
         self,
         n_time_points: int,
