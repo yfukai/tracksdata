@@ -1,4 +1,5 @@
 import abc
+from collections.abc import Sequence
 from typing import Any
 
 from tqdm import tqdm
@@ -12,7 +13,8 @@ class BaseWeightsOperator(abc.ABC):
     It will interact with a `BaseGraphBackend` to do so.
     """
 
-    def __init__(self, show_progress: bool = True):
+    def __init__(self, output_key: Sequence[str] | str, show_progress: bool = True):
+        self.output_key = output_key
         self.show_progress = show_progress
 
     def add_weights(

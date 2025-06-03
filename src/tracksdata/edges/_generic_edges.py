@@ -45,10 +45,9 @@ class GenericFunctionEdgeWeights(BaseWeightsOperator):
         output_key: str,
         show_progress: bool = True,
     ) -> None:
-        super().__init__(show_progress=show_progress)
+        super().__init__(output_key=output_key, show_progress=show_progress)
         self.feature_keys = feature_keys
         self.func = func
-        self.output_key = output_key
 
     def _add_weights_per_time(
         self,
