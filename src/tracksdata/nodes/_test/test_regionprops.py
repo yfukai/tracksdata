@@ -15,7 +15,7 @@ def test_regionprops_init_default() -> None:
     assert operator._cache is True
     assert operator._extra_properties == []
     assert operator._spacing is None
-    assert operator._show_progress is True
+    assert operator.show_progress is True
 
 
 def test_regionprops_init_custom() -> None:
@@ -27,7 +27,7 @@ def test_regionprops_init_custom() -> None:
     assert operator._cache is False
     assert operator._extra_properties == ["area", "perimeter"]
     assert operator._spacing == (1.0, 2.0)
-    assert operator._show_progress is False
+    assert operator.show_progress is False
 
 
 def test_regionprops_features_keys() -> None:

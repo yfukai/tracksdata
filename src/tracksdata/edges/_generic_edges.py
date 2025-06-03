@@ -4,12 +4,12 @@ from typing import Any
 import numpy as np
 
 from tracksdata.constants import DEFAULT_ATTR_KEYS
+from tracksdata.edges._base_weights import BaseWeightsOperator
 from tracksdata.graph._base_graph import BaseGraphBackend
 from tracksdata.utils._logging import LOG
-from tracksdata.utils._processing import maybe_show_progress
 
 
-class GenericFunctionEdgeWeights:
+class GenericFunctionEdgeWeights(BaseWeightsOperator):
     """
     Add weights to the edges of the graph based on the output of a function.
 
@@ -45,37 +45,28 @@ class GenericFunctionEdgeWeights:
         output_key: str,
         show_progress: bool = True,
     ) -> None:
+        super().__init__(show_progress=show_progress)
         self.feature_keys = feature_keys
-
         self.func = func
-        self.show_progress = show_progress
         self.output_key = output_key
 
-    def add_weights(
+    def _add_weights_per_time(
         self,
         graph: BaseGraphBackend,
         *,
-        t: int | None = None,
+        t: int,
     ) -> None:
         """
-        Add weights to the edges of the graph based on the output of a function.
+        Add weights to the edges of the graph based on the output of a function
+        for a specific time point.
 
         Parameters
         ----------
         graph : BaseGraphBackend
             The graph to add weights to.
-        t : int | None
-            The time point to add weights to.
+        t : int
+            The time point to add weights for.
         """
-        if t is None:
-            for t in maybe_show_progress(
-                graph.time_points(),
-                desc="Adding weights to edges",
-                show_progress=self.show_progress,
-            ):
-                self.add_weights(graph, t=t)
-            return
-
         source_ids = graph.filter_nodes_by_attribute({DEFAULT_ATTR_KEYS.T: t})
         edges_df = graph.edge_features(node_ids=source_ids)
 

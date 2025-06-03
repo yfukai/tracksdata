@@ -2,8 +2,6 @@ from collections.abc import Sequence
 
 import numpy as np
 from scipy.spatial import KDTree
-from tqdm import tqdm
-from typing_extensions import override
 
 from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.edges._base_edges import BaseEdgesOperator
@@ -43,8 +41,7 @@ class DistanceEdges(BaseEdgesOperator):
         self.feature_keys = feature_keys
         self.show_progress = show_progress
 
-    @override
-    def add_edges(
+    def _add_edges_per_time(
         self,
         graph: BaseGraphBackend,
         *,
@@ -63,18 +60,9 @@ class DistanceEdges(BaseEdgesOperator):
         weight_key : str
             The key to add the distance to.
         """
-        if t is None:
-            for t in tqdm(graph.time_points(), disable=not self.show_progress, desc="Adding edges"):
-                self.add_edges(
-                    graph,
-                    t=t,
-                    weight_key=weight_key,
-                )
-            return
-
         if weight_key not in graph.edge_features_keys:
             # negative value to indicate that the edge is not valid
-            graph.add_edge_feature_key(weight_key, -1.0)
+            graph.add_edge_feature_key(weight_key, -99999.0)
 
         if self.feature_keys is None:
             if "z" in graph.node_features_keys:
