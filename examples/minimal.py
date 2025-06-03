@@ -31,8 +31,7 @@ def main() -> None:
     dist_operator = DistanceEdges(distance_threshold=50.0, n_neighbors=5, show_progress=False)
     iou_operator = IoUEdgeWeights(output_key="iou", show_progress=True)
 
-    # TODO: define custom syntax for objective function from weights
-    solver = NearestNeighborsSolver(edge_weight=-AttrExpr("iou"))
+    solver = NearestNeighborsSolver(edge_weight=-AttrExpr("iou"), max_children=2)
 
     graph = RustWorkXGraphBackend()
     nodes_operator.add_nodes(graph, labels=labels)
@@ -54,6 +53,19 @@ def main() -> None:
         attributes={DEFAULT_ATTR_KEYS.TRACK_ID: track_ids},
     )
 
+    dict_graph = {child: parent for parent, child in tracks_graph.edge_list()}
+
+    tracks_df = graph.subgraph(
+        node_attr_filter={DEFAULT_ATTR_KEYS.SOLUTION: True},
+    ).node_features(
+        feature_keys=[
+            DEFAULT_ATTR_KEYS.TRACK_ID,
+            DEFAULT_ATTR_KEYS.T,
+            "y",
+            "x",
+        ],
+    )
+
     array_view = GraphArrayView(
         graph,
         labels.shape,
@@ -62,7 +74,9 @@ def main() -> None:
 
     print("opening napari ...")
 
-    napari.view_labels(array_view)
+    viewer = napari.Viewer()
+    viewer.add_labels(array_view)
+    viewer.add_tracks(tracks_df.to_numpy(), graph=dict_graph)
     napari.run()
 
 

@@ -106,7 +106,7 @@ class GenericFunctionEdgeWeights(BaseWeightsOperator):
                 weights[i] = self.func(source_attr, target_attr)
 
         if self.output_key not in graph.edge_features_keys:
-            graph.add_edge_feature_key(self.output_key, -1.0)
+            graph.add_edge_feature_key(self.output_key, -99999.0)
 
         graph.update_edge_features(
             edge_ids=edges_df[DEFAULT_ATTR_KEYS.EDGE_ID].to_numpy(),

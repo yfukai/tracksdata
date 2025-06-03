@@ -373,6 +373,7 @@ class RustWorkXGraphBackend(BaseGraphBackend):
         """
         if node_ids is None:
             graph = self._graph
+            selected_nodes = None
         else:
             if include_targets:
                 selected_nodes = set(node_ids)
@@ -382,7 +383,9 @@ class RustWorkXGraphBackend(BaseGraphBackend):
             else:
                 selected_nodes = node_ids
 
-            graph = self._graph.subgraph(list(selected_nodes))
+            selected_nodes = list(selected_nodes)
+            selected_nodes = np.sort(selected_nodes)
+            graph = self._graph.subgraph(selected_nodes)
 
         if feature_keys is None:
             feature_keys = self.edge_features_keys
@@ -403,6 +406,10 @@ class RustWorkXGraphBackend(BaseGraphBackend):
             )
 
         source, target, data = zip(*edge_map.values(), strict=False)
+        if selected_nodes is not None:
+            # mapping back to original node ids
+            source = selected_nodes[np.asarray(source)]
+            target = selected_nodes[np.asarray(target)]
 
         columns = {key: [] for key in feature_keys}
 
@@ -488,7 +495,7 @@ class RustWorkXGraphBackend(BaseGraphBackend):
                 raise ValueError(f"Edge feature key '{key}' not found in graph. Expected '{self.edge_features_keys}'")
 
             if np.isscalar(value):
-                attributes[key] = np.full(size, value)
+                attributes[key] = [value] * size
 
             elif len(attributes[key]) != size:
                 raise ValueError(f"Attribute '{key}' has wrong size. Expected {size}, got {len(attributes[key])}")

@@ -113,6 +113,7 @@ class DistanceEdges(BaseEdgesOperator):
                     neigh_id,
                     cur_id,
                     attributes={self.output_key: dist},
+                    validate_keys=False,
                 )
                 count += 1
 
