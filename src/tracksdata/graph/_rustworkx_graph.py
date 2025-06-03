@@ -221,7 +221,8 @@ class RustWorkXGraphBackend(BaseGraphBackend):
 
         # Set up parent-child relationship with proper node mapping
         # The RustWorkX subgraph remaps node IDs, so we need to establish the mapping
-        original_node_ids = list(node_ids)
+        # Mapping must be sorted to avoid issues with the parent-child relationship
+        original_node_ids = sorted(node_ids)
         new_node_ids = list(subgraph._graph.node_indices())
 
         # Set the parent relationship with node mapping
