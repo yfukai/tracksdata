@@ -1,8 +1,6 @@
 import abc
 from typing import Any
 
-from tqdm import tqdm
-
 from tracksdata.graph._base_graph import BaseGraphBackend
 
 
@@ -15,6 +13,7 @@ class BaseNodesOperator(abc.ABC):
     def __init__(self, show_progress: bool = True):
         self.show_progress = show_progress
 
+    @abc.abstractmethod
     def add_nodes(
         self,
         graph: BaseGraphBackend,
@@ -33,38 +32,4 @@ class BaseNodesOperator(abc.ABC):
             The time point to add nodes for. If None, add nodes for all time points.
         **kwargs : Any
             Additional keyword arguments to pass to the `_add_nodes_per_time` method.
-        """
-        if t is None:
-            for t in tqdm(graph.time_points(), disable=not self.show_progress, desc="Adding nodes"):
-                self._add_nodes_per_time(
-                    graph,
-                    t=t,
-                    **kwargs,
-                )
-        else:
-            self._add_nodes_per_time(
-                graph,
-                t=t,
-                **kwargs,
-            )
-
-    @abc.abstractmethod
-    def _add_nodes_per_time(
-        self,
-        graph: BaseGraphBackend,
-        *,
-        t: int,
-        **kwargs: Any,
-    ) -> None:
-        """
-        Add nodes to a graph at a given time point.
-
-        Parameters
-        ----------
-        graph : BaseGraphBackend
-            The graph to add nodes to.
-        t : int
-            The time point to add nodes for.
-        **kwargs : Any
-            Additional keyword arguments.
         """
