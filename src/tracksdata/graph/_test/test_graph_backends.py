@@ -183,9 +183,9 @@ def test_add_edge_feature_key(graph_backend: BaseGraphBackend) -> None:
     node2 = graph_backend.add_node({"t": 1})
 
     graph_backend.add_edge_feature_key("new_feature", 42)
-    edge_id = graph_backend.add_edge(node1, node2, attributes={"new_feature": 42})
+    graph_backend.add_edge(node1, node2, attributes={"new_feature": 42})
 
-    df = graph_backend.edge_features(node_ids=[edge_id], feature_keys=["new_feature"])
+    df = graph_backend.edge_features(feature_keys=["new_feature"])
     assert df["new_feature"].to_list() == [42]
 
 

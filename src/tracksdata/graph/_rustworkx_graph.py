@@ -312,6 +312,7 @@ class RustWorkXGraphBackend(BaseGraphBackend):
         *,
         node_ids: list[int] | None = None,
         feature_keys: Sequence[str] | None = None,
+        inclusive: bool = False,
     ) -> pl.DataFrame:
         """
         Get the features of the edges as a polars DataFrame.
@@ -324,14 +325,21 @@ class RustWorkXGraphBackend(BaseGraphBackend):
         feature_keys : Sequence[str] | None
             The feature keys to get.
             If None, all features are used.
+        inclusive : bool
+            Whether to include edges that are connected to nodes that are not in the given node_ids.
+            If True, the edges will be included even if they are connected to nodes that are not in the given node_ids.
+            If False, the edges will be included only if they are connected to nodes that are in the given node_ids.
         """
         if node_ids is None:
             graph = self._graph
         else:
-            selected_nodes = set(node_ids)
-            for node_id in node_ids:
-                neighbors = self._graph.neighbors(node_id)
-                selected_nodes.update(neighbors)
+            if inclusive:
+                selected_nodes = set(node_ids)
+                for node_id in node_ids:
+                    neighbors = self._graph.neighbors(node_id)
+                    selected_nodes.update(neighbors)
+            else:
+                selected_nodes = node_ids
 
             graph = self._graph.subgraph(list(selected_nodes))
 
