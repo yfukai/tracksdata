@@ -7,9 +7,9 @@ from tqdm import tqdm
 from tracksdata.graph._base_graph import BaseGraphBackend
 
 
-class BaseEdgesOperator(abc.ABC):
+class BaseWeightsOperator(abc.ABC):
     """
-    Base class indicating methods required to insert edges into a graph.
+    Base class indicating methods required to add weights to edges in a graph.
     It will interact with a `BaseGraphBackend` to do so.
     """
 
@@ -17,42 +17,41 @@ class BaseEdgesOperator(abc.ABC):
         self.output_key = output_key
         self.show_progress = show_progress
 
-    def add_edges(
+    def add_weights(
         self,
         graph: BaseGraphBackend,
         *,
         t: int | None = None,
         **kwargs: Any,
     ) -> None:
-        r"""
-        Initialize the edges from nodes of given `time` to nodes in neighboring
-        times (`time` + `\delta time`)
+        """
+        Add weights to the edges of the graph for a given time or all time points.
 
         Parameters
         ----------
         graph : BaseGraphBackend
-            The graph to initialize the edges in.
-        t: int
-            The time of the nodes to initialize the edges from.
-        **kwargs: Any
-            Additional keyword arguments to pass to the `add_edges` method.
+            The graph to add weights to.
+        t : int | None
+            The time point to add weights for. If None, add weights for all time points.
+        **kwargs : Any
+            Additional keyword arguments to pass to the `_add_weights_per_time` method.
         """
         if t is None:
-            for t in tqdm(graph.time_points(), disable=not self.show_progress, desc="Adding edges"):
-                self._add_edges_per_time(
+            for t in tqdm(graph.time_points(), disable=not self.show_progress, desc="Adding weights"):
+                self._add_weights_per_time(
                     graph,
                     t=t,
                     **kwargs,
                 )
         else:
-            self._add_edges_per_time(
+            self._add_weights_per_time(
                 graph,
                 t=t,
                 **kwargs,
             )
 
     @abc.abstractmethod
-    def _add_edges_per_time(
+    def _add_weights_per_time(
         self,
         graph: BaseGraphBackend,
         *,
@@ -60,14 +59,14 @@ class BaseEdgesOperator(abc.ABC):
         **kwargs: Any,
     ) -> None:
         """
-        Add edges to a graph at a given time point.
+        Add weights to edges of a graph at a given time point.
 
         Parameters
         ----------
         graph : BaseGraphBackend
-            The graph to add edges to.
+            The graph to add weights to.
         t : int
-            The time point to add edges for.
+            The time point to add weights for.
         **kwargs : Any
-            Additional keyword arguments to pass to the `_add_edges_per_time` method.
+            Additional keyword arguments.
         """

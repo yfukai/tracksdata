@@ -26,14 +26,14 @@ repos:
 
   # formatting
   - repo: https://github.com/psf/black
-    rev: 22.3.0
+    rev: 25.1.0
     hooks:
       - id: black
         args: ["--line-length", "120"]
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
     # Ruff version.
-    rev: v0.11.10
+    rev: v0.11.12
     hooks:
       # Run the linter.
       - id: ruff

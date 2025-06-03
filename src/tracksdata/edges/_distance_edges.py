@@ -2,8 +2,6 @@ from collections.abc import Sequence
 
 import numpy as np
 from scipy.spatial import KDTree
-from tqdm import tqdm
-from typing_extensions import override
 
 from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.edges._base_edges import BaseEdgesOperator
@@ -39,18 +37,17 @@ class DistanceEdges(BaseEdgesOperator):
         feature_keys: Sequence[str] | None = None,
         show_progress: bool = True,
     ):
+        super().__init__(output_key=output_key, show_progress=show_progress)
         self.distance_threshold = distance_threshold
         self.n_neighbors = n_neighbors
         self.output_key = output_key
         self.feature_keys = feature_keys
-        self.show_progress = show_progress
 
-    @override
-    def add_edges(
+    def _add_edges_per_time(
         self,
         graph: BaseGraphBackend,
         *,
-        t: int | None = None,
+        t: int,
     ) -> None:
         """
         Add edges to a graph based on the distance between nodes.
@@ -59,20 +56,12 @@ class DistanceEdges(BaseEdgesOperator):
         ----------
         graph : BaseGraphBackend
             The graph to add edges to.
-        t : int | None
+        t : int
             The time point to add edges for.
         """
-        if t is None:
-            for t in tqdm(graph.time_points(), disable=not self.show_progress, desc="Adding edges"):
-                self.add_edges(
-                    graph,
-                    t=t,
-                )
-            return
-
         if self.output_key not in graph.edge_features_keys:
             # negative value to indicate that the edge is not valid
-            graph.add_edge_feature_key(self.output_key, -1.0)
+            graph.add_edge_feature_key(self.output_key, -99999.0)
 
         if self.feature_keys is None:
             if "z" in graph.node_features_keys:

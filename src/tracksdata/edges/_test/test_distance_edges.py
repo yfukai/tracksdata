@@ -216,7 +216,7 @@ def test_distance_edges_add_edges_custom_weight_key() -> None:
     _ = graph.add_node({DEFAULT_ATTR_KEYS.T: 1, "x": 1.0, "y": 1.0})
 
     custom_weight_key = "custom_distance"
-    operator = DistanceEdges(distance_threshold=5.0, n_neighbors=2, show_progress=False, output_key=custom_weight_key)
+    operator = DistanceEdges(distance_threshold=5.0, n_neighbors=2, output_key=custom_weight_key, show_progress=False)
 
     operator.add_edges(graph)
 

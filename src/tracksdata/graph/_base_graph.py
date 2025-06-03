@@ -301,6 +301,7 @@ class BaseGraphBackend(abc.ABC):
         *,
         node_ids: list[int] | None = None,
         feature_keys: Sequence[str] | None = None,
+        include_targets: bool = False,
     ) -> pl.DataFrame:
         """
         Get the features of the edges as a polars DataFrame.
@@ -313,6 +314,9 @@ class BaseGraphBackend(abc.ABC):
         feature_keys : Sequence[str] | None
             The feature keys to get.
             If None, all features are used.
+        include_targets : bool
+            Whether to include edges out-going from the given node_ids even
+            if the target node is not in the given node_ids.
         """
 
     @property
