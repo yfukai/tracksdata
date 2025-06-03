@@ -239,15 +239,24 @@ class BaseGraphBackend(abc.ABC):
     def subgraph(
         self,
         *,
-        node_ids: Sequence[int],
+        node_ids: Sequence[int] | None = None,
+        node_attr_filter: dict[str, Any] | None = None,
+        edge_attr_filter: dict[str, Any] | None = None,
     ) -> "BaseGraphBackend":
         """
-        Create a subgraph from the graph from the given node IDs.
+        Create a subgraph from the graph from the given node IDs
+        or attributes' filters.
+
+        Node IDs or a single attribute filter can be used to create a subgraph.
 
         Parameters
         ----------
         node_ids : Sequence[int]
             The IDs of the nodes to include in the subgraph.
+        node_attr_filter : dict[str, Any] | None
+            The attributes to filter the nodes by.
+        edge_attr_filter : dict[str, Any] | None
+            The attributes to filter the edges by.
 
         Returns
         -------

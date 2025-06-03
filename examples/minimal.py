@@ -10,6 +10,7 @@ from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.edges._distance_edges import DistanceEdges
 from tracksdata.edges._iou_edges import IoUEdgeWeights
 from tracksdata.expr import AttrExpr
+from tracksdata.functional.graph import graph_track_ids
 from tracksdata.graph._rustworkx_graph import RustWorkXGraphBackend
 from tracksdata.nodes._regionprops import RegionPropsNodes
 from tracksdata.solvers._nearest_neighbors_solver import NearestNeighborsSolver
@@ -43,10 +44,20 @@ def main() -> None:
 
     solver.solve(graph)
 
+    solution_graph = graph.subgraph(
+        edge_attr_filter={DEFAULT_ATTR_KEYS.SOLUTION: True},
+    )
+    node_ids, track_ids, tracks_graph = graph_track_ids(solution_graph._graph)
+    graph.add_node_feature_key(DEFAULT_ATTR_KEYS.TRACK_ID, -1)
+    graph.update_node_features(
+        node_ids=node_ids,
+        attributes={DEFAULT_ATTR_KEYS.TRACK_ID: track_ids},
+    )
+
     array_view = GraphArrayView(
         graph,
         labels.shape,
-        feature_key=DEFAULT_ATTR_KEYS.SOLUTION,
+        feature_key=DEFAULT_ATTR_KEYS.TRACK_ID,
     )
 
     print("opening napari ...")

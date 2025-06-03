@@ -157,23 +157,64 @@ class RustWorkXGraphBackend(BaseGraphBackend):
     def subgraph(
         self,
         *,
-        node_ids: Sequence[int],
-    ) -> "RustWorkXGraphBackend":
+        node_ids: Sequence[int] | None = None,
+        node_attr_filter: dict[str, Any] | None = None,
+        edge_attr_filter: dict[str, Any] | None = None,
+    ) -> "BaseGraphBackend":
         """
-        Create a subgraph from the graph from the given node IDs.
+        Create a subgraph from the graph from the given node IDs
+        or attributes' filters.
+
+        Node IDs or a single attribute filter can be used to create a subgraph.
 
         Parameters
         ----------
         node_ids : Sequence[int]
             The IDs of the nodes to include in the subgraph.
+        node_attr_filter : dict[str, Any] | None
+            The attributes to filter the nodes by.
+        edge_attr_filter : dict[str, Any] | None
+            The attributes to filter the edges by.
 
         Returns
         -------
         RustWorkXGraphBackend
             A new graph with the specified nodes.
         """
+        if node_ids is not None and (node_attr_filter is not None or edge_attr_filter is not None):
+            raise ValueError("Node IDs and attributes' filters cannot be used together")
+
+        if node_attr_filter is not None and edge_attr_filter is not None:
+            raise ValueError("Node attributes' filters and edge attributes' filters cannot be used together")
+
+        if node_ids is None and node_attr_filter is None and edge_attr_filter is None:
+            raise ValueError("Either node IDs or one of the attributes' filters must be provided")
+
         subgraph = RustWorkXGraphBackend()
-        subgraph._graph = self._graph.subgraph(node_ids)
+
+        if node_ids is None:
+            if node_attr_filter is None:
+                edges_df = self.edge_features(feature_keys=edge_attr_filter.keys())
+                mask = pl.reduce(
+                    lambda x, y: x & y, [edges_df[key] == value for key, value in edge_attr_filter.items()]
+                )
+                node_pairs = (
+                    edges_df.filter(mask)
+                    .select(
+                        DEFAULT_ATTR_KEYS.EDGE_SOURCE,
+                        DEFAULT_ATTR_KEYS.EDGE_TARGET,
+                    )
+                    .to_numpy()
+                    .tolist()
+                )
+                subgraph._graph = self._graph.edge_subgraph(node_pairs)
+                node_ids = np.unique(node_pairs)
+            else:
+                node_ids = self.filter_nodes_by_attribute(node_attr_filter)
+                subgraph._graph = self._graph.subgraph(node_ids)
+        else:
+            subgraph._graph = self._graph.subgraph(node_ids)
+
         subgraph._node_features_keys = self._node_features_keys
         subgraph._edge_features_keys = self._edge_features_keys
 
