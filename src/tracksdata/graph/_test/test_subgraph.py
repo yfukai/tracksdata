@@ -58,12 +58,12 @@ def create_test_graph(graph_backend: BaseGraphBackend, use_subgraph: bool = Fals
     edge4 = graph_backend.add_edge(node3, node5, attributes={"weight": 0.9, "new_feature": 4.0})  # t=2 -> t=3
 
     if use_subgraph:
-        # Create subgraph with nodes 1, 2, 4 (this includes edges 1, 3)
-        subgraph_nodes = [node1, node2, node4]
+        # Create subgraph with nodes 1, 2, 4 in UNSORTED order to test robustness
+        subgraph_nodes = [node4, node1, node2]  # Intentionally unsorted order
         subgraph = graph_backend.subgraph(node_ids=subgraph_nodes)
 
-        # Store the subgraph nodes for testing
-        subgraph._test_nodes = subgraph_nodes  # type: ignore
+        # Store the subgraph nodes for testing (keep original order for assertions)
+        subgraph._test_nodes = [node1, node2, node4]  # type: ignore
         subgraph._test_edges = [edge1, edge3]  # edges within the subgraph (both go from t=0 to t=1)  # type: ignore
         subgraph._is_subgraph = True  # type: ignore
         return subgraph
@@ -255,21 +255,21 @@ def test_subgraph_creation(graph_backend: BaseGraphBackend) -> None:
     """Test creating subgraphs and their properties."""
     graph_with_data = create_test_graph(graph_backend, use_subgraph=False)
 
-    # Create a subgraph with subset of nodes
+    # Create a subgraph with subset of nodes in UNSORTED order
     original_nodes = graph_with_data._test_nodes  # type: ignore
-    subgraph_nodes = original_nodes[:2]  # First 2 nodes
+    subgraph_nodes_unsorted = [original_nodes[1], original_nodes[0]]  # Reverse order
 
-    subgraph = graph_with_data.subgraph(node_ids=subgraph_nodes)
+    subgraph = graph_with_data.subgraph(node_ids=subgraph_nodes_unsorted)
 
     # Test that subgraph has correct number of nodes
-    assert subgraph.num_nodes == len(subgraph_nodes)
+    assert subgraph.num_nodes == len(subgraph_nodes_unsorted)
 
-    # Test that subgraph node IDs match expected
+    # Test that subgraph node IDs match expected (regardless of input order)
     subgraph_node_ids = subgraph.node_ids()
-    assert set(subgraph_node_ids) == set(subgraph_nodes)
+    assert set(subgraph_node_ids) == set(subgraph_nodes_unsorted)
 
     # Test that subgraph has correct node features
-    for node in subgraph_nodes:
+    for node in subgraph_nodes_unsorted:
         original_features = graph_with_data.node_features(node_ids=[node])
         subgraph_features = subgraph.node_features(node_ids=[node])
 
@@ -282,9 +282,9 @@ def test_subgraph_edge_preservation(graph_backend: BaseGraphBackend) -> None:
     """Test that subgraphs preserve correct edges between included nodes."""
     graph_with_data = create_test_graph(graph_backend, use_subgraph=False)
 
-    # Get all nodes and create subgraph with first 2 nodes
+    # Get all nodes and create subgraph with first 2 nodes in REVERSE order
     original_nodes = graph_with_data._test_nodes  # type: ignore
-    subgraph_nodes = original_nodes[:2]  # First 2 nodes
+    subgraph_nodes = [original_nodes[1], original_nodes[0]]  # Reverse order
 
     # Get edges from original graph involving only these nodes
     original_edges = graph_with_data.edge_features()
@@ -316,7 +316,8 @@ def test_subgraph_feature_consistency(graph_backend: BaseGraphBackend) -> None:
     """Test that subgraph node and edge features are consistent with original graph."""
     graph_with_data = create_test_graph(graph_backend, use_subgraph=False)
     original_nodes = graph_with_data._test_nodes  # type: ignore
-    subgraph_nodes = original_nodes[:2]
+    # Use nodes in unsorted order to test robustness
+    subgraph_nodes = [original_nodes[1], original_nodes[0]]
 
     # Create subgraph
     subgraph = graph_with_data.subgraph(node_ids=subgraph_nodes)
@@ -359,3 +360,34 @@ def test_subgraph_feature_consistency(graph_backend: BaseGraphBackend) -> None:
                 break
 
         assert found_match, f"Edge ({sub_source}, {sub_target}) not found in original graph"
+
+
+def test_subgraph_with_unsorted_node_ids(graph_backend: BaseGraphBackend) -> None:
+    """Test that subgraph creation works correctly with unsorted node IDs."""
+    graph_with_data = create_test_graph(graph_backend, use_subgraph=False)
+    original_nodes = graph_with_data._test_nodes  # type: ignore
+
+    # Test with various unsorted orders
+    test_cases = [
+        [original_nodes[2], original_nodes[0], original_nodes[1]],  # Mixed order
+        [original_nodes[3], original_nodes[1], original_nodes[5], original_nodes[0]],  # Descending + mixed
+        [original_nodes[4], original_nodes[2]],  # Just two nodes in reverse order
+    ]
+
+    for unsorted_nodes in test_cases:
+        # Create subgraph with unsorted node IDs
+        subgraph = graph_with_data.subgraph(node_ids=unsorted_nodes)
+
+        # Verify the subgraph contains exactly the expected nodes
+        subgraph_node_ids = set(subgraph.node_ids())
+        expected_node_ids = set(unsorted_nodes)
+        assert subgraph_node_ids == expected_node_ids, f"Failed for node order: {unsorted_nodes}"
+
+        # Verify node features are preserved correctly
+        for node in unsorted_nodes:
+            original_features = graph_with_data.node_features(node_ids=[node])
+            subgraph_features = subgraph.node_features(node_ids=[node])
+
+            for col in original_features.columns:
+                msg = f"Node {node} feature {col} mismatch in subgraph with order {unsorted_nodes}"
+                assert original_features[col].to_list() == subgraph_features[col].to_list(), msg
