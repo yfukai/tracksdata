@@ -67,7 +67,8 @@ class GenericFunctionEdgeWeights(BaseWeightsOperator):
             The time point to add weights for.
         """
         source_ids = graph.filter_nodes_by_attribute({DEFAULT_ATTR_KEYS.T: t})
-        edges_df = graph.edge_features(node_ids=source_ids, inclusive=True)
+        edges_df = graph.edge_features(node_ids=source_ids, include_targets=True)
+        print(edges_df)
 
         if len(edges_df) == 0:
             LOG.warning(f"No edges found for time point {t} to sucessors")

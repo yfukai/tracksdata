@@ -102,6 +102,7 @@ class RustWorkXGraphBackend(BaseGraphBackend):
         if validate_keys:
             self._validate_attributes(attributes, self.edge_features_keys, "edge")
         edge_id = self._graph.add_edge(source_id, target_id, attributes)
+        attributes[DEFAULT_ATTR_KEYS.EDGE_ID] = edge_id
         return edge_id
 
     @remap_output_node_ids()
@@ -312,7 +313,7 @@ class RustWorkXGraphBackend(BaseGraphBackend):
         *,
         node_ids: list[int] | None = None,
         feature_keys: Sequence[str] | None = None,
-        inclusive: bool = False,
+        include_targets: bool = False,
     ) -> pl.DataFrame:
         """
         Get the features of the edges as a polars DataFrame.
@@ -325,15 +326,14 @@ class RustWorkXGraphBackend(BaseGraphBackend):
         feature_keys : Sequence[str] | None
             The feature keys to get.
             If None, all features are used.
-        inclusive : bool
-            Whether to include edges that are connected to nodes that are not in the given node_ids.
-            If True, the edges will be included even if they are connected to nodes that are not in the given node_ids.
-            If False, the edges will be included only if they are connected to nodes that are in the given node_ids.
+        include_targets : bool
+            Whether to include edges out-going from the given node_ids even
+            if the target node is not in the given node_ids.
         """
         if node_ids is None:
             graph = self._graph
         else:
-            if inclusive:
+            if include_targets:
                 selected_nodes = set(node_ids)
                 for node_id in node_ids:
                     neighbors = self._graph.neighbors(node_id)
@@ -346,16 +346,17 @@ class RustWorkXGraphBackend(BaseGraphBackend):
         if feature_keys is None:
             feature_keys = self.edge_features_keys
 
+        feature_keys = [DEFAULT_ATTR_KEYS.EDGE_ID, *feature_keys]
+
         edge_map = graph.edge_index_map()
         if len(edge_map) == 0:
             return pl.DataFrame(
                 {
                     key: []
                     for key in [
-                        DEFAULT_ATTR_KEYS.EDGE_ID,
+                        *feature_keys,
                         DEFAULT_ATTR_KEYS.EDGE_SOURCE,
                         DEFAULT_ATTR_KEYS.EDGE_TARGET,
-                        *feature_keys,
                     ]
                 }
             )
@@ -363,13 +364,13 @@ class RustWorkXGraphBackend(BaseGraphBackend):
         source, target, data = zip(*edge_map.values(), strict=False)
 
         columns = {key: [] for key in feature_keys}
-        columns[DEFAULT_ATTR_KEYS.EDGE_ID] = list(edge_map.keys())
-        columns[DEFAULT_ATTR_KEYS.EDGE_SOURCE] = source
-        columns[DEFAULT_ATTR_KEYS.EDGE_TARGET] = target
 
         for row in data:
             for key in feature_keys:
                 columns[key].append(row[key])
+
+        columns[DEFAULT_ATTR_KEYS.EDGE_SOURCE] = source
+        columns[DEFAULT_ATTR_KEYS.EDGE_TARGET] = target
 
         columns = {k: np.asarray(v) for k, v in columns.items()}
 
