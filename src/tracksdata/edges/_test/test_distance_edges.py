@@ -6,6 +6,8 @@ from tracksdata.graph._rustworkx_graph import RustWorkXGraphBackend
 def test_distance_edges_init_default_params() -> None:
     """Test initialization with default parameters."""
     operator = DistanceEdges(distance_threshold=10.0, n_neighbors=3)
+
+    assert operator.output_key == DEFAULT_ATTR_KEYS.EDGE_WEIGHT
     assert operator.distance_threshold == 10.0
     assert operator.n_neighbors == 3
     assert operator.feature_keys is None
@@ -14,7 +16,14 @@ def test_distance_edges_init_default_params() -> None:
 
 def test_distance_edges_init_custom_params() -> None:
     """Test initialization with custom parameters."""
-    operator = DistanceEdges(distance_threshold=5.0, n_neighbors=2, feature_keys=["x", "y"], show_progress=False)
+    operator = DistanceEdges(
+        distance_threshold=5.0,
+        n_neighbors=2,
+        feature_keys=["x", "y"],
+        show_progress=False,
+        output_key="custom_distance",
+    )
+    assert operator.output_key == "custom_distance"
     assert operator.distance_threshold == 5.0
     assert operator.n_neighbors == 2
     assert operator.feature_keys == ["x", "y"]
@@ -206,10 +215,10 @@ def test_distance_edges_add_edges_custom_weight_key() -> None:
     # Add nodes at t=1
     _ = graph.add_node({DEFAULT_ATTR_KEYS.T: 1, "x": 1.0, "y": 1.0})
 
-    operator = DistanceEdges(distance_threshold=5.0, n_neighbors=2, show_progress=False)
-
     custom_weight_key = "custom_distance"
-    operator.add_edges(graph, weight_key=custom_weight_key)
+    operator = DistanceEdges(distance_threshold=5.0, n_neighbors=2, show_progress=False, output_key=custom_weight_key)
+
+    operator.add_edges(graph)
 
     if graph.num_edges > 0:
         edges_df = graph.edge_features()

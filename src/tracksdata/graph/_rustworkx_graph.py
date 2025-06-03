@@ -406,6 +406,8 @@ class RustWorkXGraphBackend(BaseGraphBackend):
 
         columns = {k: np.asarray(v) for k, v in columns.items()}
 
+        # TODO: returning EDGE_ID is incorrect
+
         return pl.DataFrame(columns)
 
     @property
