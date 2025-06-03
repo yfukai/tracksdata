@@ -4,13 +4,13 @@ from typing import Any
 import numpy as np
 from numpy.typing import NDArray
 from skimage.measure._regionprops import RegionProperties, regionprops
+from tqdm import tqdm
 from typing_extensions import override
 
 from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.graph._base_graph import BaseGraphBackend
 from tracksdata.nodes._base_nodes import BaseNodesOperator
 from tracksdata.nodes._mask import Mask
-from tracksdata.utils._processing import maybe_show_progress
 
 
 class RegionPropsNodes(BaseNodesOperator):
@@ -23,11 +23,10 @@ class RegionPropsNodes(BaseNodesOperator):
         spacing: tuple[float, float] | None = None,
         show_progress: bool = True,
     ):
-        super().__init__()
+        super().__init__(show_progress=show_progress)
         self._cache = cache
         self._extra_properties = extra_properties or []
         self._spacing = spacing
-        self._show_progress = show_progress
 
     def features_keys(self) -> list[str]:
         """
@@ -62,26 +61,50 @@ class RegionPropsNodes(BaseNodesOperator):
             If None, the intensity image is not used.
         """
         if t is None:
-            for t in maybe_show_progress(
-                range(labels.shape[0]),
-                desc="Processing time points",
-                show_progress=self._show_progress,
-            ):
+            for t in tqdm(range(labels.shape[0]), disable=not self.show_progress, desc="Adding nodes"):
                 if intensity_image is not None:
-                    self.add_nodes(
+                    self._add_nodes_per_time(
                         graph=graph,
                         labels=labels[t],
                         t=t,
                         intensity_image=intensity_image[t],
                     )
                 else:
-                    self.add_nodes(
+                    self._add_nodes_per_time(
                         graph=graph,
                         labels=labels[t],
                         t=t,
                     )
-            return
+        else:
+            self._add_nodes_per_time(
+                graph=graph,
+                labels=labels,
+                t=t,
+                intensity_image=intensity_image,
+            )
 
+    def _add_nodes_per_time(
+        self,
+        graph: BaseGraphBackend,
+        *,
+        labels: NDArray[np.integer],
+        t: int,
+        intensity_image: NDArray | None = None,
+    ) -> None:
+        """
+        Add nodes for a specific time point using region properties.
+
+        Parameters
+        ----------
+        graph : BaseGraphBackend
+            The graph to add nodes to.
+        labels : NDArray[np.integer]
+            The labels for the specific time point.
+        t : int
+            The time point to add nodes for.
+        intensity_image : NDArray | None
+            The intensity image for the specific time point.
+        """
         if labels.ndim == 2:
             axis_names = ["y", "x"]
         elif labels.ndim == 3:
@@ -98,16 +121,10 @@ class RegionPropsNodes(BaseNodesOperator):
 
         labels = np.asarray(labels)
 
-        for obj in maybe_show_progress(
-            list(
-                regionprops(
-                    labels,
-                    intensity_image=intensity_image,
-                    spacing=self._spacing,
-                )
-            ),
-            show_progress=self._show_progress,
-            desc=f"Processing regions of time {t}",
+        for obj in regionprops(
+            labels,
+            intensity_image=intensity_image,
+            spacing=self._spacing,
         ):
             attributes = dict(zip(axis_names, obj.centroid, strict=False))
 
