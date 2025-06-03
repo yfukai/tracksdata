@@ -95,11 +95,6 @@ class NearestNeighborsSolver(BaseSolver):
         # get edges and sort them by weight
         edges_df = graph.edge_features(feature_keys=self.edge_weight_expr.column_names())
         weights = self.edge_weight_expr.evaluate(edges_df).to_numpy()
-        # TODO: remove me
-        print(np.unique(weights, return_counts=True))
-        # import matplotlib.pyplot as plt
-        # plt.hist(weights)
-        # plt.show()
         sorted_indices = np.argsort(weights)
 
         sorted_source = edges_df[DEFAULT_ATTR_KEYS.EDGE_SOURCE].to_numpy()[sorted_indices].astype(np.int64)

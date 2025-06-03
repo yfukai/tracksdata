@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 import rustworkx as rx
 
-from tracksdata.functional.graph import graph_track_ids
+from tracksdata.functional._rx import graph_track_ids
 
 
 def test_empty_graph():
