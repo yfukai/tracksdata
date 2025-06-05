@@ -3,7 +3,7 @@ import pytest
 
 from tracksdata.array._graph_array import GraphArrayView
 from tracksdata.constants import DEFAULT_ATTR_KEYS
-from tracksdata.graph._rustworkx_graph import RustWorkXGraphBackend
+from tracksdata.graph._rustworkx_graph import RustWorkXGraph
 from tracksdata.nodes._mask import Mask
 
 # NOTE: this could be generic test for all array backends
@@ -13,7 +13,7 @@ from tracksdata.nodes._mask import Mask
 
 def test_graph_array_view_init() -> None:
     """Test GraphArrayView initialization."""
-    graph = RustWorkXGraphBackend()
+    graph = RustWorkXGraph()
 
     # Add a feature key
     graph.add_node_feature_key("label", 0)
@@ -31,7 +31,7 @@ def test_graph_array_view_init() -> None:
 
 def test_graph_array_view_init_invalid_feature_key() -> None:
     """Test GraphArrayView initialization with invalid feature key."""
-    graph = RustWorkXGraphBackend()
+    graph = RustWorkXGraph()
 
     with pytest.raises(ValueError, match="Feature key 'invalid_key' not found in graph"):
         GraphArrayView(graph=graph, shape=(10, 100, 100), feature_key="invalid_key")
@@ -39,7 +39,7 @@ def test_graph_array_view_init_invalid_feature_key() -> None:
 
 def test_graph_array_view_getitem_empty_time() -> None:
     """Test __getitem__ with empty time point (no nodes)."""
-    graph = RustWorkXGraphBackend()
+    graph = RustWorkXGraph()
     graph.add_node_feature_key("label", 0)
 
     array_view = GraphArrayView(graph=graph, shape=(10, 100, 100), feature_key="label")
@@ -55,7 +55,7 @@ def test_graph_array_view_getitem_empty_time() -> None:
 
 def test_graph_array_view_getitem_with_nodes() -> None:
     """Test __getitem__ with nodes at time point."""
-    graph = RustWorkXGraphBackend()
+    graph = RustWorkXGraph()
 
     # Add feature keys
     graph.add_node_feature_key("label", 0)
@@ -90,7 +90,7 @@ def test_graph_array_view_getitem_with_nodes() -> None:
 
 def test_graph_array_view_getitem_multiple_nodes() -> None:
     """Test __getitem__ with multiple nodes at same time point."""
-    graph = RustWorkXGraphBackend()
+    graph = RustWorkXGraph()
 
     # Add feature keys
     graph.add_node_feature_key("label", 0)
@@ -125,7 +125,7 @@ def test_graph_array_view_getitem_multiple_nodes() -> None:
 
 def test_graph_array_view_getitem_boolean_dtype() -> None:
     """Test __getitem__ with boolean feature values."""
-    graph = RustWorkXGraphBackend()
+    graph = RustWorkXGraph()
 
     # Add feature keys
     graph.add_node_feature_key("is_active", False)
@@ -151,7 +151,7 @@ def test_graph_array_view_getitem_boolean_dtype() -> None:
 
 def test_graph_array_view_dtype_inference() -> None:
     """Test that dtype is properly inferred from data."""
-    graph = RustWorkXGraphBackend()
+    graph = RustWorkXGraph()
 
     # Add feature keys
     graph.add_node_feature_key("float_label", 0.0)

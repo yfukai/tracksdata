@@ -8,7 +8,7 @@ from tqdm import tqdm
 from typing_extensions import override
 
 from tracksdata.constants import DEFAULT_ATTR_KEYS
-from tracksdata.graph._base_graph import BaseGraphBackend
+from tracksdata.graph._base_graph import BaseGraph
 from tracksdata.nodes._base_nodes import BaseNodesOperator
 from tracksdata.nodes._mask import Mask
 
@@ -37,7 +37,7 @@ class RegionPropsNodes(BaseNodesOperator):
     @override
     def add_nodes(
         self,
-        graph: BaseGraphBackend,
+        graph: BaseGraph,
         *,
         labels: NDArray[np.integer],
         t: int | None = None,
@@ -49,7 +49,7 @@ class RegionPropsNodes(BaseNodesOperator):
 
         Parameters
         ----------
-        graph : BaseGraphBackend
+        graph : BaseGraph
             The graph to initialize the nodes in.
         labels : NDArray[np.integer]
             The labels of the nodes to be initialized.
@@ -85,7 +85,7 @@ class RegionPropsNodes(BaseNodesOperator):
 
     def _add_nodes_per_time(
         self,
-        graph: BaseGraphBackend,
+        graph: BaseGraph,
         *,
         labels: NDArray[np.integer],
         t: int,
@@ -96,7 +96,7 @@ class RegionPropsNodes(BaseNodesOperator):
 
         Parameters
         ----------
-        graph : BaseGraphBackend
+        graph : BaseGraph
             The graph to add nodes to.
         labels : NDArray[np.integer]
             The labels for the specific time point.

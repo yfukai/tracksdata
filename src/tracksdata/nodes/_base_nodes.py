@@ -1,13 +1,13 @@
 import abc
 from typing import Any
 
-from tracksdata.graph._base_graph import BaseGraphBackend
+from tracksdata.graph._base_graph import BaseGraph
 
 
 class BaseNodesOperator(abc.ABC):
     """
     Base class indicating methods required to insert nodes into a graph.
-    It will interact with a `BaseGraphBackend` to do so.
+    It will interact with a `BaseGraph` to do so.
     """
 
     def __init__(self, show_progress: bool = True):
@@ -16,7 +16,7 @@ class BaseNodesOperator(abc.ABC):
     @abc.abstractmethod
     def add_nodes(
         self,
-        graph: BaseGraphBackend,
+        graph: BaseGraph,
         *,
         t: int | None = None,
         **kwargs: Any,
@@ -26,7 +26,7 @@ class BaseNodesOperator(abc.ABC):
 
         Parameters
         ----------
-        graph : BaseGraphBackend
+        graph : BaseGraph
             The graph to initialize the nodes in.
         t : int | None
             The time point to add nodes for. If None, add nodes for all time points.

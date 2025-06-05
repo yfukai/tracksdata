@@ -5,7 +5,7 @@ import numpy as np
 
 from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.edges._base_weights import BaseWeightsOperator
-from tracksdata.graph._base_graph import BaseGraphBackend
+from tracksdata.graph._base_graph import BaseGraph
 from tracksdata.utils._logging import LOG
 
 
@@ -51,7 +51,7 @@ class GenericFunctionEdgeWeights(BaseWeightsOperator):
 
     def _add_weights_per_time(
         self,
-        graph: BaseGraphBackend,
+        graph: BaseGraph,
         *,
         t: int,
     ) -> None:
@@ -61,7 +61,7 @@ class GenericFunctionEdgeWeights(BaseWeightsOperator):
 
         Parameters
         ----------
-        graph : BaseGraphBackend
+        graph : BaseGraph
             The graph to add weights to.
         t : int
             The time point to add weights for.
@@ -106,7 +106,7 @@ class GenericFunctionEdgeWeights(BaseWeightsOperator):
                 weights[i] = self.func(source_attr, target_attr)
 
         if self.output_key not in graph.edge_features_keys:
-            graph.add_edge_feature_key(self.output_key, -1.0)
+            graph.add_edge_feature_key(self.output_key, -99999.0)
 
         graph.update_edge_features(
             edge_ids=edges_df[DEFAULT_ATTR_KEYS.EDGE_ID].to_numpy(),

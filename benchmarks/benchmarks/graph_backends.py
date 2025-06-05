@@ -1,16 +1,16 @@
 from tracksdata.edges._distance_edges import DistanceEdges
-from tracksdata.graph._base_graph import BaseGraphBackend
-from tracksdata.graph._rustworkx_graph import RustWorkXGraphBackend
+from tracksdata.graph._base_graph import BaseGraph
+from tracksdata.graph._rustworkx_graph import RustWorkXGraph
 from tracksdata.nodes._random import RandomNodes
 
 
-class GraphBackendSuite:
+class GraphSuite:
     """
     Benchmark suite for graph backend operations.
     """
 
     params = (
-        (RustWorkXGraphBackend,),
+        (RustWorkXGraph,),
         (1_000, 10_000, 100_000),
     )
     timeout = 1800  # 30 minutes
@@ -18,7 +18,7 @@ class GraphBackendSuite:
 
     def setup(
         self,
-        backend: BaseGraphBackend,
+        backend: BaseGraph,
         n_nodes: int,
     ) -> None:
         self.graph = backend()

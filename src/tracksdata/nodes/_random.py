@@ -3,7 +3,7 @@ from typing import Any, Literal
 import numpy as np
 from tqdm import tqdm
 
-from tracksdata.graph._base_graph import BaseGraphBackend
+from tracksdata.graph._base_graph import BaseGraph
 from tracksdata.nodes._base_nodes import BaseNodesOperator
 
 
@@ -31,7 +31,7 @@ class RandomNodes(BaseNodesOperator):
 
     def add_nodes(
         self,
-        graph: BaseGraphBackend,
+        graph: BaseGraph,
         *,
         t: int | None = None,
         **kwargs: Any,
@@ -58,7 +58,7 @@ class RandomNodes(BaseNodesOperator):
 
     def _add_nodes_per_time(
         self,
-        graph: BaseGraphBackend,
+        graph: BaseGraph,
         *,
         t: int,
         **kwargs: Any,
@@ -68,7 +68,7 @@ class RandomNodes(BaseNodesOperator):
 
         Parameters
         ----------
-        graph : BaseGraphBackend
+        graph : BaseGraph
             The graph to add nodes to.
         t : int
             The time point to add nodes for.

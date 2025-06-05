@@ -1,120 +1,19 @@
 import abc
-from collections.abc import Callable, Sequence
-from functools import wraps
-from typing import Any, Literal, Optional, ParamSpec, TypeVar
+from collections.abc import Sequence
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import polars as pl
 from numpy.typing import ArrayLike
-from skimage.util._map_array import ArrayMap
 
-# NOTE:
-# - maybe a single basegraph is better
-# - nodes have a t, and space
+if TYPE_CHECKING:
+    from tracksdata.graph._graph_view import GraphView
 
 
-class BaseReadOnlyGraph(abc.ABC):  # noqa: B024
-    """
-    Base class for viewing a graph.
-    """
-
-
-class BaseWritableGraph(BaseReadOnlyGraph):
-    """
-    Base class for writing to a graph.
-    """
-
-    # TODO
-
-
-class BaseGraphBackend(abc.ABC):
+class BaseGraph(abc.ABC):
     """
     Base class for a graph backend.
     """
-
-    def __init__(self) -> None:
-        self.set_parent(None, None)
-
-    @property
-    def parent(self) -> Optional["BaseGraphBackend"]:
-        """
-        The parent graph.
-        """
-        return self._parent
-
-    def set_parent(
-        self,
-        parent: Optional["BaseGraphBackend"],
-        node_ids: list[int] | None,
-    ) -> None:
-        """
-        Set the parent graph and computes between the node IDs of
-        the parent and child graphs.
-
-        Parameters
-        ----------
-        parent : Optional[&quot;BaseGraphBackend&quot;]
-            The parent graph.
-        node_ids : Optional[list[int]]
-            The node IDs of the subgraph.
-
-        Raises
-        ------
-        ValueError
-            If 'node_ids' is not provided when 'parent' is not None.
-        """
-
-        # TODO: do we need a edge inversion map?
-        if parent is None:
-            # resetting mapping
-            self._parent = parent
-            self._node_map = None
-            self._node_inv_map = None
-            return
-
-        if node_ids is None or len(node_ids) == 0:
-            raise ValueError("'node_ids' must be provided when setting graph 'parent'")
-
-        node_ids = np.asarray(node_ids, dtype=int, copy=True)
-        self._node_map = node_ids
-        self._node_inv_map = ArrayMap(node_ids, np.arange(len(node_ids)))
-        self._parent = parent
-
-    def maybe_map_nodes(
-        self,
-        node_ids: ArrayLike,
-        direction: Literal["child_to_root", "root_to_child"],
-    ) -> np.ndarray:
-        """
-        Map the node IDs of the root graph to the child subgraph.
-
-        For example:
-
-        {root_graph} -> {intermediate_graph} -> {child_graph}
-
-        Parameters
-        ----------
-        node_ids : ArrayLike
-            The node IDs to map.
-        direction : Literal["child_to_root", "root_to_child"]
-            The direction of the mapping.
-
-        Returns
-        -------
-        np.ndarray
-            The mapped node IDs.
-        """
-        node_ids = np.asarray(node_ids, dtype=int)
-
-        if self.parent is None:
-            return node_ids
-
-        if direction == "root_to_child":
-            return self._node_inv_map[node_ids]
-        elif direction == "child_to_root":
-            return self._node_map[node_ids]
-        else:
-            raise ValueError(f"Invalid direction: {direction}")
 
     @staticmethod
     def _validate_attributes(
@@ -137,9 +36,9 @@ class BaseGraphBackend(abc.ABC):
         for key in attributes.keys():
             if key not in reference_keys:
                 raise ValueError(
-                    f"{mode} feature key {key} not found in existing keys: "
+                    f"{mode} feature key '{key}' not found in existing keys: "
                     f"'{reference_keys}'\nInitialize with "
-                    "`graph.add_{mode}_feature_key(key, default_value)`"
+                    f"`graph.add_{mode}_feature_key(key, default_value)`"
                 )
 
         for ref_key in reference_keys:
@@ -210,12 +109,6 @@ class BaseGraphBackend(abc.ABC):
         """
 
     @abc.abstractmethod
-    def node_ids(self) -> np.ndarray:
-        """
-        Get the IDs of all nodes in the graph.
-        """
-
-    @abc.abstractmethod
     def filter_nodes_by_attribute(
         self,
         attributes: dict[str, Any],
@@ -239,20 +132,37 @@ class BaseGraphBackend(abc.ABC):
     def subgraph(
         self,
         *,
-        node_ids: Sequence[int],
-    ) -> "BaseGraphBackend":
+        node_ids: Sequence[int] | None = None,
+        node_attr_filter: dict[str, Any] | None = None,
+        edge_attr_filter: dict[str, Any] | None = None,
+        node_feature_keys: Sequence[str] | str | None = None,
+        edge_feature_keys: Sequence[str] | str | None = None,
+    ) -> "GraphView":
         """
-        Create a subgraph from the graph from the given node IDs.
+        Create a subgraph from the graph from the given node IDs
+        or attributes' filters.
+
+        Node IDs or a single attribute filter can be used to create a subgraph.
 
         Parameters
         ----------
         node_ids : Sequence[int]
             The IDs of the nodes to include in the subgraph.
+        node_attr_filter : dict[str, Any] | None
+            The attributes to filter the nodes by.
+        edge_attr_filter : dict[str, Any] | None
+            The attributes to filter the edges by.
+        node_feature_keys : Sequence[str] | str | None
+            The feature keys to get.
+            If None, all features are used.
+        edge_feature_keys : Sequence[str] | str | None
+            The feature keys to get.
+            If None, all features are used.
 
         Returns
         -------
-        BaseGraphBackend
-            A new graph with the specified nodes.
+        GraphView
+            A view of the graph with the specified nodes.
         """
 
     @abc.abstractmethod
@@ -387,78 +297,3 @@ class BaseGraphBackend(abc.ABC):
         attributes : dict[str, Any]
             Attributes to be updated.
         """
-
-
-P = ParamSpec("P")
-R = TypeVar("R")
-
-
-def remap_input_node_ids(node_param: str) -> Callable[[Callable[P, R]], Callable[P, R]]:
-    """
-    Decorator to remap node IDs from root to child before method execution.
-
-    Parameters
-    ----------
-    node_param : str
-        Name of the parameter containing node IDs to remap
-    """
-
-    def _decorator(func: Callable[P, R]) -> Callable[P, R]:
-        @wraps(func)
-        def _wrapper(self: BaseGraphBackend, **kwargs: P.kwargs) -> R:
-            # If there is no parent, the function can be executed as is
-            if self.parent is None:
-                return func(self, **kwargs)
-            # Get the node IDs from args or kwargs
-            node_ids = kwargs.get(node_param, None)
-            if node_ids is not None:
-                kwargs[node_param] = self.maybe_map_nodes(node_ids, "root_to_child")
-            return func(self, **kwargs)
-
-        return _wrapper
-
-    return _decorator
-
-
-def remap_output_node_ids(ids_columns: list[str] | None = None) -> Callable[P, R]:
-    """
-    Decorator to remap node IDs from child to root after method execution.
-    Only works for methods that return a sequence of node IDs or a single node ID.
-
-    Parameters
-    ----------
-    ids_columns : list[str] | None
-        Optional list of columns to remap when returning a pl.DataFrame.
-
-    Returns
-    -------
-    Callable[[Callable[P, R]], Callable[P, R]]
-        The decorated function.
-    """
-
-    def _decorator(func: Callable[P, R]) -> Callable[P, R]:
-        @wraps(func)
-        def _wrapper(self: BaseGraphBackend, *args: P.args, **kwargs: P.kwargs) -> R:
-            result = func(self, *args, **kwargs)
-            # If there is no parent, the result is already in the correct format
-            if self.parent is None:
-                return result
-            # otherwise, we need to remap the node IDs
-            direction = "child_to_root"
-            if isinstance(result, pl.DataFrame):
-                if ids_columns is None:
-                    raise ValueError("'ids_columns' must be provided when returning a pl.DataFrame")
-                for id_var in ids_columns:
-                    values = self.maybe_map_nodes(result[id_var].to_numpy(), direction)
-                    result = result.with_columns(pl.Series(name=id_var, values=values))
-            elif isinstance(result, list | np.ndarray | Sequence):
-                result = self.maybe_map_nodes(result, direction)
-            elif isinstance(result, int | np.integer):
-                result = self.maybe_map_nodes([result], direction)[0].item()
-            else:
-                raise ValueError(f"Invalid return type: {type(result)}")
-            return result
-
-        return _wrapper
-
-    return _decorator

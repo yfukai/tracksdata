@@ -1,11 +1,13 @@
 from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.edges._distance_edges import DistanceEdges
-from tracksdata.graph._rustworkx_graph import RustWorkXGraphBackend
+from tracksdata.graph._rustworkx_graph import RustWorkXGraph
 
 
 def test_distance_edges_init_default_params() -> None:
     """Test initialization with default parameters."""
     operator = DistanceEdges(distance_threshold=10.0, n_neighbors=3)
+
+    assert operator.output_key == DEFAULT_ATTR_KEYS.EDGE_WEIGHT
     assert operator.distance_threshold == 10.0
     assert operator.n_neighbors == 3
     assert operator.feature_keys is None
@@ -14,7 +16,14 @@ def test_distance_edges_init_default_params() -> None:
 
 def test_distance_edges_init_custom_params() -> None:
     """Test initialization with custom parameters."""
-    operator = DistanceEdges(distance_threshold=5.0, n_neighbors=2, feature_keys=["x", "y"], show_progress=False)
+    operator = DistanceEdges(
+        distance_threshold=5.0,
+        n_neighbors=2,
+        feature_keys=["x", "y"],
+        show_progress=False,
+        output_key="custom_distance",
+    )
+    assert operator.output_key == "custom_distance"
     assert operator.distance_threshold == 5.0
     assert operator.n_neighbors == 2
     assert operator.feature_keys == ["x", "y"]
@@ -23,7 +32,7 @@ def test_distance_edges_init_custom_params() -> None:
 
 def test_distance_edges_add_edges_empty_graph() -> None:
     """Test adding edges to an empty graph."""
-    graph = RustWorkXGraphBackend()
+    graph = RustWorkXGraph()
     operator = DistanceEdges(distance_threshold=10.0, n_neighbors=3, show_progress=False)
 
     # Should not raise an error on empty graph
@@ -33,7 +42,7 @@ def test_distance_edges_add_edges_empty_graph() -> None:
 
 def test_distance_edges_add_edges_single_timepoint_no_previous() -> None:
     """Test adding edges when there are no nodes in the previous timepoint."""
-    graph = RustWorkXGraphBackend()
+    graph = RustWorkXGraph()
 
     # Register feature keys
     graph.add_node_feature_key("x", 0.0)
@@ -52,7 +61,7 @@ def test_distance_edges_add_edges_single_timepoint_no_previous() -> None:
 
 def test_distance_edges_add_edges_single_timepoint_no_current() -> None:
     """Test adding edges when there are no nodes in the current timepoint."""
-    graph = RustWorkXGraphBackend()
+    graph = RustWorkXGraph()
 
     # Register feature keys
     graph.add_node_feature_key("x", 0.0)
@@ -71,7 +80,7 @@ def test_distance_edges_add_edges_single_timepoint_no_current() -> None:
 
 def test_distance_edges_add_edges_2d_coordinates() -> None:
     """Test adding edges with 2D coordinates."""
-    graph = RustWorkXGraphBackend()
+    graph = RustWorkXGraph()
 
     # Register feature keys
     graph.add_node_feature_key("x", 0.0)
@@ -99,7 +108,7 @@ def test_distance_edges_add_edges_2d_coordinates() -> None:
 
 def test_distance_edges_add_edges_3d_coordinates() -> None:
     """Test adding edges with 3D coordinates."""
-    graph = RustWorkXGraphBackend()
+    graph = RustWorkXGraph()
 
     # Register feature keys
     graph.add_node_feature_key("x", 0.0)
@@ -124,7 +133,7 @@ def test_distance_edges_add_edges_3d_coordinates() -> None:
 
 def test_distance_edges_add_edges_custom_feature_keys() -> None:
     """Test adding edges with custom feature keys."""
-    graph = RustWorkXGraphBackend()
+    graph = RustWorkXGraph()
 
     # Register feature keys
     graph.add_node_feature_key("pos_x", 0.0)
@@ -150,7 +159,7 @@ def test_distance_edges_add_edges_custom_feature_keys() -> None:
 
 def test_distance_edges_add_edges_distance_threshold() -> None:
     """Test that distance threshold is respected."""
-    graph = RustWorkXGraphBackend()
+    graph = RustWorkXGraph()
 
     # Register feature keys
     graph.add_node_feature_key("x", 0.0)
@@ -172,7 +181,7 @@ def test_distance_edges_add_edges_distance_threshold() -> None:
 
 def test_distance_edges_add_edges_multiple_timepoints() -> None:
     """Test adding edges for multiple timepoints."""
-    graph = RustWorkXGraphBackend()
+    graph = RustWorkXGraph()
 
     # Register feature keys
     graph.add_node_feature_key("x", 0.0)
@@ -194,7 +203,7 @@ def test_distance_edges_add_edges_multiple_timepoints() -> None:
 
 def test_distance_edges_add_edges_custom_weight_key() -> None:
     """Test adding edges with custom weight key."""
-    graph = RustWorkXGraphBackend()
+    graph = RustWorkXGraph()
 
     # Register feature keys
     graph.add_node_feature_key("x", 0.0)
@@ -222,7 +231,7 @@ def test_distance_edges_add_edges_custom_weight_key() -> None:
 
 def test_distance_edges_n_neighbors_limit() -> None:
     """Test that n_neighbors limit is respected."""
-    graph = RustWorkXGraphBackend()
+    graph = RustWorkXGraph()
 
     # Register feature keys
     graph.add_node_feature_key("x", 0.0)

@@ -1,12 +1,12 @@
 
 ```python
 def track(
-    graph: BaseGraphBackend,
+    graph: BaseGraph,
     nodes_init: BaseNodesOperator,
     edges_init: BaseEdgesOperator,
     solver: BaseSolver,
     solution_key: str | None,
-) -> BaseGraphBackend:
+) -> BaseGraph:
 
     nodes_init.init_nodes(graph, ...)
     edges_init.init_edges(graph, ...)

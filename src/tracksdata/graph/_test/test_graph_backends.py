@@ -2,17 +2,17 @@ import polars as pl
 import pytest
 
 from tracksdata.constants import DEFAULT_ATTR_KEYS
-from tracksdata.graph._base_graph import BaseGraphBackend
-from tracksdata.graph._rustworkx_graph import RustWorkXGraphBackend
+from tracksdata.graph._base_graph import BaseGraph
+from tracksdata.graph._rustworkx_graph import RustWorkXGraph
 
 
-@pytest.fixture(params=[RustWorkXGraphBackend])
-def graph_backend(request) -> BaseGraphBackend:
-    """Fixture that provides all implementations of BaseGraphBackend."""
+@pytest.fixture(params=[RustWorkXGraph])
+def graph_backend(request) -> BaseGraph:
+    """Fixture that provides all implementations of BaseGraph."""
     return request.param()
 
 
-def test_already_existing_keys(graph_backend: BaseGraphBackend) -> None:
+def test_already_existing_keys(graph_backend: BaseGraph) -> None:
     """Test that adding already existing keys raises an error."""
     graph_backend.add_node_feature_key("x", None)
 
@@ -29,7 +29,7 @@ def test_already_existing_keys(graph_backend: BaseGraphBackend) -> None:
         graph_backend.add_node(attributes={"t": 0})
 
 
-def testing_empty_graph(graph_backend: BaseGraphBackend) -> None:
+def testing_empty_graph(graph_backend: BaseGraph) -> None:
     """Test that the graph is empty."""
     assert graph_backend.num_nodes == 0
     assert graph_backend.num_edges == 0
@@ -41,7 +41,7 @@ def testing_empty_graph(graph_backend: BaseGraphBackend) -> None:
     assert graph_backend.edge_features().is_empty()
 
 
-def test_node_validation(graph_backend: BaseGraphBackend) -> None:
+def test_node_validation(graph_backend: BaseGraph) -> None:
     """Test node validation."""
     # 't' key must exist by default
     graph_backend.add_node({"t": 1})
@@ -50,13 +50,13 @@ def test_node_validation(graph_backend: BaseGraphBackend) -> None:
         graph_backend.add_node({"t": 0, "x": 1.0})
 
 
-def test_edge_validation(graph_backend: BaseGraphBackend) -> None:
+def test_edge_validation(graph_backend: BaseGraph) -> None:
     """Test edge validation."""
     with pytest.raises(ValueError):
         graph_backend.add_edge(0, 1, {"weight": 0.5})
 
 
-def test_add_node(graph_backend: BaseGraphBackend) -> None:
+def test_add_node(graph_backend: BaseGraph) -> None:
     """Test adding nodes with various attributes."""
 
     for key in ["x", "y"]:
@@ -72,7 +72,7 @@ def test_add_node(graph_backend: BaseGraphBackend) -> None:
     assert df["y"].to_list() == [2.0]
 
 
-def test_add_edge(graph_backend: BaseGraphBackend) -> None:
+def test_add_edge(graph_backend: BaseGraph) -> None:
     """Test adding edges with attributes."""
     # Add node feature key
     graph_backend.add_node_feature_key("x", None)
@@ -105,7 +105,7 @@ def test_add_edge(graph_backend: BaseGraphBackend) -> None:
     assert df["weight"].to_list() == [0.5, 0.1]
 
 
-def test_node_ids(graph_backend: BaseGraphBackend) -> None:
+def test_node_ids(graph_backend: BaseGraph) -> None:
     """Test retrieving node IDs."""
     node1 = graph_backend.add_node({"t": 0})
     node2 = graph_backend.add_node({"t": 1})
@@ -113,7 +113,7 @@ def test_node_ids(graph_backend: BaseGraphBackend) -> None:
     assert set(graph_backend.node_ids()) == {node1, node2}
 
 
-def test_filter_nodes_by_attribute(graph_backend: BaseGraphBackend) -> None:
+def test_filter_nodes_by_attribute(graph_backend: BaseGraph) -> None:
     """Test filtering nodes by attributes."""
     graph_backend.add_node_feature_key("label", None)
 
@@ -134,7 +134,7 @@ def test_filter_nodes_by_attribute(graph_backend: BaseGraphBackend) -> None:
     assert set(nodes) == {node3}
 
 
-def test_time_points(graph_backend: BaseGraphBackend) -> None:
+def test_time_points(graph_backend: BaseGraph) -> None:
     """Test retrieving time points."""
     graph_backend.add_node({"t": 0})
     graph_backend.add_node({"t": 2})
@@ -143,7 +143,7 @@ def test_time_points(graph_backend: BaseGraphBackend) -> None:
     assert set(graph_backend.time_points()) == {0, 1, 2}
 
 
-def test_node_features(graph_backend: BaseGraphBackend) -> None:
+def test_node_features(graph_backend: BaseGraph) -> None:
     """Test retrieving node features."""
     graph_backend.add_node_feature_key("x", None)
 
@@ -155,7 +155,7 @@ def test_node_features(graph_backend: BaseGraphBackend) -> None:
     assert df["x"].to_list() == [1.0, 2.0]
 
 
-def test_edge_features(graph_backend: BaseGraphBackend) -> None:
+def test_edge_features(graph_backend: BaseGraph) -> None:
     """Test retrieving edge features."""
     node1 = graph_backend.add_node({"t": 0})
     node2 = graph_backend.add_node({"t": 1})
@@ -168,7 +168,7 @@ def test_edge_features(graph_backend: BaseGraphBackend) -> None:
     assert df["weight"].to_list() == [0.5]
 
 
-def test_edge_features_subgraph_edge_ids(graph_backend: BaseGraphBackend) -> None:
+def test_edge_features_subgraph_edge_ids(graph_backend: BaseGraph) -> None:
     """Test that edge_features preserves original edge IDs when using node_ids parameter."""
     # Add edge feature key
     graph_backend.add_edge_feature_key("weight", 0.0)
@@ -228,7 +228,7 @@ def test_edge_features_subgraph_edge_ids(graph_backend: BaseGraphBackend) -> Non
     assert actual_subset_edge_ids == expected_subset_edge_ids, msg
 
 
-def test_add_node_feature_key(graph_backend: BaseGraphBackend) -> None:
+def test_add_node_feature_key(graph_backend: BaseGraph) -> None:
     """Test adding new node feature keys."""
     node = graph_backend.add_node({"t": 0})
     graph_backend.add_node_feature_key("new_feature", 42)
@@ -237,7 +237,7 @@ def test_add_node_feature_key(graph_backend: BaseGraphBackend) -> None:
     assert df["new_feature"].to_list() == [42]
 
 
-def test_add_edge_feature_key(graph_backend: BaseGraphBackend) -> None:
+def test_add_edge_feature_key(graph_backend: BaseGraph) -> None:
     """Test adding new edge feature keys."""
     node1 = graph_backend.add_node({"t": 0})
     node2 = graph_backend.add_node({"t": 1})
@@ -249,7 +249,7 @@ def test_add_edge_feature_key(graph_backend: BaseGraphBackend) -> None:
     assert df["new_feature"].to_list() == [42]
 
 
-def test_update_node_features(graph_backend: BaseGraphBackend) -> None:
+def test_update_node_features(graph_backend: BaseGraph) -> None:
     """Test updating node features."""
     graph_backend.add_node_feature_key("x", None)
 
@@ -272,7 +272,7 @@ def test_update_node_features(graph_backend: BaseGraphBackend) -> None:
         graph_backend.update_node_features(node_ids=[node_1, node_2], attributes={"x": [1.0]})
 
 
-def test_update_edge_features(graph_backend: BaseGraphBackend) -> None:
+def test_update_edge_features(graph_backend: BaseGraph) -> None:
     """Test updating edge features."""
     node1 = graph_backend.add_node({"t": 0})
     node2 = graph_backend.add_node({"t": 1})
@@ -289,7 +289,7 @@ def test_update_edge_features(graph_backend: BaseGraphBackend) -> None:
         graph_backend.update_edge_features(edge_ids=[edge_id], attributes={"weight": [1.0, 2.0]})
 
 
-def test_num_edges(graph_backend: BaseGraphBackend) -> None:
+def test_num_edges(graph_backend: BaseGraph) -> None:
     """Test counting edges."""
     node1 = graph_backend.add_node({"t": 0})
     node2 = graph_backend.add_node({"t": 1})
@@ -300,7 +300,7 @@ def test_num_edges(graph_backend: BaseGraphBackend) -> None:
     assert graph_backend.num_edges == 1
 
 
-def test_num_nodes(graph_backend: BaseGraphBackend) -> None:
+def test_num_nodes(graph_backend: BaseGraph) -> None:
     """Test counting nodes."""
     graph_backend.add_node({"t": 0})
     graph_backend.add_node({"t": 1})
@@ -308,7 +308,7 @@ def test_num_nodes(graph_backend: BaseGraphBackend) -> None:
     assert graph_backend.num_nodes == 2
 
 
-def test_edge_features_include_targets(graph_backend: BaseGraphBackend) -> None:
+def test_edge_features_include_targets(graph_backend: BaseGraph) -> None:
     """Test the inclusive flag behavior in edge_features method."""
     # Add edge feature key
     graph_backend.add_edge_feature_key("weight", 0.0)
@@ -335,7 +335,7 @@ def test_edge_features_include_targets(graph_backend: BaseGraphBackend) -> None:
 
     # Get all edges for reference
     df_all = graph_backend.edge_features()
-    print(f"All edges: {df_all}")
+    print(f"All edges:\n{df_all}")
 
     # Test with include_targets=False (default)
     # When selecting [node1, node2, node3], should only include edges between these nodes:
@@ -344,7 +344,7 @@ def test_edge_features_include_targets(graph_backend: BaseGraphBackend) -> None:
     # - edge2: node2 -> node3 ✓
     # - edge3: node3 -> node0 ✗ (node0 not in selection)
     df_exclusive = graph_backend.edge_features(node_ids=[node1, node2, node3], include_targets=False)
-    print(f"Exclusive edges (include_targets=False): {df_exclusive}")
+    print(f"Exclusive edges (include_targets=False):\n{df_exclusive}")
     exclusive_edge_ids = set(df_exclusive[DEFAULT_ATTR_KEYS.EDGE_ID].to_list())
     expected_exclusive = {edge1, edge2}
 
@@ -366,7 +366,7 @@ def test_edge_features_include_targets(graph_backend: BaseGraphBackend) -> None:
     # - edge2: node2 -> node3 ✓
     # - edge3: node3 -> node0 ✓
     df_inclusive = graph_backend.edge_features(node_ids=[node2, node3], include_targets=True)
-    print(f"Inclusive edges (include_targets=True): {df_inclusive}")
+    print(f"Inclusive edges (include_targets=True):\n{df_inclusive}")
     inclusive_edge_ids = set(df_inclusive[DEFAULT_ATTR_KEYS.EDGE_ID].to_list())
     expected_inclusive = {edge2, edge3}
 

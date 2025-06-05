@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 
 from tracksdata.constants import DEFAULT_ATTR_KEYS
-from tracksdata.graph._rustworkx_graph import RustWorkXGraphBackend
+from tracksdata.graph._rustworkx_graph import RustWorkXGraph
 from tracksdata.nodes._random import RandomNodes
 
 
@@ -35,7 +35,7 @@ def test_random_nodes_init_invalid_dimension() -> None:
 
 def test_random_nodes_add_nodes_single_time_point_2d() -> None:
     """Test adding nodes for a single time point in 2D."""
-    graph = RustWorkXGraphBackend()
+    graph = RustWorkXGraph()
 
     operator = RandomNodes(
         n_time_points=1,
@@ -69,7 +69,7 @@ def test_random_nodes_add_nodes_single_time_point_2d() -> None:
 
 def test_random_nodes_add_nodes_single_time_point_3d() -> None:
     """Test adding nodes for a single time point in 3D."""
-    graph = RustWorkXGraphBackend()
+    graph = RustWorkXGraph()
 
     operator = RandomNodes(
         n_time_points=1,
@@ -104,7 +104,7 @@ def test_random_nodes_add_nodes_single_time_point_3d() -> None:
 
 def test_random_nodes_add_nodes_all_time_points() -> None:
     """Test adding nodes for all time points when t=None."""
-    graph = RustWorkXGraphBackend()
+    graph = RustWorkXGraph()
 
     operator = RandomNodes(
         n_time_points=3,
@@ -130,7 +130,7 @@ def test_random_nodes_add_nodes_all_time_points() -> None:
 
 def test_random_nodes_variable_node_count() -> None:
     """Test that the number of nodes varies within the specified range."""
-    graph = RustWorkXGraphBackend()
+    graph = RustWorkXGraph()
 
     operator = RandomNodes(
         n_time_points=10,
@@ -158,7 +158,7 @@ def test_random_nodes_variable_node_count() -> None:
 def test_random_nodes_reproducible_with_same_seed() -> None:
     """Test that results are reproducible with the same random seed."""
     # First run
-    graph1 = RustWorkXGraphBackend()
+    graph1 = RustWorkXGraph()
     operator1 = RandomNodes(
         n_time_points=2,
         n_nodes=(3, 4),
@@ -170,7 +170,7 @@ def test_random_nodes_reproducible_with_same_seed() -> None:
     nodes_df1 = graph1.node_features()
 
     # Second run with same seed
-    graph2 = RustWorkXGraphBackend()
+    graph2 = RustWorkXGraph()
     operator2 = RandomNodes(
         n_time_points=2,
         n_nodes=(3, 4),
@@ -198,7 +198,7 @@ def test_random_nodes_reproducible_with_same_seed() -> None:
 def test_random_nodes_different_with_different_seed() -> None:
     """Test that results are different with different random seeds."""
     # First run
-    graph1 = RustWorkXGraphBackend()
+    graph1 = RustWorkXGraph()
     operator1 = RandomNodes(
         n_time_points=1,
         n_nodes=(5, 6),
@@ -210,7 +210,7 @@ def test_random_nodes_different_with_different_seed() -> None:
     nodes_df1 = graph1.node_features()
 
     # Second run with different seed
-    graph2 = RustWorkXGraphBackend()
+    graph2 = RustWorkXGraph()
     operator2 = RandomNodes(
         n_time_points=1,
         n_nodes=(5, 6),
@@ -229,7 +229,7 @@ def test_random_nodes_different_with_different_seed() -> None:
 
 def test_random_nodes_feature_keys_registration() -> None:
     """Test that spatial feature keys are properly registered."""
-    graph = RustWorkXGraphBackend()
+    graph = RustWorkXGraph()
 
     operator = RandomNodes(
         n_time_points=1,
@@ -255,7 +255,7 @@ def test_random_nodes_feature_keys_registration() -> None:
 
 def test_random_nodes_empty_time_points() -> None:
     """Test behavior with zero time points."""
-    graph = RustWorkXGraphBackend()
+    graph = RustWorkXGraph()
 
     operator = RandomNodes(n_time_points=0, n_nodes=(1, 5), n_dim=2, random_state=42, show_progress=False)
 

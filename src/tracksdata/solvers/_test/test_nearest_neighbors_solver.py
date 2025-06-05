@@ -1,6 +1,6 @@
 from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.expr import AttrExpr
-from tracksdata.graph._rustworkx_graph import RustWorkXGraphBackend
+from tracksdata.graph._rustworkx_graph import RustWorkXGraph
 from tracksdata.solvers._nearest_neighbors_solver import NearestNeighborsSolver
 
 
@@ -32,7 +32,7 @@ def test_nearest_neighbors_solver_init_with_attr_expr() -> None:
 
 def test_nearest_neighbors_solver_solve_empty_graph() -> None:
     """Test solving on an empty graph."""
-    graph = RustWorkXGraphBackend()
+    graph = RustWorkXGraph()
     solver = NearestNeighborsSolver()
 
     # Should not raise an error on empty graph
@@ -41,7 +41,7 @@ def test_nearest_neighbors_solver_solve_empty_graph() -> None:
 
 def test_nearest_neighbors_solver_solve_no_edges() -> None:
     """Test solving on a graph with nodes but no edges."""
-    graph = RustWorkXGraphBackend()
+    graph = RustWorkXGraph()
 
     # Register feature keys
     graph.add_node_feature_key("x", 0.0)
@@ -59,7 +59,7 @@ def test_nearest_neighbors_solver_solve_no_edges() -> None:
 
 def test_nearest_neighbors_solver_solve_simple_case() -> None:
     """Test solving with a simple graph."""
-    graph = RustWorkXGraphBackend()
+    graph = RustWorkXGraph()
 
     # Register feature keys
     graph.add_node_feature_key("x", 0.0)
@@ -95,7 +95,7 @@ def test_nearest_neighbors_solver_solve_simple_case() -> None:
 
 def test_nearest_neighbors_solver_solve_max_children_constraint() -> None:
     """Test that max_children constraint is respected."""
-    graph = RustWorkXGraphBackend()
+    graph = RustWorkXGraph()
 
     # Register feature keys
     graph.add_node_feature_key("x", 0.0)
@@ -135,7 +135,7 @@ def test_nearest_neighbors_solver_solve_max_children_constraint() -> None:
 
 def test_nearest_neighbors_solver_solve_one_parent_constraint() -> None:
     """Test that each node can have only one parent."""
-    graph = RustWorkXGraphBackend()
+    graph = RustWorkXGraph()
 
     # Register feature keys
     graph.add_node_feature_key("x", 0.0)
@@ -167,7 +167,7 @@ def test_nearest_neighbors_solver_solve_one_parent_constraint() -> None:
 
 def test_nearest_neighbors_solver_solve_custom_weight_expr() -> None:
     """Test solving with custom weight expression."""
-    graph = RustWorkXGraphBackend()
+    graph = RustWorkXGraph()
 
     # Register feature keys
     graph.add_node_feature_key("x", 0.0)
@@ -200,7 +200,7 @@ def test_nearest_neighbors_solver_solve_custom_weight_expr() -> None:
 
 def test_nearest_neighbors_solver_solve_complex_expression() -> None:
     """Test solving with complex weight expression."""
-    graph = RustWorkXGraphBackend()
+    graph = RustWorkXGraph()
 
     # Register feature keys
     graph.add_node_feature_key("x", 0.0)
@@ -235,7 +235,7 @@ def test_nearest_neighbors_solver_solve_complex_expression() -> None:
 
 def test_nearest_neighbors_solver_solve_custom_output_key() -> None:
     """Test solving with custom output key."""
-    graph = RustWorkXGraphBackend()
+    graph = RustWorkXGraph()
 
     # Register feature keys
     graph.add_node_feature_key("x", 0.0)
@@ -263,7 +263,7 @@ def test_nearest_neighbors_solver_solve_custom_output_key() -> None:
 
 def test_nearest_neighbors_solver_solve_large_graph() -> None:
     """Test solving with a larger graph to verify algorithm correctness."""
-    graph = RustWorkXGraphBackend()
+    graph = RustWorkXGraph()
 
     # Register feature keys
     graph.add_node_feature_key("x", 0.0)
