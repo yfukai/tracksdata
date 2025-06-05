@@ -41,21 +41,25 @@ def to_napari_format(
     solution_graph = graph.subgraph(
         edge_attr_filter={solution_key: True},
     )
-    node_ids, track_ids, tracks_graph = graph_track_ids(solution_graph._graph)
+    solution_graph.sync = False
 
-    graph.add_node_feature_key(output_track_id_key, -1)
-    graph.update_node_features(
+    node_ids, track_ids, tracks_graph = graph_track_ids(solution_graph.rx_graph)
+
+    node_map = solution_graph._node_map_to_root
+    node_ids = [node_map[node_id] for node_id in node_ids.tolist()]
+
+    solution_graph.add_node_feature_key(output_track_id_key, -1)
+    solution_graph.update_node_features(
         node_ids=node_ids,
         attributes={output_track_id_key: track_ids},
     )
 
     dict_graph = {child: parent for parent, child in tracks_graph.edge_list()}
 
-    # tracks_data = solution_graph.node_features(  # This doesn't work because the node index mapping is not working
-    tracks_data = graph.subgraph(
-        node_attr_filter={solution_key: True},
-    ).node_features(
-        feature_keys=[output_track_id_key, DEFAULT_ATTR_KEYS.T, "y", "x"],
+    spatial_cols = ["z", "y", "x"][-len(shape) + 1 :]
+
+    tracks_data = solution_graph.node_features(
+        feature_keys=[output_track_id_key, DEFAULT_ATTR_KEYS.T, *spatial_cols],
     )
 
     array_view = GraphArrayView(

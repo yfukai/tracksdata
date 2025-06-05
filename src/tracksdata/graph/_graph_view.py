@@ -14,6 +14,9 @@ def map_ids(
     map: dict[int, int],
     indices: Sequence[int],
 ) -> list[int]:
+    if hasattr(indices, "tolist"):
+        indices = indices.tolist()
+
     return [map[node_id] for node_id in indices]
 
 
@@ -49,6 +52,16 @@ class GraphView(RustWorkXGraphBackend):
         # they should be accessed through the root graph
         self._node_features_keys = None
         self._edge_features_keys = None
+
+    @property
+    def sync(self) -> bool:
+        return self._sync
+
+    @sync.setter
+    def sync(self, value: bool) -> None:
+        if value and not self._sync:
+            raise ValueError("Cannot sync a graph view that is not synced\nRe-create the graph view.")
+        self._sync = value
 
     def node_ids(self) -> np.ndarray:
         indices = self.rx_graph.node_indices()
@@ -153,8 +166,6 @@ class GraphView(RustWorkXGraphBackend):
             include_targets=include_targets,
         )
 
-        # for id_key in [DEFAULT_ATTR_KEYS.EDGE_SOURCE, DEFAULT_ATTR_KEYS.EDGE_TARGET]:
-        #     edges_df[id_key] = map_ids(self._edge_map_to_root, edges_df[id_key])
         edges_df = edges_df.with_columns(
             {
                 key: pl.col(key).map_elements(lambda x: self._edge_map_to_root[x])

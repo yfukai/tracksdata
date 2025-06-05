@@ -1,10 +1,13 @@
 import abc
 from collections.abc import Sequence
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import polars as pl
 from numpy.typing import ArrayLike
+
+if TYPE_CHECKING:
+    from tracksdata.graph._graph_view import GraphView
 
 
 class BaseGraphBackend(abc.ABC):
@@ -132,7 +135,7 @@ class BaseGraphBackend(abc.ABC):
         node_ids: Sequence[int] | None = None,
         node_attr_filter: dict[str, Any] | None = None,
         edge_attr_filter: dict[str, Any] | None = None,
-    ) -> "BaseGraphBackend":
+    ) -> "GraphView":
         """
         Create a subgraph from the graph from the given node IDs
         or attributes' filters.
@@ -150,8 +153,8 @@ class BaseGraphBackend(abc.ABC):
 
         Returns
         -------
-        BaseGraphBackend
-            A new graph with the specified nodes.
+        GraphView
+            A view of the graph with the specified nodes.
         """
 
     @abc.abstractmethod
