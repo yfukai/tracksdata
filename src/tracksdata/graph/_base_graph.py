@@ -36,9 +36,9 @@ class BaseGraph(abc.ABC):
         for key in attributes.keys():
             if key not in reference_keys:
                 raise ValueError(
-                    f"{mode} feature key {key} not found in existing keys: "
+                    f"{mode} feature key '{key}' not found in existing keys: "
                     f"'{reference_keys}'\nInitialize with "
-                    "`graph.add_{mode}_feature_key(key, default_value)`"
+                    f"`graph.add_{mode}_feature_key(key, default_value)`"
                 )
 
         for ref_key in reference_keys:

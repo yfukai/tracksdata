@@ -156,11 +156,11 @@ class GraphView(RustWorkXGraph):
         )
 
         if self.sync:
-            edge_id = super().add_edge(
-                source_id=self._node_map_from_root[source_id],
-                target_id=self._node_map_from_root[target_id],
-                attributes=attributes,
-                validate_keys=validate_keys,
+            # it does not set the EDGE_ID as attribute as the super().add_edge
+            edge_id = self.rx_graph.add_edge(
+                self._node_map_from_root[source_id],
+                self._node_map_from_root[target_id],
+                attributes,
             )
             self._edge_map_to_root[edge_id] = parent_edge_id
             self._edge_map_from_root[parent_edge_id] = edge_id
@@ -188,11 +188,9 @@ class GraphView(RustWorkXGraph):
         )
         if DEFAULT_ATTR_KEYS.NODE_ID in node_dfs.columns:
             node_dfs = node_dfs.with_columns(
-                {
-                    DEFAULT_ATTR_KEYS.NODE_ID: pl.col(DEFAULT_ATTR_KEYS.NODE_ID).map_elements(
-                        lambda x: self._node_map_to_root[x]
-                    )
-                }
+                pl.col(DEFAULT_ATTR_KEYS.NODE_ID)
+                .map_elements(lambda x: self._node_map_to_root[x])
+                .alias(DEFAULT_ATTR_KEYS.NODE_ID)
             )
         return node_dfs
 
@@ -210,10 +208,10 @@ class GraphView(RustWorkXGraph):
         )
 
         edges_df = edges_df.with_columns(
-            {
-                key: pl.col(key).map_elements(lambda x: self._edge_map_to_root[x])
+            *[
+                pl.col(key).map_elements(lambda x: self._node_map_to_root[x]).alias(key)
                 for key in [DEFAULT_ATTR_KEYS.EDGE_SOURCE, DEFAULT_ATTR_KEYS.EDGE_TARGET]
-            }
+            ]
         )
 
         return edges_df
