@@ -3,7 +3,7 @@ import pytest
 from skimage.measure._regionprops import RegionProperties
 
 from tracksdata.constants import DEFAULT_ATTR_KEYS
-from tracksdata.graph._rustworkx_graph import RustWorkXGraphBackend
+from tracksdata.graph._rustworkx_graph import RustWorkXGraph
 from tracksdata.nodes._mask import Mask
 from tracksdata.nodes._regionprops import RegionPropsNodes
 
@@ -50,7 +50,7 @@ def test_regionprops_features_keys() -> None:
 
 def test_regionprops_add_nodes_2d() -> None:
     """Test adding nodes from 2D labels."""
-    graph = RustWorkXGraphBackend()
+    graph = RustWorkXGraph()
 
     # Create simple 2D labels
     labels = np.array([[[1, 1, 0], [1, 0, 2], [0, 2, 2]]], dtype=np.int32)
@@ -81,7 +81,7 @@ def test_regionprops_add_nodes_2d() -> None:
 
 def test_regionprops_add_nodes_3d() -> None:
     """Test adding nodes from 3D labels."""
-    graph = RustWorkXGraphBackend()
+    graph = RustWorkXGraph()
 
     # Create simple 3D labels
     labels = np.array([[[[1, 1, 0], [1, 0, 0], [0, 0, 0]]], [[[0, 0, 0], [2, 2, 0], [0, 0, 0]]]], dtype=np.int32)
@@ -108,7 +108,7 @@ def test_regionprops_add_nodes_3d() -> None:
 
 def test_regionprops_add_nodes_with_intensity() -> None:
     """Test adding nodes with intensity image."""
-    graph = RustWorkXGraphBackend()
+    graph = RustWorkXGraph()
 
     # Create labels and intensity image
     labels = np.array([[[1, 1, 0], [1, 0, 2], [0, 2, 2]]], dtype=np.int32)
@@ -137,7 +137,7 @@ def test_regionprops_add_nodes_with_intensity() -> None:
 
 def test_regionprops_add_nodes_timelapse() -> None:
     """Test adding nodes from timelapse (t=None)."""
-    graph = RustWorkXGraphBackend()
+    graph = RustWorkXGraph()
 
     # Create timelapse labels (time x height x width)
     labels = np.array([[[1, 1], [0, 0]], [[0, 2], [2, 2]]], dtype=np.int32)  # t=0  # t=1
@@ -161,7 +161,7 @@ def test_regionprops_add_nodes_timelapse() -> None:
 
 def test_regionprops_add_nodes_timelapse_with_intensity() -> None:
     """Test adding nodes from timelapse with intensity images."""
-    graph = RustWorkXGraphBackend()
+    graph = RustWorkXGraph()
 
     # Create timelapse labels and intensity
     labels = np.array([[[1, 1], [0, 0]], [[0, 2], [2, 2]]], dtype=np.int32)  # t=0  # t=1
@@ -184,7 +184,7 @@ def test_regionprops_add_nodes_timelapse_with_intensity() -> None:
 
 def test_regionprops_custom_properties() -> None:
     """Test with custom property functions."""
-    graph = RustWorkXGraphBackend()
+    graph = RustWorkXGraph()
 
     # Create simple labels
     labels = np.array([[1, 1, 0], [1, 0, 0], [0, 0, 0]], dtype=np.int32)
@@ -210,7 +210,7 @@ def test_regionprops_custom_properties() -> None:
 
 def test_regionprops_invalid_dimensions() -> None:
     """Test error handling for invalid label dimensions."""
-    graph = RustWorkXGraphBackend()
+    graph = RustWorkXGraph()
 
     # Create 1D labels (invalid)
     labels = np.array([1, 2, 3], dtype=np.int32)
@@ -223,7 +223,7 @@ def test_regionprops_invalid_dimensions() -> None:
 
 def test_regionprops_mask_creation() -> None:
     """Test that masks are properly created for regions."""
-    graph = RustWorkXGraphBackend()
+    graph = RustWorkXGraph()
 
     # Create simple labels
     labels = np.array([[1, 1, 0], [1, 0, 0], [0, 0, 2]], dtype=np.int32)
@@ -245,7 +245,7 @@ def test_regionprops_mask_creation() -> None:
 
 def test_regionprops_spacing() -> None:
     """Test regionprops with custom spacing."""
-    graph = RustWorkXGraphBackend()
+    graph = RustWorkXGraph()
 
     # Create simple labels
     labels = np.array([[1, 1], [1, 1]], dtype=np.int32)
@@ -263,7 +263,7 @@ def test_regionprops_spacing() -> None:
 
 def test_regionprops_empty_labels() -> None:
     """Test behavior with empty labels (no regions)."""
-    graph = RustWorkXGraphBackend()
+    graph = RustWorkXGraph()
 
     # Create labels with no regions
     labels = np.zeros((3, 3), dtype=np.int32)

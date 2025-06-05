@@ -9,7 +9,7 @@ from tracksdata.edges._distance_edges import DistanceEdges
 from tracksdata.edges._iou_edges import IoUEdgeWeights
 from tracksdata.expr import AttrExpr
 from tracksdata.functional._napari import to_napari_format
-from tracksdata.graph._rustworkx_graph import RustWorkXGraphBackend
+from tracksdata.graph._rustworkx_graph import RustWorkXGraph
 from tracksdata.nodes._regionprops import RegionPropsNodes
 from tracksdata.solvers._nearest_neighbors_solver import NearestNeighborsSolver
 
@@ -36,7 +36,7 @@ def main() -> None:
         max_children=2,
     )
 
-    graph = RustWorkXGraphBackend()
+    graph = RustWorkXGraph()
     nodes_operator.add_nodes(graph, labels=labels)
     print(f"Number of nodes: {graph.num_nodes}")
 

@@ -5,7 +5,7 @@ from scipy.spatial import KDTree
 
 from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.edges._base_edges import BaseEdgesOperator
-from tracksdata.graph._base_graph import BaseGraphBackend
+from tracksdata.graph._base_graph import BaseGraph
 from tracksdata.utils._logging import LOG
 
 
@@ -45,7 +45,7 @@ class DistanceEdges(BaseEdgesOperator):
 
     def _add_edges_per_time(
         self,
-        graph: BaseGraphBackend,
+        graph: BaseGraph,
         *,
         t: int,
     ) -> None:
@@ -54,7 +54,7 @@ class DistanceEdges(BaseEdgesOperator):
 
         Parameters
         ----------
-        graph : BaseGraphBackend
+        graph : BaseGraph
             The graph to add edges to.
         t : int
             The time point to add edges for.

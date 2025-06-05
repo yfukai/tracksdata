@@ -3,7 +3,7 @@ from numpy.typing import ArrayLike
 
 from tracksdata.array._base_array import ArrayIndex, BaseReadOnlyArray
 from tracksdata.constants import DEFAULT_ATTR_KEYS
-from tracksdata.graph._base_graph import BaseGraphBackend
+from tracksdata.graph._base_graph import BaseGraph
 from tracksdata.nodes._mask import Mask
 from tracksdata.utils._convert import polars_dtype_to_numpy_dtype
 
@@ -11,7 +11,7 @@ from tracksdata.utils._convert import polars_dtype_to_numpy_dtype
 class GraphArrayView(BaseReadOnlyArray):
     def __init__(
         self,
-        graph: BaseGraphBackend,
+        graph: BaseGraph,
         shape: tuple[int, ...],
         feature_key: str,
         offset: int | np.ndarray = 0,

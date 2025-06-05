@@ -3,7 +3,7 @@ from numba import njit, typed
 
 from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.expr import AttrExpr
-from tracksdata.graph._base_graph import BaseGraphBackend
+from tracksdata.graph._base_graph import BaseGraph
 from tracksdata.solvers._base_solver import BaseSolver
 
 
@@ -81,7 +81,7 @@ class NearestNeighborsSolver(BaseSolver):
 
     def solve(
         self,
-        graph: BaseGraphBackend,
+        graph: BaseGraph,
     ) -> None:
         """
         Solve the tracking problem with nearest neighbor ordering of edges.
@@ -89,7 +89,7 @@ class NearestNeighborsSolver(BaseSolver):
 
         Parameters
         ----------
-        graph : BaseGraphBackend
+        graph : BaseGraph
             The graph to solve.
         """
         # get edges and sort them by weight

@@ -2,7 +2,7 @@ import numpy as np
 
 from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.edges._generic_edges import GenericFunctionEdgeWeights
-from tracksdata.graph._rustworkx_graph import RustWorkXGraphBackend
+from tracksdata.graph._rustworkx_graph import RustWorkXGraph
 
 
 def _scalar_distance_func(source_val: float, target_val: float) -> float:
@@ -44,7 +44,7 @@ def test_generic_edges_init_multiple_feature_keys() -> None:
 
 def test_generic_edges_add_weights_single_feature_key() -> None:
     """Test adding weights with single feature key."""
-    graph = RustWorkXGraphBackend()
+    graph = RustWorkXGraph()
 
     # Register feature keys
     graph.add_node_feature_key("x", 0.0)
@@ -83,7 +83,7 @@ def test_generic_edges_add_weights_single_feature_key() -> None:
 
 def test_generic_edges_add_weights_multiple_feature_keys() -> None:
     """Test adding weights with multiple feature keys."""
-    graph = RustWorkXGraphBackend()
+    graph = RustWorkXGraph()
 
     # Register feature keys
     graph.add_node_feature_key("x", 0.0)
@@ -119,7 +119,7 @@ def test_generic_edges_add_weights_multiple_feature_keys() -> None:
 
 def test_generic_edges_add_weights_all_time_points() -> None:
     """Test adding weights to all time points when t=None."""
-    graph = RustWorkXGraphBackend()
+    graph = RustWorkXGraph()
 
     # Register feature keys
     graph.add_node_feature_key("x", 0.0)
@@ -151,7 +151,7 @@ def test_generic_edges_add_weights_all_time_points() -> None:
 
 def test_generic_edges_no_edges_at_time_point() -> None:
     """Test behavior when no edges exist at a time point."""
-    graph = RustWorkXGraphBackend()
+    graph = RustWorkXGraph()
 
     # Register feature keys
     graph.add_node_feature_key("x", 0.0)
@@ -174,7 +174,7 @@ def test_generic_edges_no_edges_at_time_point() -> None:
 
 def test_generic_edges_creates_output_key() -> None:
     """Test that the operator creates the output key if it doesn't exist."""
-    graph = RustWorkXGraphBackend()
+    graph = RustWorkXGraph()
 
     # Register feature keys
     graph.add_node_feature_key("x", 0.0)
@@ -204,7 +204,7 @@ def test_generic_edges_creates_output_key() -> None:
 
 def test_generic_edges_dict_input_function() -> None:
     """Test with a more complex function that uses multiple operations."""
-    graph = RustWorkXGraphBackend()
+    graph = RustWorkXGraph()
 
     # Register feature keys
     graph.add_node_feature_key("value", 0.0)
@@ -237,7 +237,7 @@ def test_generic_edges_dict_input_function() -> None:
 
 def test_generic_edges_empty_graph() -> None:
     """Test behavior with an empty graph."""
-    graph = RustWorkXGraphBackend()
+    graph = RustWorkXGraph()
 
     operator = GenericFunctionEdgeWeights(
         func=_scalar_distance_func, feature_keys="x", output_key="distance", show_progress=False

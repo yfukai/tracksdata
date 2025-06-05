@@ -4,13 +4,13 @@ from typing import Any
 
 from tqdm import tqdm
 
-from tracksdata.graph._base_graph import BaseGraphBackend
+from tracksdata.graph._base_graph import BaseGraph
 
 
 class BaseWeightsOperator(abc.ABC):
     """
     Base class indicating methods required to add weights to edges in a graph.
-    It will interact with a `BaseGraphBackend` to do so.
+    It will interact with a `BaseGraph` to do so.
     """
 
     def __init__(self, output_key: Sequence[str] | str, show_progress: bool = True):
@@ -19,7 +19,7 @@ class BaseWeightsOperator(abc.ABC):
 
     def add_weights(
         self,
-        graph: BaseGraphBackend,
+        graph: BaseGraph,
         *,
         t: int | None = None,
         **kwargs: Any,
@@ -29,7 +29,7 @@ class BaseWeightsOperator(abc.ABC):
 
         Parameters
         ----------
-        graph : BaseGraphBackend
+        graph : BaseGraph
             The graph to add weights to.
         t : int | None
             The time point to add weights for. If None, add weights for all time points.
@@ -53,7 +53,7 @@ class BaseWeightsOperator(abc.ABC):
     @abc.abstractmethod
     def _add_weights_per_time(
         self,
-        graph: BaseGraphBackend,
+        graph: BaseGraph,
         *,
         t: int,
         **kwargs: Any,
@@ -63,7 +63,7 @@ class BaseWeightsOperator(abc.ABC):
 
         Parameters
         ----------
-        graph : BaseGraphBackend
+        graph : BaseGraph
             The graph to add weights to.
         t : int
             The time point to add weights for.

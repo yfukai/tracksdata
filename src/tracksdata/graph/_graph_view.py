@@ -6,8 +6,8 @@ import polars as pl
 import rustworkx as rx
 
 from tracksdata.constants import DEFAULT_ATTR_KEYS
-from tracksdata.graph._base_graph import BaseGraphBackend
-from tracksdata.graph._rustworkx_graph import RustWorkXGraphBackend
+from tracksdata.graph._base_graph import BaseGraph
+from tracksdata.graph._rustworkx_graph import RustWorkXGraph
 
 
 def map_ids(
@@ -23,12 +23,12 @@ def map_ids(
     return [map[node_id] for node_id in indices]
 
 
-class GraphView(RustWorkXGraphBackend):
+class GraphView(RustWorkXGraph):
     def __init__(
         self,
         rx_graph: rx.PyDiGraph,
         node_map_to_root: dict[int, int],
-        root: BaseGraphBackend,
+        root: BaseGraph,
         sync: bool = True,
     ) -> None:
         super().__init__(rx_graph=rx_graph)
@@ -49,7 +49,7 @@ class GraphView(RustWorkXGraphBackend):
         self._edge_map_from_root: dict[int, int] = {v: k for k, v in self._edge_map_to_root.items()}
 
         self._root = root
-        self._is_root_rx_graph = isinstance(root, RustWorkXGraphBackend)
+        self._is_root_rx_graph = isinstance(root, RustWorkXGraph)
         self._sync = sync
 
         # making sure these are not used

@@ -3,11 +3,11 @@ import numpy as np
 from tracksdata.array._graph_array import GraphArrayView
 from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.functional._rx import graph_track_ids
-from tracksdata.graph._base_graph import BaseGraphBackend
+from tracksdata.graph._base_graph import BaseGraph
 
 
 def to_napari_format(
-    graph: BaseGraphBackend,
+    graph: BaseGraph,
     shape: tuple[int, ...],
     solution_key: str = DEFAULT_ATTR_KEYS.SOLUTION,
     output_track_id_key: str = DEFAULT_ATTR_KEYS.TRACK_ID,
@@ -26,7 +26,7 @@ def to_napari_format(
 
     Parameters
     ----------
-    graph : BaseGraphBackend
+    graph : BaseGraph
         The graph to convert.
     shape : tuple[int, ...]
         The shape of the labels layer.

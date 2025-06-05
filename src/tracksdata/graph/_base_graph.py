@@ -10,7 +10,7 @@ if TYPE_CHECKING:
     from tracksdata.graph._graph_view import GraphView
 
 
-class BaseGraphBackend(abc.ABC):
+class BaseGraph(abc.ABC):
     """
     Base class for a graph backend.
     """

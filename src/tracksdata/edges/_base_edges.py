@@ -4,13 +4,13 @@ from typing import Any
 
 from tqdm import tqdm
 
-from tracksdata.graph._base_graph import BaseGraphBackend
+from tracksdata.graph._base_graph import BaseGraph
 
 
 class BaseEdgesOperator(abc.ABC):
     """
     Base class indicating methods required to insert edges into a graph.
-    It will interact with a `BaseGraphBackend` to do so.
+    It will interact with a `BaseGraph` to do so.
     """
 
     def __init__(self, output_key: Sequence[str] | str, show_progress: bool = True):
@@ -19,7 +19,7 @@ class BaseEdgesOperator(abc.ABC):
 
     def add_edges(
         self,
-        graph: BaseGraphBackend,
+        graph: BaseGraph,
         *,
         t: int | None = None,
         **kwargs: Any,
@@ -30,7 +30,7 @@ class BaseEdgesOperator(abc.ABC):
 
         Parameters
         ----------
-        graph : BaseGraphBackend
+        graph : BaseGraph
             The graph to initialize the edges in.
         t: int
             The time of the nodes to initialize the edges from.
@@ -54,7 +54,7 @@ class BaseEdgesOperator(abc.ABC):
     @abc.abstractmethod
     def _add_edges_per_time(
         self,
-        graph: BaseGraphBackend,
+        graph: BaseGraph,
         *,
         t: int,
         **kwargs: Any,
@@ -64,7 +64,7 @@ class BaseEdgesOperator(abc.ABC):
 
         Parameters
         ----------
-        graph : BaseGraphBackend
+        graph : BaseGraph
             The graph to add edges to.
         t : int
             The time point to add edges for.

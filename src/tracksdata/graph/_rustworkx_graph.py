@@ -7,14 +7,14 @@ import rustworkx as rx
 from numpy.typing import ArrayLike
 
 from tracksdata.constants import DEFAULT_ATTR_KEYS
-from tracksdata.graph._base_graph import BaseGraphBackend
+from tracksdata.graph._base_graph import BaseGraph
 from tracksdata.utils._logging import LOG
 
 if TYPE_CHECKING:
     from tracksdata.graph._graph_view import GraphView
 
 
-class RustWorkXGraphBackend(BaseGraphBackend):
+class RustWorkXGraph(BaseGraph):
     def __init__(self, rx_graph: rx.PyDiGraph | None = None) -> None:
         """
         TODO
@@ -172,7 +172,7 @@ class RustWorkXGraphBackend(BaseGraphBackend):
 
         Returns
         -------
-        RustWorkXGraphBackend
+        RustWorkXGraph
             A new graph with the specified nodes.
         """
         from tracksdata.graph._graph_view import GraphView
