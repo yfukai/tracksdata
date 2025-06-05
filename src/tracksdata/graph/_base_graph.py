@@ -135,6 +135,8 @@ class BaseGraphBackend(abc.ABC):
         node_ids: Sequence[int] | None = None,
         node_attr_filter: dict[str, Any] | None = None,
         edge_attr_filter: dict[str, Any] | None = None,
+        node_feature_keys: Sequence[str] | str | None = None,
+        edge_feature_keys: Sequence[str] | str | None = None,
     ) -> "GraphView":
         """
         Create a subgraph from the graph from the given node IDs
@@ -150,6 +152,12 @@ class BaseGraphBackend(abc.ABC):
             The attributes to filter the nodes by.
         edge_attr_filter : dict[str, Any] | None
             The attributes to filter the edges by.
+        node_feature_keys : Sequence[str] | str | None
+            The feature keys to get.
+            If None, all features are used.
+        edge_feature_keys : Sequence[str] | str | None
+            The feature keys to get.
+            If None, all features are used.
 
         Returns
         -------
