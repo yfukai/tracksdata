@@ -391,3 +391,171 @@ def test_subgraph_with_unsorted_node_ids(graph_backend: BaseGraph) -> None:
             for col in original_features.columns:
                 msg = f"Node {node} feature {col} mismatch in subgraph with order {unsorted_nodes}"
                 assert original_features[col].to_list() == subgraph_features[col].to_list(), msg
+
+
+def test_subgraph_add_node(graph_backend: BaseGraph) -> None:
+    """Test adding nodes to a subgraph."""
+    graph_with_data = create_test_graph(graph_backend, use_subgraph=False)
+    original_nodes = graph_with_data._test_nodes  # type: ignore
+
+    # Create a subgraph with two nodes
+    subgraph_nodes = [original_nodes[1], original_nodes[3]]
+    subgraph = graph_with_data.subgraph(node_ids=subgraph_nodes)
+
+    initial_counts = (subgraph.num_nodes, graph_with_data.num_nodes)
+
+    # Add a new node to the subgraph
+    new_node_id = subgraph.add_node({"t": 10, "x": 10.0, "y": 10.0, "label": "NEW"})
+
+    # Verify node was added to both subgraph and original graph
+    assert subgraph.num_nodes == initial_counts[0] + 1
+    assert graph_with_data.num_nodes == initial_counts[1] + 1
+    assert new_node_id in subgraph.node_ids()
+    assert new_node_id in graph_with_data.node_ids()
+
+    # Verify attributes in both graphs
+    for graph in [subgraph, graph_with_data]:
+        features = graph.node_features(node_ids=[new_node_id])
+        assert features["t"].to_list()[0] == 10
+        assert features["label"].to_list()[0] == "NEW"
+
+
+def test_subgraph_add_edge(graph_backend: BaseGraph) -> None:
+    """Test adding edges to a subgraph."""
+    graph_with_data = create_test_graph(graph_backend, use_subgraph=False)
+    original_nodes = graph_with_data._test_nodes  # type: ignore
+
+    # Create a subgraph with three nodes
+    subgraph_nodes = original_nodes[:3]
+    subgraph = graph_with_data.subgraph(node_ids=subgraph_nodes)
+
+    initial_counts = (subgraph.num_edges, graph_with_data.num_edges)
+    node_a, node_b = subgraph_nodes[0], subgraph_nodes[2]
+
+    # Add a new edge between existing nodes
+    subgraph.add_edge(node_a, node_b, attributes={"weight": 1.5, "new_feature": 10.0})
+
+    # Verify edge was added to both subgraph and original graph
+    assert subgraph.num_edges == initial_counts[0] + 1
+    assert graph_with_data.num_edges == initial_counts[1] + 1
+
+    # Test both the subgraph and the original graph
+    for edge_df in [subgraph.edge_features(), graph_with_data.edge_features()]:
+        # Find the new edge in the edge features
+        new_edge_found = False
+        for i in range(len(edge_df)):
+            source = edge_df[DEFAULT_ATTR_KEYS.EDGE_SOURCE].to_list()[i]
+            target = edge_df[DEFAULT_ATTR_KEYS.EDGE_TARGET].to_list()[i]
+            weight = edge_df["weight"].to_list()[i]
+            new_feature = edge_df["new_feature"].to_list()[i]
+
+            if source == node_a and target == node_b and weight == 1.5 and new_feature == 10.0:
+                new_edge_found = True
+                break
+
+        assert new_edge_found, "New edge not found in graph edge features"
+
+
+def test_subgraph_add_node_then_edge(graph_backend: BaseGraph) -> None:
+    """Test adding a node to a subgraph and then adding an edge to/from it."""
+    graph_with_data = create_test_graph(graph_backend, use_subgraph=False)
+    original_nodes = graph_with_data._test_nodes  # type: ignore
+
+    # Create a subgraph with two nodes
+    subgraph_nodes = [original_nodes[3], original_nodes[1]]
+    subgraph = graph_with_data.subgraph(node_ids=subgraph_nodes)
+
+    # Add node and edge
+    new_node_id = subgraph.add_node({"t": 20, "x": 20.0, "y": 20.0, "label": "ADDED"})
+    subgraph.add_edge(subgraph_nodes[0], new_node_id, attributes={"weight": 2.0, "new_feature": 20.0})
+
+    # Verify propagation to both graphs
+    for graph in [subgraph, graph_with_data]:
+        assert new_node_id in graph.node_ids()
+
+        edges = graph.edge_features()
+        edge_found = any(
+            edges[DEFAULT_ATTR_KEYS.EDGE_SOURCE].to_list()[i] == subgraph_nodes[0]
+            and edges[DEFAULT_ATTR_KEYS.EDGE_TARGET].to_list()[i] == new_node_id
+            and edges["weight"].to_list()[i] == 2.0
+            for i in range(len(edges))
+        )
+        assert edge_found, f"Edge to new node not found in {type(graph).__name__}"
+
+
+def test_nested_subgraph_creation(graph_backend: BaseGraph) -> None:
+    """Test creating a subgraph of a subgraph (nested subgraphs)."""
+    graph_with_data = create_test_graph(graph_backend, use_subgraph=False)
+    original_nodes = graph_with_data._test_nodes  # type: ignore
+
+    # Create nested subgraphs
+    first_subgraph = graph_with_data.subgraph(node_ids=original_nodes[:4])
+    second_subgraph = first_subgraph.subgraph(node_ids=original_nodes[:2])
+
+    # Verify nested subgraph properties
+    assert second_subgraph.num_nodes == 2
+    assert set(second_subgraph.node_ids()) == set(original_nodes[:2])
+
+    # Verify node features are preserved through all levels
+    for node_id in original_nodes[:2]:
+        graphs = [graph_with_data, first_subgraph, second_subgraph]
+        features = [g.node_features(node_ids=[node_id]) for g in graphs]
+
+        # All should have identical features
+        for col in features[0].columns:
+            values = [f[col].to_list()[0] for f in features]
+            assert all(v == values[0] for v in values), f"Feature {col} inconsistent across graph levels"
+
+
+def test_nested_subgraph_edge_preservation(graph_backend: BaseGraph) -> None:
+    """Test that nested subgraphs preserve correct edges."""
+    graph_with_data = create_test_graph(graph_backend, use_subgraph=False)
+    original_nodes = graph_with_data._test_nodes  # type: ignore
+
+    # Create nested subgraphs: original -> first (3 nodes) -> nested (2 nodes)
+    first_subgraph = graph_with_data.subgraph(node_ids=original_nodes[:3])
+    nested_subgraph = first_subgraph.subgraph(node_ids=original_nodes[:2])
+
+    # Verify the nested subgraph has exactly one edge: 0->1
+    nested_edges = nested_subgraph.edge_features()
+    assert len(nested_edges) == 1
+
+    edge_source = nested_edges[DEFAULT_ATTR_KEYS.EDGE_SOURCE].to_list()[0]
+    edge_target = nested_edges[DEFAULT_ATTR_KEYS.EDGE_TARGET].to_list()[0]
+
+    assert (edge_source, edge_target) == (original_nodes[0], original_nodes[1])
+
+
+def test_nested_subgraph_modifications(graph_backend: BaseGraph) -> None:
+    """Test adding nodes and edges to nested subgraphs."""
+    graph_with_data = create_test_graph(graph_backend, use_subgraph=False)
+    original_nodes = graph_with_data._test_nodes  # type: ignore
+
+    # Create nested subgraphs
+    first_subgraph = graph_with_data.subgraph(node_ids=original_nodes[:3])
+    nested_subgraph = first_subgraph.subgraph(node_ids=original_nodes[:2])
+
+    initial_counts = (nested_subgraph.num_nodes, graph_with_data.num_nodes)
+
+    # Add node and edge to nested subgraph
+    new_node_id = nested_subgraph.add_node({"t": 30, "x": 30.0, "y": 30.0, "label": "NESTED"})
+    nested_subgraph.add_edge(original_nodes[0], new_node_id, attributes={"weight": 3.0, "new_feature": 30.0})
+
+    # Verify propagation to all graph levels
+    # intermediate graph (first_subgraph) is not affected
+    graphs = [nested_subgraph, graph_with_data]
+    expected_counts = [c + 1 for c in initial_counts]
+
+    for i, graph in enumerate(graphs):
+        assert graph.num_nodes == expected_counts[i]
+        assert new_node_id in graph.node_ids()
+
+        # Verify edge exists in all graphs
+        edges = graph.edge_features()
+        edge_found = any(
+            edges[DEFAULT_ATTR_KEYS.EDGE_SOURCE].to_list()[j] == original_nodes[0]
+            and edges[DEFAULT_ATTR_KEYS.EDGE_TARGET].to_list()[j] == new_node_id
+            and edges["weight"].to_list()[j] == 3.0
+            for j in range(len(edges))
+        )
+        assert edge_found, f"Edge not found in {type(graph).__name__}"
