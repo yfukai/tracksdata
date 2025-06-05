@@ -15,12 +15,17 @@ if TYPE_CHECKING:
 
 
 class RustWorkXGraphBackend(BaseGraphBackend):
-    def __init__(self) -> None:
+    def __init__(self, rx_graph: rx.PyDiGraph | None = None) -> None:
         """
         TODO
         """
         super().__init__()
-        self._graph = rx.PyDiGraph()
+
+        if rx_graph is None:
+            self._graph = rx.PyDiGraph()
+        else:
+            self._graph = rx_graph
+
         self._time_to_nodes: dict[int, list[int]] = {}
         self._node_features_keys: list[str] = [DEFAULT_ATTR_KEYS.T]
         self._edge_features_keys: list[str] = []
@@ -181,11 +186,6 @@ class RustWorkXGraphBackend(BaseGraphBackend):
         if node_ids is None and node_attr_filter is None and edge_attr_filter is None:
             raise ValueError("Either node IDs or one of the attributes' filters must be provided")
 
-        subgraph = GraphView(self)
-
-        return subgraph
-        # TODO implement the rest
-
         if edge_attr_filter is not None:
             edges_df = self.edge_features(feature_keys=edge_attr_filter.keys())
             mask = pl.reduce(lambda x, y: x & y, [edges_df[key] == value for key, value in edge_attr_filter.items()])
@@ -200,31 +200,23 @@ class RustWorkXGraphBackend(BaseGraphBackend):
         elif node_attr_filter is not None:
             node_ids = self.filter_nodes_by_attribute(node_attr_filter)
 
-        subgraph._graph, node_map = self.rx_graph.subgraph_with_nodemap(node_ids)
-
-        subgraph._node_features_keys = self._node_features_keys
-        subgraph._edge_features_keys = self._edge_features_keys
-
-        # Set the parent relationship with node mapping
-        subgraph.set_parent(self, node_map)
-
-        # Fix the time_to_nodes mapping using the new (remapped) node IDs
-        subgraph._time_to_nodes = {}
-        for new_node_id, parent_node_id in node_map.items():
-            t = self.rx_graph[parent_node_id][DEFAULT_ATTR_KEYS.T]
-            if t not in subgraph._time_to_nodes:
-                subgraph._time_to_nodes[t] = []
-            subgraph._time_to_nodes[t].append(new_node_id)
+        rx_graph, node_map = self.rx_graph.subgraph_with_nodemap(node_ids)
 
         if edge_attr_filter is not None:
             LOG.info(f"Removing edges without attributes {edge_attr_filter}")
-            for source, target, edge_attr in subgraph._graph.weighted_edge_list():
+            for source, target, edge_attr in rx_graph.weighted_edge_list():
                 for key, value in edge_attr_filter.items():
                     if edge_attr[key] != value:
-                        subgraph._graph.remove_edge(source, target)
+                        rx_graph.remove_edge(source, target)
                         break
 
-        return subgraph
+        graph_view = GraphView(
+            rx_graph=rx_graph,
+            node_map_to_root=dict(node_map.items()),
+            root=self,
+        )
+
+        return graph_view
 
     def time_points(self) -> list[int]:
         """

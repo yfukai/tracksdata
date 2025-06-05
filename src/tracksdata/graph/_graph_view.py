@@ -3,6 +3,7 @@ from typing import Any
 
 import numpy as np
 import polars as pl
+import rustworkx as rx
 
 from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.graph._base_graph import BaseGraphBackend
@@ -19,18 +20,30 @@ def map_ids(
 class GraphView(RustWorkXGraphBackend):
     def __init__(
         self,
+        rx_graph: rx.PyDiGraph,
+        node_map_to_root: dict[int, int],
         root: BaseGraphBackend,
         sync: bool = True,
     ) -> None:
-        super().__init__()
+        super().__init__(rx_graph=rx_graph)
+
+        # setting up the time_to_nodes mapping
+        for idx in rx_graph.node_indices():
+            t = self.rx_graph[idx][DEFAULT_ATTR_KEYS.T]
+            if t not in self._time_to_nodes:
+                self._time_to_nodes[t] = []
+            self._time_to_nodes[t].append(idx)
+
+        self._node_map_to_root = node_map_to_root.copy()
+        self._node_map_from_root = {v: k for k, v in node_map_to_root.items()}
+
+        self._edge_map_to_root: dict[int, int] = {
+            idx: data[DEFAULT_ATTR_KEYS.EDGE_ID] for idx, (_, _, data) in self.rx_graph.edge_index_map().items()
+        }
+        self._edge_map_from_root: dict[int, int] = {v: k for k, v in self._edge_map_to_root.items()}
+
         self._root = root
         self._sync = sync
-
-        self._node_map_to_root: dict[int, int] = {}
-        self._node_map_from_root: dict[int, int] = {}
-
-        self._edge_map_to_root: dict[int, int] = {}
-        self._edge_map_from_root: dict[int, int] = {}
 
         # making sure these are not used
         # they should be accessed through the root graph
@@ -106,6 +119,15 @@ class GraphView(RustWorkXGraphBackend):
             self._edge_map_from_root[parent_edge_id] = edge_id
 
         return parent_edge_id
+
+    def filter_nodes_by_attribute(
+        self,
+        attributes: dict[str, Any],
+    ) -> np.ndarray:
+        node_ids = super().filter_nodes_by_attribute(
+            attributes=attributes,
+        )
+        return map_ids(self._node_map_to_root, node_ids)
 
     def node_features(
         self,

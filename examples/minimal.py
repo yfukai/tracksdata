@@ -41,7 +41,10 @@ def main() -> None:
 
     solver.solve(graph)
 
+    print("Converting to napari format ...")
     labels, tracks_df, track_graph = to_napari_format(graph, labels.shape)
+
+    print("Opening napari viewer ...")
 
     viewer = napari.Viewer()
     viewer.add_labels(labels)
