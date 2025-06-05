@@ -29,7 +29,8 @@ dependencies = [
   "blosc2",
   "numpy > 2",
   "scikit-image >= 0.24.0",
-  "rustworkx",
+  # remove this once rustworkx 0.17.0 is released
+  "rustworkx @ git+https://github.com/qiskit/rustworkx.git@ac1082ca9d1774e6e9a91436a15a201b0c7baffd",
   "tqdm",
   "polars",
   "rich",
@@ -49,6 +50,9 @@ test = [
 Documentation = "https://github.com/jookuma/tracksdata#readme"
 Issues = "https://github.com/jookuma/tracksdata/issues"
 Source = "https://github.com/jookuma/tracksdata"
+
+[tool.hatch.metadata]
+allow-direct-references = true
 
 [tool.hatch.version]
 path = "src/tracksdata/__about__.py"

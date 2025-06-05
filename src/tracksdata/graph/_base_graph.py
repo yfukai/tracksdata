@@ -45,7 +45,7 @@ class BaseGraphBackend(abc.ABC):
     def set_parent(
         self,
         parent: Optional["BaseGraphBackend"],
-        node_ids: list[int] | None,
+        node_map: dict[int, int] | None,
     ) -> None:
         """
         Set the parent graph and computes between the node IDs of
@@ -55,13 +55,13 @@ class BaseGraphBackend(abc.ABC):
         ----------
         parent : Optional[&quot;BaseGraphBackend&quot;]
             The parent graph.
-        node_ids : Optional[list[int]]
-            The node IDs of the subgraph.
+        node_map : Optional[dict[int, int]]
+            The node mapping between child graph ids to the original parent graph ids.
 
         Raises
         ------
         ValueError
-            If 'node_ids' is not provided when 'parent' is not None.
+            If 'node_map' is not provided when 'parent' is not None.
         """
 
         # TODO: do we need a edge inversion map?
@@ -72,12 +72,15 @@ class BaseGraphBackend(abc.ABC):
             self._node_inv_map = None
             return
 
-        if node_ids is None or len(node_ids) == 0:
-            raise ValueError("'node_ids' must be provided when setting graph 'parent'")
+        if node_map is None or len(node_map) == 0:
+            raise ValueError("'node_map' must be provided when setting graph 'parent'")
 
-        node_ids = np.asarray(node_ids, dtype=int, copy=True)
-        self._node_map = node_ids
-        self._node_inv_map = ArrayMap(node_ids, np.arange(len(node_ids)))
+        node_child_ids = np.asarray(list(node_map.keys()), dtype=int)
+        node_parent_ids = np.asarray(list(node_map.values()), dtype=int)
+
+        self._node_map = np.full(node_child_ids.max() + 1, -1, dtype=int)
+        self._node_map[node_child_ids] = node_parent_ids
+        self._node_inv_map = ArrayMap(node_parent_ids, node_child_ids)
         self._parent = parent
 
     def maybe_map_nodes(

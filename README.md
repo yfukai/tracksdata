@@ -12,8 +12,16 @@
 
 ## Installation
 
+Until rustworkx 0.17.0 is released, you need to have rust installed to compile the latest rustworkx.
+
 ```console
-pip install tracksdata
+conda install -c conda-forge rust
+```
+
+Then install tracksdata with the following command:
+
+```console
+pip install .
 ```
 
 ## License

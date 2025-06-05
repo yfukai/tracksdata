@@ -13,6 +13,7 @@ from tracksdata.graph._base_graph import (
     remap_input_node_ids,
     remap_output_node_ids,
 )
+from tracksdata.utils._logging import LOG
 
 # TODO:
 # - use a better name for the default graph backend
@@ -133,8 +134,8 @@ class RustWorkXGraphBackend(BaseGraphBackend):
                 return selected_nodes
 
             # subgraph of selected nodes
-            rx_graph = rx_graph.subgraph(selected_nodes)
-            node_map = np.asarray(selected_nodes)
+            rx_graph, node_map = rx_graph.subgraph_with_nodemap(selected_nodes)
+            # node_map = np.asarray(selected_nodes)
 
         def _filter_func(node_attr: dict[str, Any]) -> bool:
             for key, value in attributes.items():
@@ -145,7 +146,7 @@ class RustWorkXGraphBackend(BaseGraphBackend):
         if node_map is None:
             return list(rx_graph.filter_nodes(_filter_func))
         else:
-            return node_map[rx_graph.filter_nodes(_filter_func)].tolist()
+            return [node_map[n] for n in rx_graph.filter_nodes(_filter_func)]
 
     @remap_output_node_ids()
     def node_ids(self) -> np.ndarray:
@@ -193,48 +194,43 @@ class RustWorkXGraphBackend(BaseGraphBackend):
 
         subgraph = RustWorkXGraphBackend()
 
-        if node_ids is None:
-            if node_attr_filter is None:
-                edges_df = self.edge_features(feature_keys=edge_attr_filter.keys())
-                mask = pl.reduce(
-                    lambda x, y: x & y, [edges_df[key] == value for key, value in edge_attr_filter.items()]
+        if edge_attr_filter is not None:
+            edges_df = self.edge_features(feature_keys=edge_attr_filter.keys())
+            mask = pl.reduce(lambda x, y: x & y, [edges_df[key] == value for key, value in edge_attr_filter.items()])
+            node_ids = np.unique(
+                edges_df.filter(mask)
+                .select(
+                    DEFAULT_ATTR_KEYS.EDGE_SOURCE,
+                    DEFAULT_ATTR_KEYS.EDGE_TARGET,
                 )
-                node_pairs = (
-                    edges_df.filter(mask)
-                    .select(
-                        DEFAULT_ATTR_KEYS.EDGE_SOURCE,
-                        DEFAULT_ATTR_KEYS.EDGE_TARGET,
-                    )
-                    .to_numpy()
-                    .tolist()
-                )
-                subgraph._graph = self._graph.edge_subgraph(node_pairs)
-                node_ids = np.unique(node_pairs)
-            else:
-                node_ids = self.filter_nodes_by_attribute(node_attr_filter)
-                subgraph._graph = self._graph.subgraph(node_ids)
-        else:
-            subgraph._graph = self._graph.subgraph(node_ids)
+                .to_numpy()
+            )
+        elif node_attr_filter is not None:
+            node_ids = self.filter_nodes_by_attribute(node_attr_filter)
+
+        subgraph._graph, node_map = self._graph.subgraph_with_nodemap(node_ids)
 
         subgraph._node_features_keys = self._node_features_keys
         subgraph._edge_features_keys = self._edge_features_keys
 
-        # Set up parent-child relationship with proper node mapping
-        # The RustWorkX subgraph remaps node IDs, so we need to establish the mapping
-        # Mapping must be sorted to avoid issues with the parent-child relationship
-        original_node_ids = sorted(node_ids)
-        new_node_ids = list(subgraph._graph.node_indices())
-
         # Set the parent relationship with node mapping
-        subgraph.set_parent(self, original_node_ids)
+        subgraph.set_parent(self, node_map)
 
         # Fix the time_to_nodes mapping using the new (remapped) node IDs
         subgraph._time_to_nodes = {}
-        for original_node_id, new_node_id in zip(original_node_ids, new_node_ids, strict=True):
-            t = self._graph[original_node_id][DEFAULT_ATTR_KEYS.T]
+        for new_node_id, parent_node_id in node_map.items():
+            t = self._graph[parent_node_id][DEFAULT_ATTR_KEYS.T]
             if t not in subgraph._time_to_nodes:
                 subgraph._time_to_nodes[t] = []
             subgraph._time_to_nodes[t].append(new_node_id)
+
+        if edge_attr_filter is not None:
+            LOG.info(f"Removing edges without attributes {edge_attr_filter}")
+            for source, target, edge_attr in subgraph._graph.weighted_edge_list():
+                for key, value in edge_attr_filter.items():
+                    if edge_attr[key] != value:
+                        subgraph._graph.remove_edge(source, target)
+                        break
 
         return subgraph
 
@@ -374,19 +370,16 @@ class RustWorkXGraphBackend(BaseGraphBackend):
         """
         if node_ids is None:
             graph = self._graph
-            selected_nodes = None
+            node_map = None
         else:
             if include_targets:
                 selected_nodes = set(node_ids)
                 for node_id in node_ids:
                     neighbors = self._graph.neighbors(node_id)
                     selected_nodes.update(neighbors)
-            else:
-                selected_nodes = node_ids
+                node_ids = list(selected_nodes)
 
-            selected_nodes = list(selected_nodes)
-            selected_nodes = np.sort(selected_nodes)
-            graph = self._graph.subgraph(selected_nodes)
+            graph, node_map = self._graph.subgraph_with_nodemap(node_ids)
 
         if feature_keys is None:
             feature_keys = self.edge_features_keys
@@ -407,10 +400,9 @@ class RustWorkXGraphBackend(BaseGraphBackend):
             )
 
         source, target, data = zip(*edge_map.values(), strict=False)
-        if selected_nodes is not None:
-            # mapping back to original node ids
-            source = selected_nodes[np.asarray(source)]
-            target = selected_nodes[np.asarray(target)]
+        if node_map is not None:
+            source = np.asarray([node_map[s] for s in source], dtype=int)
+            target = np.asarray([node_map[t] for t in target], dtype=int)
 
         columns = {key: [] for key in feature_keys}
 

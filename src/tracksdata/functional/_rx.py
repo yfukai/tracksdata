@@ -2,6 +2,8 @@ import numpy as np
 import rustworkx as rx
 from numba import njit, typed, types
 
+from tracksdata.utils._logging import LOG
+
 NO_PARENT = -1
 
 
@@ -153,6 +155,7 @@ def graph_track_ids(
     if graph.num_nodes() == 0:
         raise ValueError("Graph is empty")
 
+    LOG.info(f"Graph has {graph.num_nodes()} nodes and {graph.num_edges()} edges")
     # was it better (faster) when using a numpy array for the digraph as in ultrack?
     dag = _numba_dag(graph)
     roots = dag.pop(NO_PARENT)
