@@ -358,6 +358,7 @@ class RustWorkXGraphBackend(BaseGraphBackend):
 
         if node_ids is None:
             rx_graph = self.rx_graph
+            node_map = None
         else:
             if include_targets:
                 selected_nodes = set(node_ids)
@@ -366,11 +367,7 @@ class RustWorkXGraphBackend(BaseGraphBackend):
                     selected_nodes.update(neighbors)
                 node_ids = list(selected_nodes)
 
-            rx_graph = self.subgraph(
-                node_ids=node_ids,
-                node_feature_keys=[],
-                edge_feature_keys=feature_keys,
-            ).rx_graph
+            rx_graph, node_map = self.rx_graph.subgraph_with_nodemap(node_ids)
 
         edge_map = rx_graph.edge_index_map()
         if len(edge_map) == 0:
@@ -386,6 +383,10 @@ class RustWorkXGraphBackend(BaseGraphBackend):
             )
 
         source, target, data = zip(*edge_map.values(), strict=False)
+
+        if node_map is not None:
+            source = [node_map[s] for s in source]
+            target = [node_map[t] for t in target]
 
         columns = {key: [] for key in feature_keys}
 

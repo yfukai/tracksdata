@@ -335,7 +335,7 @@ def test_edge_features_include_targets(graph_backend: BaseGraphBackend) -> None:
 
     # Get all edges for reference
     df_all = graph_backend.edge_features()
-    print(f"All edges: {df_all}")
+    print(f"All edges:\n{df_all}")
 
     # Test with include_targets=False (default)
     # When selecting [node1, node2, node3], should only include edges between these nodes:
@@ -344,7 +344,7 @@ def test_edge_features_include_targets(graph_backend: BaseGraphBackend) -> None:
     # - edge2: node2 -> node3 ✓
     # - edge3: node3 -> node0 ✗ (node0 not in selection)
     df_exclusive = graph_backend.edge_features(node_ids=[node1, node2, node3], include_targets=False)
-    print(f"Exclusive edges (include_targets=False): {df_exclusive}")
+    print(f"Exclusive edges (include_targets=False):\n{df_exclusive}")
     exclusive_edge_ids = set(df_exclusive[DEFAULT_ATTR_KEYS.EDGE_ID].to_list())
     expected_exclusive = {edge1, edge2}
 
@@ -366,7 +366,7 @@ def test_edge_features_include_targets(graph_backend: BaseGraphBackend) -> None:
     # - edge2: node2 -> node3 ✓
     # - edge3: node3 -> node0 ✓
     df_inclusive = graph_backend.edge_features(node_ids=[node2, node3], include_targets=True)
-    print(f"Inclusive edges (include_targets=True): {df_inclusive}")
+    print(f"Inclusive edges (include_targets=True):\n{df_inclusive}")
     inclusive_edge_ids = set(df_inclusive[DEFAULT_ATTR_KEYS.EDGE_ID].to_list())
     expected_inclusive = {edge2, edge3}
 

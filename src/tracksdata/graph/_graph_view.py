@@ -71,6 +71,33 @@ class GraphView(RustWorkXGraphBackend):
         indices = self.rx_graph.node_indices()
         return map_ids(self._node_map_to_root, indices)
 
+    def subgraph(
+        self,
+        *,
+        node_ids: Sequence[int] | None = None,
+        node_attr_filter: dict[str, Any] | None = None,
+        edge_attr_filter: dict[str, Any] | None = None,
+        node_feature_keys: Sequence[str] | str | None = None,
+        edge_feature_keys: Sequence[str] | str | None = None,
+    ) -> "GraphView":
+        subgraph = super().subgraph(
+            node_ids=node_ids,
+            node_attr_filter=node_attr_filter,
+            edge_attr_filter=edge_attr_filter,
+            node_feature_keys=node_feature_keys,
+            edge_feature_keys=edge_feature_keys,
+        )
+
+        subgraph._root = self._root
+
+        subgraph._node_map_to_root = {k: self._node_map_to_root[v] for k, v in subgraph._node_map_to_root.items()}
+        subgraph._node_map_from_root = {v: k for k, v in subgraph._node_map_to_root.items()}
+
+        subgraph._edge_map_to_root = {k: self._edge_map_to_root[v] for k, v in subgraph._edge_map_to_root.items()}
+        subgraph._edge_map_from_root = {v: k for k, v in subgraph._edge_map_to_root.items()}
+
+        return subgraph
+
     @property
     def node_features_keys(self) -> list[str]:
         return self._root.node_features_keys
