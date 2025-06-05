@@ -26,10 +26,15 @@ def main() -> None:
     print("starting tracking ...")
 
     nodes_operator = RegionPropsNodes(show_progress=False)
-    dist_operator = DistanceEdges(distance_threshold=50.0, n_neighbors=5, show_progress=False)
+    dist_operator = DistanceEdges(distance_threshold=30.0, n_neighbors=5, show_progress=False)
     iou_operator = IoUEdgeWeights(output_key="iou", show_progress=False)
 
-    solver = NearestNeighborsSolver(edge_weight=-AttrExpr("iou"), max_children=1)
+    dist_weight = 1 / dist_operator.distance_threshold
+
+    solver = NearestNeighborsSolver(
+        edge_weight=-AttrExpr("iou") + AttrExpr("weight") * dist_weight,
+        max_children=2,
+    )
 
     graph = RustWorkXGraphBackend()
     nodes_operator.add_nodes(graph, labels=labels)
