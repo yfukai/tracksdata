@@ -189,7 +189,7 @@ class GraphView(RustWorkXGraph):
         if DEFAULT_ATTR_KEYS.NODE_ID in node_dfs.columns:
             node_dfs = node_dfs.with_columns(
                 pl.col(DEFAULT_ATTR_KEYS.NODE_ID)
-                .map_elements(lambda x: self._node_map_to_root[x])
+                .map_elements(lambda x: self._node_map_to_root[x], return_dtype=pl.Int64)
                 .alias(DEFAULT_ATTR_KEYS.NODE_ID)
             )
         return node_dfs
@@ -209,7 +209,7 @@ class GraphView(RustWorkXGraph):
 
         edges_df = edges_df.with_columns(
             *[
-                pl.col(key).map_elements(lambda x: self._node_map_to_root[x]).alias(key)
+                pl.col(key).map_elements(lambda x: self._node_map_to_root[x], return_dtype=pl.Int64).alias(key)
                 for key in [DEFAULT_ATTR_KEYS.EDGE_SOURCE, DEFAULT_ATTR_KEYS.EDGE_TARGET]
             ]
         )
