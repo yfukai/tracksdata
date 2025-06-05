@@ -12,8 +12,11 @@ from tracksdata.graph._rustworkx_graph import RustWorkXGraphBackend
 
 def map_ids(
     map: dict[int, int],
-    indices: Sequence[int],
-) -> list[int]:
+    indices: Sequence[int] | None,
+) -> list[int] | None:
+    if indices is None:
+        return None
+
     if hasattr(indices, "tolist"):
         indices = indices.tolist()
 
@@ -46,6 +49,7 @@ class GraphView(RustWorkXGraphBackend):
         self._edge_map_from_root: dict[int, int] = {v: k for k, v in self._edge_map_to_root.items()}
 
         self._root = root
+        self._is_root_rx_graph = isinstance(root, RustWorkXGraphBackend)
         self._sync = sync
 
         # making sure these are not used
@@ -77,14 +81,17 @@ class GraphView(RustWorkXGraphBackend):
 
     def add_node_feature_key(self, key: str, default_value: Any) -> None:
         self._root.add_node_feature_key(key, default_value)
-        if self._sync:
-            for node_id in self._graph.node_indices():
-                self._graph[node_id][key] = default_value
+        # because attributes are passed by reference, we need don't need if both are rustworkx graphs
+        if self.sync and not self._is_root_rx_graph:
+            rx_graph = self.rx_graph
+            for node_id in rx_graph.node_indices():
+                rx_graph[node_id][key] = default_value
 
     def add_edge_feature_key(self, key: str, default_value: Any) -> None:
         self._root.add_edge_feature_key(key, default_value)
-        if self._sync:
-            for _, _, edge_attr in self._graph.weighted_edge_list():
+        # because attributes are passed by reference, we need don't need if both are rustworkx graphs
+        if self.sync and not self._is_root_rx_graph:
+            for _, _, edge_attr in self.rx_graph.weighted_edge_list():
                 edge_attr[key] = default_value
 
     def add_node(
@@ -97,7 +104,7 @@ class GraphView(RustWorkXGraphBackend):
             validate_keys=validate_keys,
         )
 
-        if self._sync:
+        if self.sync:
             node_id = super().add_node(
                 attributes=attributes,
                 validate_keys=validate_keys,
@@ -121,10 +128,10 @@ class GraphView(RustWorkXGraphBackend):
             validate_keys=validate_keys,
         )
 
-        if self._sync:
+        if self.sync:
             edge_id = super().add_edge(
-                source_id=source_id,
-                target_id=target_id,
+                source_id=self._node_map_from_root[source_id],
+                target_id=self._node_map_from_root[target_id],
                 attributes=attributes,
                 validate_keys=validate_keys,
             )
@@ -148,10 +155,19 @@ class GraphView(RustWorkXGraphBackend):
         node_ids: Sequence[int] | None = None,
         feature_keys: Sequence[str] | str | None = None,
     ) -> pl.DataFrame:
-        return self._root.node_features(
-            node_ids=node_ids,
+        node_dfs = super().node_features(
+            node_ids=map_ids(self._node_map_from_root, node_ids),
             feature_keys=feature_keys,
         )
+        if DEFAULT_ATTR_KEYS.NODE_ID in node_dfs.columns:
+            node_dfs = node_dfs.with_columns(
+                {
+                    DEFAULT_ATTR_KEYS.NODE_ID: pl.col(DEFAULT_ATTR_KEYS.NODE_ID).map_elements(
+                        lambda x: self._node_map_to_root[x]
+                    )
+                }
+            )
+        return node_dfs
 
     def edge_features(
         self,
@@ -161,7 +177,7 @@ class GraphView(RustWorkXGraphBackend):
         include_targets: bool = False,
     ) -> pl.DataFrame:
         edges_df = super().edge_features(
-            node_ids=node_ids,
+            node_ids=map_ids(self._node_map_from_root, node_ids),
             feature_keys=feature_keys,
             include_targets=include_targets,
         )
@@ -184,7 +200,8 @@ class GraphView(RustWorkXGraphBackend):
             node_ids=node_ids,
             attributes=attributes,
         )
-        if self._sync:
+        # because attributes are passed by reference, we need don't need if both are rustworkx graphs
+        if self.sync and not self._is_root_rx_graph:
             super().update_node_features(
                 node_ids=map_ids(self._node_map_from_root, node_ids),
                 attributes=attributes,
@@ -199,7 +216,8 @@ class GraphView(RustWorkXGraphBackend):
             edge_ids=edge_ids,
             attributes=attributes,
         )
-        if self._sync:
+        # because attributes are passed by reference, we need don't need if both are rustworkx graphs
+        if self.sync and not self._is_root_rx_graph:
             super().update_edge_features(
                 edge_ids=map_ids(self._edge_map_from_root, edge_ids),
                 attributes=attributes,

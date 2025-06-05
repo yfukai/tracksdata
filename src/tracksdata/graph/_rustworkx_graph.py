@@ -357,22 +357,22 @@ class RustWorkXGraphBackend(BaseGraphBackend):
         feature_keys = [DEFAULT_ATTR_KEYS.EDGE_ID, *feature_keys]
 
         if node_ids is None:
-            graph = self._graph
+            rx_graph = self.rx_graph
         else:
             if include_targets:
                 selected_nodes = set(node_ids)
                 for node_id in node_ids:
-                    neighbors = self._graph.neighbors(node_id)
+                    neighbors = self.rx_graph.neighbors(node_id)
                     selected_nodes.update(neighbors)
                 node_ids = list(selected_nodes)
 
-            graph = self.subgraph(
+            rx_graph = self.subgraph(
                 node_ids=node_ids,
                 node_feature_keys=[],
                 edge_feature_keys=feature_keys,
-            )._graph
+            ).rx_graph
 
-        edge_map = graph.edge_index_map()
+        edge_map = rx_graph.edge_index_map()
         if len(edge_map) == 0:
             return pl.DataFrame(
                 {
