@@ -6,7 +6,7 @@ import numpy as np
 import polars as pl
 import sqlalchemy as sa
 from numpy.typing import ArrayLike
-from sqlalchemy.orm import DeclarativeBase, Session
+from sqlalchemy.orm import DeclarativeBase, Session, load_only
 from sqlalchemy.sql.type_api import TypeEngine
 
 from tracksdata.graph._base_graph import BaseGraph
@@ -32,7 +32,7 @@ class Node(Base):
 
 class Edge(Base):
     __tablename__ = "edges"
-    edge_id = sa.Column(sa.BigInteger, primary_key=True, unique=True)
+    edge_id = sa.Column(sa.Integer, primary_key=True, unique=True, autoincrement=True)
     source_id = sa.Column(sa.BigInteger, sa.ForeignKey("nodes.node_id"))
     target_id = sa.Column(sa.BigInteger, sa.ForeignKey("nodes.node_id"))
 
@@ -87,16 +87,44 @@ class SQLGraph(BaseGraph):
         attributes: dict[str, Any],
         validate_keys: bool = True,
     ) -> int:
-        raise NotImplementedError("SQLGraph does not support edges")
+        if validate_keys:
+            self._validate_attributes(attributes, self.edge_features_keys, "edge")
+
+        if hasattr(source_id, "item"):
+            source_id = source_id.item()
+
+        if hasattr(target_id, "item"):
+            target_id = target_id.item()
+
+        edge = Edge(
+            source_id=source_id,
+            target_id=target_id,
+            **attributes,
+        )
+
+        with Session(self._engine) as session:
+            session.add(edge)
+            session.commit()
+            edge_id = edge.edge_id
+
+        return edge_id
 
     def filter_nodes_by_attribute(
         self,
         attributes: dict[str, Any],
     ) -> np.ndarray:
-        raise NotImplementedError("SQLGraph does not support filtering nodes by attribute")
+        with Session(self._engine) as session:
+            query = session.query(Node.node_id)
+            for key, value in attributes.items():
+                query = query.filter(getattr(Node, key) == value)
+            return np.asarray([i for (i,) in query.all()], dtype=int)
 
     def node_ids(self) -> np.ndarray:
-        raise NotImplementedError("SQLGraph does not support node ids")
+        with Session(self._engine) as session:
+            return np.asarray(
+                [i for (i,) in session.query(Node.node_id).all()],
+                dtype=int,
+            )
 
     def subgraph(
         self,
@@ -110,7 +138,20 @@ class SQLGraph(BaseGraph):
         raise NotImplementedError("SQLGraph does not support subgraphs")
 
     def time_points(self) -> list[int]:
-        raise NotImplementedError("SQLGraph does not support time points")
+        with Session(self._engine) as session:
+            return [t for (t,) in session.query(Node.t).distinct().all()]
+
+    def _reorder_by_indices(
+        self,
+        df: pl.DataFrame,
+        indices: Sequence[int],
+        id_key: str,
+    ) -> pl.DataFrame:
+        # NOTE: maybe we should avoid doing this and return the indices
+        order_df = pl.DataFrame(
+            {id_key: indices, "order": np.arange(0, len(indices))},
+        )
+        return order_df.join(df, on=id_key, how="left").drop("order")
 
     def node_features(
         self,
@@ -118,7 +159,38 @@ class SQLGraph(BaseGraph):
         node_ids: Sequence[int] | None = None,
         feature_keys: Sequence[str] | str | None = None,
     ) -> pl.DataFrame:
-        raise NotImplementedError("SQLGraph does not support node features")
+        if isinstance(feature_keys, str):
+            feature_keys = [feature_keys]
+
+        with Session(self._engine) as session:
+            query = session.query(Node)
+
+            if node_ids is not None:
+                if hasattr(node_ids, "tolist"):
+                    node_ids = node_ids.tolist()
+
+                query = query.filter(Node.node_id.in_(node_ids))
+
+            if feature_keys is not None:
+                query = query.options(
+                    load_only(
+                        *[getattr(Node, key) for key in feature_keys],
+                    ),
+                )
+
+            LOG.info("Query: %s", query.statement)
+
+        nodes_df = pl.read_database(
+            query.statement,
+            connection=session.connection(),
+        )
+
+        # match node_ids ordering
+        if node_ids is not None:
+            nodes_df = self._reorder_by_indices(nodes_df, node_ids, "node_id")
+
+        # indices are included by default and must be removed
+        return nodes_df.select([pl.col(c) for c in feature_keys])
 
     def edge_features(
         self,
@@ -127,7 +199,34 @@ class SQLGraph(BaseGraph):
         feature_keys: Sequence[str] | None = None,
         include_targets: bool = False,
     ) -> pl.DataFrame:
-        raise NotImplementedError("SQLGraph does not support edge features")
+        with Session(self._engine) as session:
+            query = session.query(Edge)
+
+            if node_ids is not None:
+                if hasattr(node_ids, "tolist"):
+                    node_ids = node_ids.tolist()
+
+                if include_targets:
+                    query = query.filter(Edge.source_id.in_(node_ids))
+                else:
+                    query = query.filter(
+                        Edge.source_id.not_in_(node_ids),
+                        Edge.target_id.in_(node_ids),
+                    )
+
+            if feature_keys is not None:
+                query = query.options(
+                    load_only(
+                        *[getattr(Edge, key) for key in feature_keys],
+                    ),
+                )
+
+            LOG.info("Query: %s", query.statement)
+
+            return pl.read_database(
+                query.statement,
+                connection=session.connection(),
+            )
 
     @property
     def node_features_keys(self) -> list[str]:
@@ -136,7 +235,8 @@ class SQLGraph(BaseGraph):
 
     @property
     def edge_features_keys(self) -> list[str]:
-        raise NotImplementedError("SQLGraph does not support edge features keys")
+        keys = list(Edge.__table__.columns.keys())
+        return keys
 
     def _sqlalchemy_type_inference(self, default_value: Any) -> TypeEngine:
         if isinstance(default_value, np.ndarray) and np.isscalar(default_value):
@@ -179,7 +279,7 @@ class SQLGraph(BaseGraph):
             f"COLUMN {sa_column.name} {str_dialect_type} "
             f"DEFAULT {default_value}",
         )
-        LOG.info("`add_node_feature_key` statement: %s", add_column_stmt)
+        LOG.info("add %s column statement:\n'%s'", table_class.__table__, add_column_stmt)
 
         # create the new column in the database
         with Session(self._engine) as session:
@@ -212,13 +312,51 @@ class SQLGraph(BaseGraph):
         with Session(self._engine) as session:
             return int(session.query(Node).count())
 
+    def _update_table(
+        self,
+        table_class: type[Base],
+        ids: Sequence[int],
+        id_key: str,
+        attributes: dict[str, Any],
+    ) -> None:
+        attributes = attributes.copy()
+
+        if hasattr(ids, "tolist"):
+            ids = ids.tolist()
+
+        for k, v in attributes.items():
+            if np.isscalar(v):
+                if hasattr(v, "item"):
+                    v = v.item()
+                attributes[k] = [v] * len(ids)
+            else:
+                if hasattr(v, "tolist"):
+                    attributes[k] = v.tolist()
+
+        with Session(self._engine) as session:
+            query = session.query(table_class)
+            query = query.filter(getattr(table_class, id_key) == sa.bindparam(f"bind_{id_key}"))
+            query.update(
+                {k: sa.bindparam(f"bind_{k}") for k in attributes},
+            )
+
+            # must be done after the query is created
+            attributes[id_key] = ids
+            LOG.info("update %s table with:\n%s", table_class.__table__, attributes)
+
+            session.execute(
+                query,
+                {f"bind_{k}": v for k, v in attributes.items()},
+            )
+            session.commit()
+
     def update_node_features(
         self,
         *,
         node_ids: Sequence[int],
         attributes: dict[str, Any],
     ) -> None:
-        raise NotImplementedError("SQLGraph does not support updating node features")
+        self._update_table(Node, node_ids, "node_id", attributes)
 
     def update_edge_features(
         self,
@@ -226,4 +364,4 @@ class SQLGraph(BaseGraph):
         edge_ids: ArrayLike,
         attributes: dict[str, Any],
     ) -> None:
-        raise NotImplementedError("SQLGraph does not support updating edge features")
+        self._update_table(Edge, edge_ids, "edge_id", attributes)

@@ -1,9 +1,5 @@
-import logging
-
 import numpy as np
 from numba import njit, types
-
-LOG = logging.getLogger(__name__)
 
 
 @njit
