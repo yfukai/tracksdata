@@ -28,8 +28,13 @@ class Base(DeclarativeBase):
 
 class Node(Base):
     __tablename__ = "nodes"
-    t = sa.Column(sa.Integer, primary_key=True)
+
+    # Use node_id as sole primary key for simpler updates
     node_id = sa.Column(sa.BigInteger, primary_key=True, unique=True)
+
+    # Add t as a regular column
+    # NOTE might want to use as index for fast time-based queries
+    t = sa.Column(sa.Integer, nullable=False)
 
 
 class Edge(Base):
@@ -417,11 +422,11 @@ class SQLGraph(BaseGraph):
         if hasattr(ids, "tolist"):
             ids = ids.tolist()
 
-        # specialized case for scalar values
+        # specialized case for scalar values - use simple bulk update
         if all(np.isscalar(v) for v in attributes.values()):
             attributes = {k: v.item() if hasattr(v, "item") else v for k, v in attributes.items()}
 
-            LOG.info("update %s table with:\n%s", table_class.__table__, attributes)
+            LOG.info("update %s table with scalar values: %s", table_class.__table__, attributes)
 
             with Session(self._engine) as session:
                 session.query(table_class).filter(getattr(table_class, id_key).in_(ids)).update(attributes)
@@ -429,6 +434,7 @@ class SQLGraph(BaseGraph):
 
             return
 
+        # Handle array values with bulk_update_mappings
         attributes = attributes.copy()
 
         # Prepare values for bulk update
@@ -448,15 +454,17 @@ class SQLGraph(BaseGraph):
                 if len(attributes[k]) != len(ids):
                     raise ValueError(f"Length mismatch: {len(attributes[k])} values for {len(ids)} {id_key}s")
 
-        # Create list of dictionaries for bulk update
+        # Create list of dictionaries for bulk update (simple primary key)
         for i, row_id in enumerate(ids):
             row_data = {id_key: row_id}
+
+            # Add the attribute updates
             for k, v_list in attributes.items():
                 row_data[k] = v_list[i]
             update_data.append(row_data)
 
         LOG.info("update %s table with %d rows", table_class.__table__, len(update_data))
-        LOG.info("update data:\n%s", update_data)
+        LOG.info("update data sample: %s", update_data[:2])
 
         with Session(self._engine) as session:
             # Use bulk_update_mappings for efficient bulk updates
