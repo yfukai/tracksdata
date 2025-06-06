@@ -45,8 +45,7 @@ class BaseGraph(abc.ABC):
             if ref_key not in attributes.keys():
                 raise ValueError(
                     f"Attribute '{ref_key}' not found in attributes: "
-                    f"'{attributes.keys()}'\nAll '{reference_keys}' "
-                    "attributes must be provided."
+                    f"'{attributes.keys()}'\nRequested keys: '{reference_keys}'"
                 )
 
     @abc.abstractmethod

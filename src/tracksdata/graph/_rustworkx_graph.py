@@ -298,11 +298,11 @@ class RustWorkXGraph(BaseGraph):
         if node_ids is None:
             node_ids = list(rx_graph.node_indices())
 
-        if len(node_ids) == 0:
-            raise ValueError("Empty graph, there are no nodes to get features from")
-
         if feature_keys is None:
             feature_keys = self.node_features_keys
+
+        if len(node_ids) == 0:
+            return pl.DataFrame({key: [] for key in feature_keys})
 
         if isinstance(feature_keys, str):
             feature_keys = [feature_keys]

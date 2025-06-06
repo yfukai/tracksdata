@@ -1,15 +1,32 @@
 import polars as pl
 import pytest
+import sqlalchemy as sa
 
 from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.graph._base_graph import BaseGraph
 from tracksdata.graph._rustworkx_graph import RustWorkXGraph
+from tracksdata.graph._sql_graph import SQLGraph
 
 
-@pytest.fixture(params=[RustWorkXGraph])
+@pytest.fixture(params=[RustWorkXGraph, SQLGraph])
 def graph_backend(request) -> BaseGraph:
     """Fixture that provides all implementations of BaseGraph."""
-    return request.param()
+    graph_class: BaseGraph = request.param
+
+    if graph_class == SQLGraph:
+        db_name = ":memory:"
+        engine = sa.create_engine(sa.engine.URL.create("sqlite", database=db_name))
+        # clear database
+        with engine.connect() as conn:
+            conn.execute(sa.text("DROP TABLE IF EXISTS nodes"))
+            conn.execute(sa.text("DROP TABLE IF EXISTS edges"))
+            conn.commit()
+        return graph_class(
+            drivername="sqlite",
+            database=db_name,
+        )
+    else:
+        return graph_class()
 
 
 def test_already_existing_keys(graph_backend: BaseGraph) -> None:
@@ -34,10 +51,7 @@ def testing_empty_graph(graph_backend: BaseGraph) -> None:
     assert graph_backend.num_nodes == 0
     assert graph_backend.num_edges == 0
 
-    with pytest.raises(ValueError):
-        graph_backend.node_features()
-
-    # graph could be disconnected so this should not raise an error
+    assert graph_backend.node_features().is_empty()
     assert graph_backend.edge_features().is_empty()
 
 

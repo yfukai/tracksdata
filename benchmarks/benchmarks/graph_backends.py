@@ -1,7 +1,21 @@
 from tracksdata.edges._distance_edges import DistanceEdges
 from tracksdata.graph._base_graph import BaseGraph
 from tracksdata.graph._rustworkx_graph import RustWorkXGraph
+from tracksdata.graph._sql_graph import SQLGraph as _SQLGraph
 from tracksdata.nodes._random import RandomNodes
+
+
+class SQLGraphWithMemory(_SQLGraph):
+    def __init__(self):
+        super().__init__(drivername="sqlite", database=":memory:")
+
+
+class SQLGraphDisk(_SQLGraph):
+    def __init__(self):
+        import datetime
+
+        path = f"/tmp/_asv_tracksdata_db_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        super().__init__(drivername="sqlite", database=path)
 
 
 class GraphSuite:
@@ -10,7 +24,11 @@ class GraphSuite:
     """
 
     params = (
-        (RustWorkXGraph,),
+        (
+            RustWorkXGraph,
+            SQLGraphWithMemory,
+            SQLGraphDisk,
+        ),
         (1_000, 10_000, 100_000),
     )
     timeout = 1800  # 30 minutes

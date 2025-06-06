@@ -47,8 +47,24 @@ class Edge(Base):
 class SQLGraph(BaseGraph):
     node_id_time_multiplier = 1_000_000_000
 
-    def __init__(self, db_path: str):
-        self._engine = sa.create_engine(f"sqlite:///{db_path}")
+    def __init__(
+        self,
+        drivername: str,
+        database: str,
+        username: str | None = None,
+        password: str | None = None,
+        host: str | None = None,
+        port: int | None = None,
+    ):
+        self._url = sa.engine.URL.create(
+            drivername,
+            username=username,
+            password=password,
+            host=host,
+            port=port,
+            database=database,
+        )
+        self._engine = sa.create_engine(self._url)
         Base.metadata.create_all(self._engine)
 
         self._max_id_per_time = {}
@@ -279,7 +295,10 @@ class SQLGraph(BaseGraph):
             nodes_df = self._reorder_by_indices(nodes_df, node_ids, "node_id")
 
         # indices are included by default and must be removed
-        return nodes_df.select([pl.col(c) for c in feature_keys])
+        if feature_keys is not None:
+            return nodes_df.select([pl.col(c) for c in feature_keys])
+        else:
+            return nodes_df.drop(DEFAULT_ATTR_KEYS.NODE_ID)
 
     def edge_features(
         self,
@@ -331,6 +350,7 @@ class SQLGraph(BaseGraph):
     @property
     def node_features_keys(self) -> list[str]:
         keys = list(Node.__table__.columns.keys())
+        keys.remove(DEFAULT_ATTR_KEYS.NODE_ID)
         return keys
 
     @property
