@@ -9,6 +9,7 @@ from numpy.typing import ArrayLike
 from sqlalchemy.orm import DeclarativeBase, Session, load_only
 from sqlalchemy.sql.type_api import TypeEngine
 
+from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.graph._base_graph import BaseGraph
 from tracksdata.utils._logging import LOG
 
@@ -199,6 +200,9 @@ class SQLGraph(BaseGraph):
         feature_keys: Sequence[str] | None = None,
         include_targets: bool = False,
     ) -> pl.DataFrame:
+        if isinstance(feature_keys, str):
+            feature_keys = [feature_keys]
+
         with Session(self._engine) as session:
             query = session.query(Edge)
 
@@ -215,6 +219,14 @@ class SQLGraph(BaseGraph):
                     )
 
             if feature_keys is not None:
+                feature_keys = set(feature_keys)
+                # we always return the source and target id by default
+                feature_keys.add(DEFAULT_ATTR_KEYS.EDGE_SOURCE)
+                feature_keys.add(DEFAULT_ATTR_KEYS.EDGE_TARGET)
+                feature_keys = list(feature_keys)
+
+                LOG.info("Edge feature keys: %s", feature_keys)
+
                 query = query.options(
                     load_only(
                         *[getattr(Edge, key) for key in feature_keys],
@@ -319,35 +331,53 @@ class SQLGraph(BaseGraph):
         id_key: str,
         attributes: dict[str, Any],
     ) -> None:
-        attributes = attributes.copy()
-
         if hasattr(ids, "tolist"):
             ids = ids.tolist()
+
+        # specialized case for scalar values
+        if all(np.isscalar(v) for v in attributes.values()):
+            attributes = {k: v.item() if hasattr(v, "item") else v for k, v in attributes.items()}
+
+            LOG.info("update %s table with:\n%s", table_class.__table__, attributes)
+
+            with Session(self._engine) as session:
+                session.query(table_class).filter(getattr(table_class, id_key).in_(ids)).update(attributes)
+                session.commit()
+
+            return
+
+        attributes = attributes.copy()
+
+        # Prepare values for bulk update
+        update_data = []
 
         for k, v in attributes.items():
             if np.isscalar(v):
                 if hasattr(v, "item"):
                     v = v.item()
+                # Convert scalar to list of same length as ids
                 attributes[k] = [v] * len(ids)
             else:
                 if hasattr(v, "tolist"):
                     attributes[k] = v.tolist()
 
+                # Validate length matches ids
+                if len(attributes[k]) != len(ids):
+                    raise ValueError(f"Length mismatch: {len(attributes[k])} values for {len(ids)} {id_key}s")
+
+        # Create list of dictionaries for bulk update
+        for i, row_id in enumerate(ids):
+            row_data = {id_key: row_id}
+            for k, v_list in attributes.items():
+                row_data[k] = v_list[i]
+            update_data.append(row_data)
+
+        LOG.info("update %s table with %d rows", table_class.__table__, len(update_data))
+        LOG.info("update data:\n%s", update_data)
+
         with Session(self._engine) as session:
-            query = session.query(table_class)
-            query = query.filter(getattr(table_class, id_key) == sa.bindparam(f"bind_{id_key}"))
-            query.update(
-                {k: sa.bindparam(f"bind_{k}") for k in attributes},
-            )
-
-            # must be done after the query is created
-            attributes[id_key] = ids
-            LOG.info("update %s table with:\n%s", table_class.__table__, attributes)
-
-            session.execute(
-                query,
-                {f"bind_{k}": v for k, v in attributes.items()},
-            )
+            # Use bulk_update_mappings for efficient bulk updates
+            session.bulk_update_mappings(table_class, update_data)
             session.commit()
 
     def update_node_features(
@@ -356,7 +386,10 @@ class SQLGraph(BaseGraph):
         node_ids: Sequence[int],
         attributes: dict[str, Any],
     ) -> None:
-        self._update_table(Node, node_ids, "node_id", attributes)
+        if "t" in attributes:
+            raise ValueError("Node attribute 't' cannot be updated.")
+
+        self._update_table(Node, node_ids, DEFAULT_ATTR_KEYS.NODE_ID, attributes)
 
     def update_edge_features(
         self,
@@ -364,4 +397,4 @@ class SQLGraph(BaseGraph):
         edge_ids: ArrayLike,
         attributes: dict[str, Any],
     ) -> None:
-        self._update_table(Edge, edge_ids, "edge_id", attributes)
+        self._update_table(Edge, edge_ids, DEFAULT_ATTR_KEYS.EDGE_ID, attributes)
