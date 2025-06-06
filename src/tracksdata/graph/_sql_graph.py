@@ -279,6 +279,10 @@ class SQLGraph(BaseGraph):
         )
         return order_df.join(df, on=id_key, how="left").drop("order")
 
+    def _raw_query(self, query: sa.sql.Select) -> str:
+        # for some reason, the query.statement is not working with polars
+        return str(query.statement.compile(dialect=self._engine.dialect, compile_kwargs={"literal_binds": True}))
+
     def node_features(
         self,
         *,
@@ -362,11 +366,13 @@ class SQLGraph(BaseGraph):
                 )
 
             LOG.info("Query: %s", query.statement)
-
-            return pl.read_database(
-                query.statement,
+            # for some reason, the query.statement is not working with polars
+            edges_df = pl.read_database(
+                self._raw_query(query),
                 connection=session.connection(),
             )
+
+            return edges_df
 
     @property
     def node_features_keys(self) -> list[str]:

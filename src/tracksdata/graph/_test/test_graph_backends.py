@@ -115,6 +115,8 @@ def test_add_edge(graph_backend: BaseGraph) -> None:
     assert isinstance(edge_id, int)
 
     # testing default value was assigned correctly
+    # at some point there was a bug and this was needed
+    # df = graph_backend.edge_features(node_ids=[node1, node2, node3])
     df = graph_backend.edge_features()
     assert df["new_feature"].to_list() == [0.0, 1.0]
     assert df["weight"].to_list() == [0.5, 0.1]
