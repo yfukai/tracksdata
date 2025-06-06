@@ -177,14 +177,7 @@ class RustWorkXGraph(BaseGraph):
         """
         from tracksdata.graph._graph_view import GraphView
 
-        if node_ids is not None and (node_attr_filter is not None or edge_attr_filter is not None):
-            raise ValueError("Node IDs and attributes' filters cannot be used together")
-
-        if node_attr_filter is not None and edge_attr_filter is not None:
-            raise ValueError("Node attributes' filters and edge attributes' filters cannot be used together")
-
-        if node_ids is None and node_attr_filter is None and edge_attr_filter is None:
-            raise ValueError("Either node IDs or one of the attributes' filters must be provided")
+        self._validate_subgraph_args(node_ids, node_attr_filter, edge_attr_filter)
 
         if edge_attr_filter is not None:
             edges_df = self.edge_features(feature_keys=edge_attr_filter.keys())

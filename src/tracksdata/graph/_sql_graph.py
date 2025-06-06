@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import polars as pl
+import rustworkx as rx
 import sqlalchemy as sa
 from numpy.typing import ArrayLike
 from sqlalchemy.orm import DeclarativeBase, Session, load_only
@@ -136,7 +137,89 @@ class SQLGraph(BaseGraph):
         node_feature_keys: Sequence[str] | str | None = None,
         edge_feature_keys: Sequence[str] | str | None = None,
     ) -> "GraphView":
-        raise NotImplementedError("SQLGraph does not support subgraphs")
+        from tracksdata.graph._graph_view import GraphView
+
+        self._validate_subgraph_args(node_ids, node_attr_filter, edge_attr_filter)
+
+        with Session(self._engine) as session:
+            # selecting edges
+            edge_query = session.query(Edge)
+
+            if edge_attr_filter is not None:
+                edge_query = edge_query.filter(
+                    *[getattr(Edge, k) == v for k, v in edge_attr_filter.items()],
+                )
+
+                assert node_ids is None, "node_ids must be None when edge_attr_filter is not None"
+
+                node_ids = edge_query.with_entities(Edge.source_id, Edge.target_id).all()
+                node_ids = np.unique(node_ids).tolist()
+
+            if edge_feature_keys is not None:
+                edge_query = edge_query.options(
+                    load_only(
+                        *[getattr(Edge, key) for key in edge_feature_keys],
+                    ),
+                )
+
+            node_query = session.query(Node)
+
+            if node_ids is not None:
+                node_query = node_query.filter(Node.node_id.in_(node_ids))
+
+            if node_attr_filter is not None:
+                node_query = node_query.filter(
+                    *[getattr(Node, k) == v for k, v in node_attr_filter.items()],
+                )
+
+            if node_feature_keys is not None:
+                if DEFAULT_ATTR_KEYS.NODE_ID not in node_feature_keys:
+                    node_feature_keys.append(DEFAULT_ATTR_KEYS.NODE_ID)
+
+                node_query = node_query.options(
+                    load_only(
+                        *[getattr(Node, key) for key in node_feature_keys],
+                    ),
+                )
+
+            if edge_feature_keys is not None:
+                edge_feature_keys = set(edge_feature_keys)
+                # we always return the source and target id by default
+                edge_feature_keys.add(DEFAULT_ATTR_KEYS.EDGE_ID)
+                edge_feature_keys.add(DEFAULT_ATTR_KEYS.EDGE_SOURCE)
+                edge_feature_keys.add(DEFAULT_ATTR_KEYS.EDGE_TARGET)
+                edge_feature_keys = list(edge_feature_keys)
+
+                edge_query = edge_query.options(
+                    load_only(
+                        *[getattr(Edge, key) for key in edge_feature_keys],
+                    ),
+                )
+
+        node_map_to_root = {}
+        node_map_from_root = {}
+        rx_graph = rx.PyDiGraph()
+
+        for row in node_query.all():
+            data = {k: v for k, v in row.__dict__.items() if not k.startswith("_")}
+            root_node_id = data.pop(DEFAULT_ATTR_KEYS.NODE_ID)
+            node_id = rx_graph.add_node(data)
+            node_map_to_root[node_id] = root_node_id
+            node_map_from_root[root_node_id] = node_id
+
+        for row in edge_query.all():
+            data = {k: v for k, v in row.__dict__.items() if not k.startswith("_")}
+            source_id = node_map_from_root[data.pop(DEFAULT_ATTR_KEYS.EDGE_SOURCE)]
+            target_id = node_map_from_root[data.pop(DEFAULT_ATTR_KEYS.EDGE_TARGET)]
+            rx_graph.add_edge(source_id, target_id, data)
+
+        graph = GraphView(
+            rx_graph=rx_graph,
+            node_map_to_root=node_map_to_root,
+            root=self,
+        )
+
+        return graph
 
     def time_points(self) -> list[int]:
         with Session(self._engine) as session:
@@ -214,7 +297,7 @@ class SQLGraph(BaseGraph):
                     query = query.filter(Edge.source_id.in_(node_ids))
                 else:
                     query = query.filter(
-                        Edge.source_id.not_in_(node_ids),
+                        Edge.source_id.in_(node_ids),
                         Edge.target_id.in_(node_ids),
                     )
 
