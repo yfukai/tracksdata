@@ -11,6 +11,7 @@ from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.graph._base_graph import BaseGraph
 from tracksdata.nodes._base_nodes import BaseNodesOperator
 from tracksdata.nodes._mask import Mask
+from tracksdata.utils._logging import LOG
 
 
 class RegionPropsNodes(BaseNodesOperator):
@@ -122,6 +123,8 @@ class RegionPropsNodes(BaseNodesOperator):
 
         labels = np.asarray(labels)
 
+        nodes_data = []
+
         for obj in regionprops(
             labels,
             intensity_image=intensity_image,
@@ -138,4 +141,9 @@ class RegionPropsNodes(BaseNodesOperator):
             attributes[DEFAULT_ATTR_KEYS.MASK] = Mask(obj.image, obj.bbox)
             attributes[DEFAULT_ATTR_KEYS.T] = t
 
-            graph.add_node(attributes, validate_keys=False)
+            nodes_data.append(attributes)
+
+        if len(nodes_data) > 0:
+            graph.bulk_add_nodes(nodes_data)
+        else:
+            LOG.warning("No valid nodes found for time point %d", t)

@@ -7,9 +7,9 @@ from tracksdata.nodes._random import RandomNodes
 from tracksdata.solvers._nearest_neighbors_solver import NearestNeighborsSolver
 
 
-@profile(immediate=True, sort="cumulative")
+@profile(immediate=True, sort="time")
 def main() -> None:
-    n_nodes = 200
+    n_nodes = 1_000
     nodes_operator = RandomNodes(
         n_time_points=50,
         n_nodes_per_tp=(int(n_nodes * 0.95), int(n_nodes * 1.05)),

@@ -94,9 +94,4 @@ class RandomNodes(BaseNodesOperator):
             size=(n_nodes_at_t, len(self.spatial_cols)),
         )
 
-        for c in coords:
-            graph.add_node(
-                {"t": t, **dict(zip(self.spatial_cols, c, strict=True))},
-                **kwargs,
-                validate_keys=False,
-            )
+        graph.bulk_add_nodes([{"t": t, **dict(zip(self.spatial_cols, c, strict=True)), **kwargs} for c in coords])

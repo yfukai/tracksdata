@@ -22,6 +22,20 @@ def _is_builtin(obj: Any) -> bool:
     return getattr(obj.__class__, "__module__", None) == "builtins"
 
 
+def _data_numpy_to_native(data: dict[str, Any]) -> None:
+    """
+    Convert numpy scalars to native Python scalars in place.
+
+    Parameters
+    ----------
+    data : dict[str, Any]
+        The data to convert.
+    """
+    for k, v in data.items():
+        if np.isscalar(v) and hasattr(v, "item"):
+            data[k] = v.item()
+
+
 class SQLGraph(BaseGraph):
     node_id_time_multiplier: int = 1_000_000_000
     Base: type[DeclarativeBase]
@@ -114,6 +128,31 @@ class SQLGraph(BaseGraph):
 
         return node_id
 
+    def bulk_add_nodes(
+        self,
+        nodes: list[dict[str, Any]],
+    ) -> None:
+        """
+        Faster method to add multiple nodes to the graph with less overhead and fewer checks.
+
+        Parameters
+        ----------
+        nodes : list[dict[str, Any]]
+            The data of the nodes to be added.
+            The keys of the data will be used as the attributes of the nodes.
+            Must have "t" key.
+        """
+        for node in nodes:
+            time = node["t"]
+            default_node_id = (time * self.node_id_time_multiplier) - 1
+            node_id = self._max_id_per_time.get(time, default_node_id) + 1
+            node[DEFAULT_ATTR_KEYS.NODE_ID] = node_id
+            self._max_id_per_time[time] = node_id
+
+        with Session(self._engine) as session:
+            session.bulk_insert_mappings(self.Node, nodes)
+            session.commit()
+
     def add_edge(
         self,
         source_id: int,
@@ -142,6 +181,27 @@ class SQLGraph(BaseGraph):
             edge_id = edge.edge_id
 
         return edge_id
+
+    def bulk_add_edges(
+        self,
+        edges: list[dict[str, Any]],
+    ) -> None:
+        """
+        Faster method to add multiple edges to the graph with less overhead and fewer checks.
+
+        Parameters
+        ----------
+        edges : list[dict[str, Any]]
+            The data of the edges to be added.
+            The keys of the data will be used as the attributes of the edges.
+            Must have "source_id" and "target_id" keys.
+        """
+        for edge in edges:
+            _data_numpy_to_native(edge)
+
+        with Session(self._engine) as session:
+            session.bulk_insert_mappings(self.Edge, edges)
+            session.commit()
 
     def filter_nodes_by_attribute(
         self,
@@ -388,7 +448,7 @@ class SQLGraph(BaseGraph):
         return keys
 
     def _sqlalchemy_type_inference(self, default_value: Any) -> TypeEngine:
-        if isinstance(default_value, np.ndarray) and np.isscalar(default_value):
+        if np.isscalar(default_value) and hasattr(default_value, "item"):
             default_value = default_value.item()
 
         if isinstance(default_value, float):
@@ -471,10 +531,12 @@ class SQLGraph(BaseGraph):
         if hasattr(ids, "tolist"):
             ids = ids.tolist()
 
+        # Handle array values with bulk_update_mappings
+        attributes = attributes.copy()
+        _data_numpy_to_native(attributes)
+
         # specialized case for scalar values - use simple bulk update
         if all(np.isscalar(v) for v in attributes.values()):
-            attributes = {k: v.item() if hasattr(v, "item") else v for k, v in attributes.items()}
-
             LOG.info("update %s table with scalar values: %s", table_class.__table__, attributes)
 
             with Session(self._engine) as session:
@@ -483,16 +545,11 @@ class SQLGraph(BaseGraph):
 
             return
 
-        # Handle array values with bulk_update_mappings
-        attributes = attributes.copy()
-
         # Prepare values for bulk update
         update_data = []
 
         for k, v in attributes.items():
             if np.isscalar(v):
-                if hasattr(v, "item"):
-                    v = v.item()
                 # Convert scalar to list of same length as ids
                 attributes[k] = [v] * len(ids)
             else:
