@@ -8,7 +8,7 @@ from tracksdata.nodes._random import RandomNodes
 
 def test_random_nodes_init_2d() -> None:
     """Test initialization with 2D coordinates."""
-    operator = RandomNodes(n_time_points=5, n_nodes=(10, 20), n_dim=2, random_state=42, show_progress=False)
+    operator = RandomNodes(n_time_points=5, n_nodes_per_tp=(10, 20), n_dim=2, random_state=42, show_progress=False)
 
     assert operator.n_time_points == 5
     assert operator.n_nodes == (10, 20)
@@ -19,7 +19,7 @@ def test_random_nodes_init_2d() -> None:
 
 def test_random_nodes_init_3d() -> None:
     """Test initialization with 3D coordinates."""
-    operator = RandomNodes(n_time_points=3, n_nodes=(5, 15), n_dim=3, random_state=123, show_progress=True)
+    operator = RandomNodes(n_time_points=3, n_nodes_per_tp=(5, 15), n_dim=3, random_state=123, show_progress=True)
 
     assert operator.n_time_points == 3
     assert operator.n_nodes == (5, 15)
@@ -30,7 +30,7 @@ def test_random_nodes_init_3d() -> None:
 def test_random_nodes_init_invalid_dimension() -> None:
     """Test initialization with invalid dimension raises error."""
     with pytest.raises(ValueError, match="Invalid number of dimensions: 4"):
-        RandomNodes(n_time_points=1, n_nodes=(1, 2), n_dim=4, random_state=0)
+        RandomNodes(n_time_points=1, n_nodes_per_tp=(1, 2), n_dim=4, random_state=0)
 
 
 def test_random_nodes_add_nodes_single_time_point_2d() -> None:
@@ -39,7 +39,7 @@ def test_random_nodes_add_nodes_single_time_point_2d() -> None:
 
     operator = RandomNodes(
         n_time_points=1,
-        n_nodes=(5, 6),  # Fixed number for deterministic test (low < high)
+        n_nodes_per_tp=(5, 6),  # Fixed number for deterministic test (low < high)
         n_dim=2,
         random_state=42,
         show_progress=False,
@@ -73,7 +73,7 @@ def test_random_nodes_add_nodes_single_time_point_3d() -> None:
 
     operator = RandomNodes(
         n_time_points=1,
-        n_nodes=(3, 4),  # Fixed number for deterministic test (low < high)
+        n_nodes_per_tp=(3, 4),  # Fixed number for deterministic test (low < high)
         n_dim=3,
         random_state=42,
         show_progress=False,
@@ -108,7 +108,7 @@ def test_random_nodes_add_nodes_all_time_points() -> None:
 
     operator = RandomNodes(
         n_time_points=3,
-        n_nodes=(2, 5),
+        n_nodes_per_tp=(2, 5),
         n_dim=2,
         random_state=42,
         show_progress=False,  # Range where low < high
@@ -134,7 +134,7 @@ def test_random_nodes_variable_node_count() -> None:
 
     operator = RandomNodes(
         n_time_points=10,
-        n_nodes=(1, 11),
+        n_nodes_per_tp=(1, 11),
         n_dim=2,
         random_state=42,
         show_progress=False,  # Range where low < high
@@ -161,7 +161,7 @@ def test_random_nodes_reproducible_with_same_seed() -> None:
     graph1 = RustWorkXGraph()
     operator1 = RandomNodes(
         n_time_points=2,
-        n_nodes=(3, 4),
+        n_nodes_per_tp=(3, 4),
         n_dim=2,
         random_state=123,
         show_progress=False,  # Range where low < high
@@ -173,7 +173,7 @@ def test_random_nodes_reproducible_with_same_seed() -> None:
     graph2 = RustWorkXGraph()
     operator2 = RandomNodes(
         n_time_points=2,
-        n_nodes=(3, 4),
+        n_nodes_per_tp=(3, 4),
         n_dim=2,
         random_state=123,
         show_progress=False,  # Range where low < high
@@ -201,7 +201,7 @@ def test_random_nodes_different_with_different_seed() -> None:
     graph1 = RustWorkXGraph()
     operator1 = RandomNodes(
         n_time_points=1,
-        n_nodes=(5, 6),
+        n_nodes_per_tp=(5, 6),
         n_dim=2,
         random_state=42,
         show_progress=False,  # Range where low < high
@@ -213,7 +213,7 @@ def test_random_nodes_different_with_different_seed() -> None:
     graph2 = RustWorkXGraph()
     operator2 = RandomNodes(
         n_time_points=1,
-        n_nodes=(5, 6),
+        n_nodes_per_tp=(5, 6),
         n_dim=2,
         random_state=999,
         show_progress=False,  # Range where low < high
@@ -233,7 +233,7 @@ def test_random_nodes_feature_keys_registration() -> None:
 
     operator = RandomNodes(
         n_time_points=1,
-        n_nodes=(2, 3),
+        n_nodes_per_tp=(2, 3),
         n_dim=3,
         random_state=42,
         show_progress=False,  # Range where low < high
@@ -257,7 +257,7 @@ def test_random_nodes_empty_time_points() -> None:
     """Test behavior with zero time points."""
     graph = RustWorkXGraph()
 
-    operator = RandomNodes(n_time_points=0, n_nodes=(1, 5), n_dim=2, random_state=42, show_progress=False)
+    operator = RandomNodes(n_time_points=0, n_nodes_per_tp=(1, 5), n_dim=2, random_state=42, show_progress=False)
 
     # Add nodes for all time points (should be none)
     operator.add_nodes(graph)

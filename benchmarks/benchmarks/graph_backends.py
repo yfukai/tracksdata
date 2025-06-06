@@ -40,9 +40,11 @@ class GraphSuite:
         n_nodes: int,
     ) -> None:
         self.graph = backend()
+        n_time_points = 50
+        n_nodes /= 50
         self.nodes_operator = RandomNodes(
-            n_time_points=50,
-            n_nodes=(int(n_nodes * 0.95), int(n_nodes * 1.05)),
+            n_time_points=n_time_points,
+            n_nodes_per_tp=(int(n_nodes * 0.95), int(n_nodes * 1.05)),
             n_dim=3,
             show_progress=False,
         )
