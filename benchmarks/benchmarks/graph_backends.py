@@ -31,7 +31,7 @@ class GraphSuite:
         ),
         (1_000, 10_000, 100_000),
     )
-    timeout = 1800  # 30 minutes
+    timeout = 300  # 5 minutes
     param_names = ("backend", "n_nodes")
 
     def setup(
