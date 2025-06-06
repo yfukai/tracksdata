@@ -142,6 +142,7 @@ class RegionPropsNodes(BaseNodesOperator):
             attributes[DEFAULT_ATTR_KEYS.T] = t
 
             nodes_data.append(attributes)
+            obj._cache.clear()  # clearing to reduce memory footprint
 
         if len(nodes_data) > 0:
             graph.bulk_add_nodes(nodes_data)
