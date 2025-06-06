@@ -2,7 +2,6 @@ import abc
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any
 
-import numpy as np
 import polars as pl
 from numpy.typing import ArrayLike
 
@@ -111,7 +110,7 @@ class BaseGraph(abc.ABC):
     def filter_nodes_by_attribute(
         self,
         attributes: dict[str, Any],
-    ) -> np.ndarray:
+    ) -> list[int]:
         """
         Filter nodes by attributes.
 
@@ -123,7 +122,7 @@ class BaseGraph(abc.ABC):
 
         Returns
         -------
-        np.ndarray
+        list[int]
             The IDs of the filtered nodes.
         """
 

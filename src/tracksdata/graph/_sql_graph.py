@@ -22,30 +22,11 @@ def _is_builtin(obj: Any) -> bool:
     return getattr(obj.__class__, "__module__", None) == "builtins"
 
 
-class Base(DeclarativeBase):
-    pass
-
-
-class Node(Base):
-    __tablename__ = "nodes"
-
-    # Use node_id as sole primary key for simpler updates
-    node_id = sa.Column(sa.BigInteger, primary_key=True, unique=True)
-
-    # Add t as a regular column
-    # NOTE might want to use as index for fast time-based queries
-    t = sa.Column(sa.Integer, nullable=False)
-
-
-class Edge(Base):
-    __tablename__ = "edges"
-    edge_id = sa.Column(sa.Integer, primary_key=True, unique=True, autoincrement=True)
-    source_id = sa.Column(sa.BigInteger, sa.ForeignKey("nodes.node_id"))
-    target_id = sa.Column(sa.BigInteger, sa.ForeignKey("nodes.node_id"))
-
-
 class SQLGraph(BaseGraph):
-    node_id_time_multiplier = 1_000_000_000
+    node_id_time_multiplier: int = 1_000_000_000
+    Base: type[DeclarativeBase]
+    Node: type[DeclarativeBase]
+    Edge: type[DeclarativeBase]
 
     def __init__(
         self,
@@ -56,6 +37,9 @@ class SQLGraph(BaseGraph):
         host: str | None = None,
         port: int | None = None,
     ):
+        # Create unique classes for this instance
+        self._define_schema()
+
         self._url = sa.engine.URL.create(
             drivername,
             username=username,
@@ -65,15 +49,42 @@ class SQLGraph(BaseGraph):
             database=database,
         )
         self._engine = sa.create_engine(self._url)
-        Base.metadata.create_all(self._engine)
+        self.Base.metadata.create_all(self._engine)
 
         self._max_id_per_time = {}
         self._update_max_id_per_time()
 
+    def _define_schema(self) -> None:
+        """Define the database schema classes for this SQLGraph instance."""
+
+        class Base(DeclarativeBase):
+            pass
+
+        class Node(Base):
+            __tablename__ = "nodes"
+
+            # Use node_id as sole primary key for simpler updates
+            node_id = sa.Column(sa.BigInteger, primary_key=True, unique=True)
+
+            # Add t as a regular column
+            # NOTE might want to use as index for fast time-based queries
+            t = sa.Column(sa.Integer, nullable=False)
+
+        class Edge(Base):
+            __tablename__ = "edges"
+            edge_id = sa.Column(sa.Integer, primary_key=True, unique=True, autoincrement=True)
+            source_id = sa.Column(sa.BigInteger, sa.ForeignKey("nodes.node_id"))
+            target_id = sa.Column(sa.BigInteger, sa.ForeignKey("nodes.node_id"))
+
+        # Assign to instance variables
+        self.Base = Base
+        self.Node = Node
+        self.Edge = Edge
+
     def _update_max_id_per_time(self) -> None:
         with Session(self._engine) as session:
-            for t in session.query(Node.t).distinct():
-                self._max_id_per_time[t] = int(session.query(sa.func.max(Node.node_id)).scalar())
+            for t in session.query(self.Node.t).distinct():
+                self._max_id_per_time[t] = int(session.query(sa.func.max(self.Node.node_id)).scalar())
 
     def add_node(
         self,
@@ -90,7 +101,7 @@ class SQLGraph(BaseGraph):
         default_node_id = (time * self.node_id_time_multiplier) - 1
         node_id = self._max_id_per_time.get(time, default_node_id) + 1
 
-        node = Node(
+        node = self.Node(
             node_id=node_id,
             **attributes,
         )
@@ -119,7 +130,7 @@ class SQLGraph(BaseGraph):
         if hasattr(target_id, "item"):
             target_id = target_id.item()
 
-        edge = Edge(
+        edge = self.Edge(
             source_id=source_id,
             target_id=target_id,
             **attributes,
@@ -135,19 +146,16 @@ class SQLGraph(BaseGraph):
     def filter_nodes_by_attribute(
         self,
         attributes: dict[str, Any],
-    ) -> np.ndarray:
+    ) -> list[int]:
         with Session(self._engine) as session:
-            query = session.query(Node.node_id)
+            query = session.query(self.Node.node_id)
             for key, value in attributes.items():
-                query = query.filter(getattr(Node, key) == value)
-            return np.asarray([i for (i,) in query.all()], dtype=int)
+                query = query.filter(getattr(self.Node, key) == value)
+            return [i for (i,) in query.all()]
 
-    def node_ids(self) -> np.ndarray:
+    def node_ids(self) -> list[int]:
         with Session(self._engine) as session:
-            return np.asarray(
-                [i for (i,) in session.query(Node.node_id).all()],
-                dtype=int,
-            )
+            return [i for (i,) in session.query(self.Node.node_id).all()]
 
     def subgraph(
         self,
@@ -162,35 +170,48 @@ class SQLGraph(BaseGraph):
 
         self._validate_subgraph_args(node_ids, node_attr_filter, edge_attr_filter)
 
+        if hasattr(node_ids, "tolist"):
+            node_ids = node_ids.tolist()
+
         with Session(self._engine) as session:
             # selecting edges
-            edge_query = session.query(Edge)
+            edge_query = session.query(self.Edge)
 
+            edge_filtered = False
             if edge_attr_filter is not None:
                 edge_query = edge_query.filter(
-                    *[getattr(Edge, k) == v for k, v in edge_attr_filter.items()],
+                    *[getattr(self.Edge, k) == v for k, v in edge_attr_filter.items()],
                 )
 
                 assert node_ids is None, "node_ids must be None when edge_attr_filter is not None"
 
-                node_ids = edge_query.with_entities(Edge.source_id, Edge.target_id).all()
+                node_ids = edge_query.with_entities(self.Edge.source_id, self.Edge.target_id).all()
                 node_ids = np.unique(node_ids).tolist()
+                edge_filtered = True
 
             if edge_feature_keys is not None:
                 edge_query = edge_query.options(
                     load_only(
-                        *[getattr(Edge, key) for key in edge_feature_keys],
+                        *[getattr(self.Edge, key) for key in edge_feature_keys],
                     ),
                 )
 
-            node_query = session.query(Node)
+            node_query = session.query(self.Node)
 
             if node_ids is not None:
-                node_query = node_query.filter(Node.node_id.in_(node_ids))
+                node_query = node_query.filter(self.Node.node_id.in_(node_ids))
 
             if node_attr_filter is not None:
                 node_query = node_query.filter(
-                    *[getattr(Node, k) == v for k, v in node_attr_filter.items()],
+                    *[getattr(self.Node, k) == v for k, v in node_attr_filter.items()],
+                )
+                node_ids = [i for (i,) in node_query.with_entities(self.Node.node_id).all()]
+
+            if not edge_filtered and node_ids is not None:
+                # TODO could this be done at the individual node filtering levels?
+                edge_query = edge_query.filter(
+                    self.Edge.source_id.in_(node_ids),
+                    self.Edge.target_id.in_(node_ids),
                 )
 
             if node_feature_keys is not None:
@@ -199,7 +220,7 @@ class SQLGraph(BaseGraph):
 
                 node_query = node_query.options(
                     load_only(
-                        *[getattr(Node, key) for key in node_feature_keys],
+                        *[getattr(self.Node, key) for key in node_feature_keys],
                     ),
                 )
 
@@ -213,7 +234,7 @@ class SQLGraph(BaseGraph):
 
                 edge_query = edge_query.options(
                     load_only(
-                        *[getattr(Edge, key) for key in edge_feature_keys],
+                        *[getattr(self.Edge, key) for key in edge_feature_keys],
                     ),
                 )
 
@@ -244,7 +265,7 @@ class SQLGraph(BaseGraph):
 
     def time_points(self) -> list[int]:
         with Session(self._engine) as session:
-            return [t for (t,) in session.query(Node.t).distinct().all()]
+            return [t for (t,) in session.query(self.Node.t).distinct().all()]
 
     def _reorder_by_indices(
         self,
@@ -268,18 +289,18 @@ class SQLGraph(BaseGraph):
             feature_keys = [feature_keys]
 
         with Session(self._engine) as session:
-            query = session.query(Node)
+            query = session.query(self.Node)
 
             if node_ids is not None:
                 if hasattr(node_ids, "tolist"):
                     node_ids = node_ids.tolist()
 
-                query = query.filter(Node.node_id.in_(node_ids))
+                query = query.filter(self.Node.node_id.in_(node_ids))
 
             if feature_keys is not None:
                 query = query.options(
                     load_only(
-                        *[getattr(Node, key) for key in feature_keys],
+                        *[getattr(self.Node, key) for key in feature_keys],
                     ),
                 )
 
@@ -291,7 +312,7 @@ class SQLGraph(BaseGraph):
         )
 
         # match node_ids ordering
-        if node_ids is not None:
+        if node_ids is not None and not nodes_df.is_empty():
             nodes_df = self._reorder_by_indices(nodes_df, node_ids, "node_id")
 
         # indices are included by default and must be removed
@@ -311,18 +332,18 @@ class SQLGraph(BaseGraph):
             feature_keys = [feature_keys]
 
         with Session(self._engine) as session:
-            query = session.query(Edge)
+            query = session.query(self.Edge)
 
             if node_ids is not None:
                 if hasattr(node_ids, "tolist"):
                     node_ids = node_ids.tolist()
 
                 if include_targets:
-                    query = query.filter(Edge.source_id.in_(node_ids))
+                    query = query.filter(self.Edge.source_id.in_(node_ids))
                 else:
                     query = query.filter(
-                        Edge.source_id.in_(node_ids),
-                        Edge.target_id.in_(node_ids),
+                        self.Edge.source_id.in_(node_ids),
+                        self.Edge.target_id.in_(node_ids),
                     )
 
             if feature_keys is not None:
@@ -336,7 +357,7 @@ class SQLGraph(BaseGraph):
 
                 query = query.options(
                     load_only(
-                        *[getattr(Edge, key) for key in feature_keys],
+                        *[getattr(self.Edge, key) for key in feature_keys],
                     ),
                 )
 
@@ -349,13 +370,15 @@ class SQLGraph(BaseGraph):
 
     @property
     def node_features_keys(self) -> list[str]:
-        keys = list(Node.__table__.columns.keys())
+        keys = list(self.Node.__table__.columns.keys())
         keys.remove(DEFAULT_ATTR_KEYS.NODE_ID)
         return keys
 
     @property
     def edge_features_keys(self) -> list[str]:
-        keys = list(Edge.__table__.columns.keys())
+        keys = list(self.Edge.__table__.columns.keys())
+        for k in [DEFAULT_ATTR_KEYS.EDGE_ID, DEFAULT_ATTR_KEYS.EDGE_SOURCE, DEFAULT_ATTR_KEYS.EDGE_TARGET]:
+            keys.remove(k)
         return keys
 
     def _sqlalchemy_type_inference(self, default_value: Any) -> TypeEngine:
@@ -385,7 +408,7 @@ class SQLGraph(BaseGraph):
 
     def _add_new_column(
         self,
-        table_class: type[Base],
+        table_class: type[DeclarativeBase],
         key: str,
         default_value: Any,
     ) -> None:
@@ -414,27 +437,27 @@ class SQLGraph(BaseGraph):
         if key in self.node_features_keys:
             raise ValueError(f"Node feature key {key} already exists")
 
-        self._add_new_column(Node, key, default_value)
+        self._add_new_column(self.Node, key, default_value)
 
     def add_edge_feature_key(self, key: str, default_value: Any) -> None:
         if key in self.edge_features_keys:
             raise ValueError(f"Edge feature key {key} already exists")
 
-        self._add_new_column(Edge, key, default_value)
+        self._add_new_column(self.Edge, key, default_value)
 
     @property
     def num_edges(self) -> int:
         with Session(self._engine) as session:
-            return int(session.query(Edge).count())
+            return int(session.query(self.Edge).count())
 
     @property
     def num_nodes(self) -> int:
         with Session(self._engine) as session:
-            return int(session.query(Node).count())
+            return int(session.query(self.Node).count())
 
     def _update_table(
         self,
-        table_class: type[Base],
+        table_class: type[DeclarativeBase],
         ids: Sequence[int],
         id_key: str,
         attributes: dict[str, Any],
@@ -500,7 +523,7 @@ class SQLGraph(BaseGraph):
         if "t" in attributes:
             raise ValueError("Node attribute 't' cannot be updated.")
 
-        self._update_table(Node, node_ids, DEFAULT_ATTR_KEYS.NODE_ID, attributes)
+        self._update_table(self.Node, node_ids, DEFAULT_ATTR_KEYS.NODE_ID, attributes)
 
     def update_edge_features(
         self,
@@ -508,4 +531,4 @@ class SQLGraph(BaseGraph):
         edge_ids: ArrayLike,
         attributes: dict[str, Any],
     ) -> None:
-        self._update_table(Edge, edge_ids, DEFAULT_ATTR_KEYS.EDGE_ID, attributes)
+        self._update_table(self.Edge, edge_ids, DEFAULT_ATTR_KEYS.EDGE_ID, attributes)

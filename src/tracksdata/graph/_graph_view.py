@@ -1,7 +1,6 @@
 from collections.abc import Sequence
 from typing import Any
 
-import numpy as np
 import polars as pl
 import rustworkx as rx
 
@@ -67,7 +66,7 @@ class GraphView(RustWorkXGraph):
             raise ValueError("Cannot sync a graph view that is not synced\nRe-create the graph view.")
         self._sync = value
 
-    def node_ids(self) -> np.ndarray:
+    def node_ids(self) -> list[int]:
         indices = self.rx_graph.node_indices()
         return map_ids(self._node_map_to_root, indices)
 
@@ -81,7 +80,7 @@ class GraphView(RustWorkXGraph):
         edge_feature_keys: Sequence[str] | str | None = None,
     ) -> "GraphView":
         subgraph = super().subgraph(
-            node_ids=node_ids,
+            node_ids=map_ids(self._node_map_from_root, node_ids),
             node_attr_filter=node_attr_filter,
             edge_attr_filter=edge_attr_filter,
             node_feature_keys=node_feature_keys,
@@ -154,6 +153,7 @@ class GraphView(RustWorkXGraph):
             attributes=attributes,
             validate_keys=validate_keys,
         )
+        attributes[DEFAULT_ATTR_KEYS.EDGE_ID] = parent_edge_id
 
         if self.sync:
             # it does not set the EDGE_ID as attribute as the super().add_edge
@@ -170,7 +170,7 @@ class GraphView(RustWorkXGraph):
     def filter_nodes_by_attribute(
         self,
         attributes: dict[str, Any],
-    ) -> np.ndarray:
+    ) -> list[int]:
         node_ids = super().filter_nodes_by_attribute(
             attributes=attributes,
         )
