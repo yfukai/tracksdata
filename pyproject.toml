@@ -33,6 +33,7 @@ dependencies = [
   "rustworkx @ git+https://github.com/qiskit/rustworkx.git@ac1082ca9d1774e6e9a91436a15a201b0c7baffd",
   "tqdm",
   "polars",
+  "sqlalchemy>=2",
   "rich",
   "numba",
   "imagecodecs",
