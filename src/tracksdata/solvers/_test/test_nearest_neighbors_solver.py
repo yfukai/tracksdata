@@ -27,7 +27,7 @@ def test_nearest_neighbors_solver_init_with_attr_expr() -> None:
     weight_expr = AttrExpr("weight") * 2
     solver = NearestNeighborsSolver(edge_weight=weight_expr)
 
-    assert solver.edge_weight_expr is weight_expr
+    assert str(solver.edge_weight_expr) == str(weight_expr)
 
 
 def test_nearest_neighbors_solver_solve_empty_graph() -> None:
