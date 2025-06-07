@@ -105,6 +105,15 @@ class ILPSolver(BaseSolver):
         self,
         edges_df: pl.DataFrame,
     ) -> None:
+        # fewer columns are faster to group by
+        edges_df = edges_df.select(
+            [
+                DEFAULT_ATTR_KEYS.EDGE_TARGET,
+                DEFAULT_ATTR_KEYS.EDGE_SOURCE,
+                DEFAULT_ATTR_KEYS.EDGE_ID,
+            ]
+        )
+
         # incoming flow
         for (target_id,), group in edges_df.group_by(DEFAULT_ATTR_KEYS.EDGE_TARGET):
             edge_ids = group[DEFAULT_ATTR_KEYS.EDGE_ID].to_list()
