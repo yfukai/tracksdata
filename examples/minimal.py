@@ -73,7 +73,7 @@ def _minimal_example(show_napari_viewer: bool) -> None:
 @click.option("--profile", is_flag=True, type=bool, default=False)
 def main(profile: bool) -> None:
     if profile:
-        profile_hook(_minimal_example, immediate=True, sort="cumulative", entries=60)(show_napari_viewer=False)
+        profile_hook(_minimal_example, immediate=True, sort="time")(show_napari_viewer=False)
     else:
         _minimal_example(show_napari_viewer=True)
 

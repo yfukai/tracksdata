@@ -32,6 +32,7 @@ class ILPSolver(BaseSolver):
         disappearance_weight: str | ExprInput = 0.0,
         division_weight: str | ExprInput = 0.0,
         output_key: str = DEFAULT_ATTR_KEYS.SOLUTION,
+        num_threads: int = 1,
     ):
         self.edge_weight_expr = AttrExpr(edge_weight)
         self.node_weight_expr = AttrExpr(node_weight)
@@ -39,6 +40,7 @@ class ILPSolver(BaseSolver):
         self.disappearance_weight_expr = AttrExpr(disappearance_weight)
         self.division_weight_expr = AttrExpr(division_weight)
         self.output_key = output_key
+        self.num_threads = num_threads
         self.reset_model()
 
     def reset_model(self) -> None:
@@ -103,6 +105,7 @@ class ILPSolver(BaseSolver):
 
     def _add_constraints(
         self,
+        node_ids: list[int],
         edges_df: pl.DataFrame,
     ) -> None:
         # fewer columns are faster to group by
@@ -114,6 +117,9 @@ class ILPSolver(BaseSolver):
             ]
         )
 
+        unseen_in_nodes = set(node_ids)
+        unseen_out_nodes = unseen_in_nodes.copy()
+
         # incoming flow
         for (target_id,), group in edges_df.group_by(DEFAULT_ATTR_KEYS.EDGE_TARGET):
             edge_ids = group[DEFAULT_ATTR_KEYS.EDGE_ID].to_list()
@@ -121,6 +127,10 @@ class ILPSolver(BaseSolver):
                 self._appear_vars[target_id] + sum(self._edge_vars[edge_id] for edge_id in edge_ids)
                 == self._node_vars[target_id]
             )
+            unseen_in_nodes.remove(target_id)
+
+        for node_id in unseen_in_nodes:
+            self._constraints.add(self._appear_vars[node_id] == self._node_vars[node_id])
 
         # outgoing flow
         for (source_id,), group in edges_df.group_by(DEFAULT_ATTR_KEYS.EDGE_SOURCE):
@@ -128,6 +138,12 @@ class ILPSolver(BaseSolver):
             self._constraints.add(
                 self._disappear_vars[source_id] + sum(self._edge_vars[edge_id] for edge_id in edge_ids)
                 == self._node_vars[source_id] + self._division_vars[source_id]
+            )
+            unseen_out_nodes.remove(source_id)
+
+        for node_id in unseen_out_nodes:
+            self._constraints.add(
+                self._disappear_vars[node_id] == self._node_vars[node_id] + self._division_vars[node_id]
             )
 
         # existing division from nodes
@@ -143,11 +159,12 @@ class ILPSolver(BaseSolver):
             default_variable_type=VariableType.Binary,
             preference=Preference.Scip,
         )
+        solver.set_num_threads(self.num_threads)
         solver.set_objective(self._objective)
         solver.set_constraints(self._constraints)
         solution = solver.solve()
 
-        if np.asarray(solution, dtype=bool).all():
+        if not np.asarray(solution, dtype=bool).any():
             LOG.warning("Trivial solution found with all variables set to 0!")
             return solution
 
@@ -174,7 +191,7 @@ class ILPSolver(BaseSolver):
         )
 
         self._add_objective_and_variables(nodes_df, edges_df)
-        self._add_constraints(edges_df)
+        self._add_constraints(nodes_df[DEFAULT_ATTR_KEYS.NODE_ID].to_list(), edges_df)
 
         solution = self._solve()
 
