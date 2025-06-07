@@ -41,7 +41,6 @@ def to_napari_format(
     solution_graph = graph.subgraph(
         edge_attr_filter={solution_key: True},
     )
-    solution_graph.sync = False
 
     node_ids, track_ids, tracks_graph = graph_track_ids(solution_graph.rx_graph)
 

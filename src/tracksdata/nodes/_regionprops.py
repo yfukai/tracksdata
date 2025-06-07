@@ -11,6 +11,7 @@ from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.graph._base_graph import BaseGraph
 from tracksdata.nodes._base_nodes import BaseNodesOperator
 from tracksdata.nodes._mask import Mask
+from tracksdata.utils._logging import LOG
 
 
 class RegionPropsNodes(BaseNodesOperator):
@@ -112,14 +113,17 @@ class RegionPropsNodes(BaseNodesOperator):
         else:
             raise ValueError(f"`labels` must be 2D or 3D, got {labels.ndim} dimensions.")
 
+        if DEFAULT_ATTR_KEYS.MASK not in graph.node_features_keys:
+            graph.add_node_feature_key(DEFAULT_ATTR_KEYS.MASK, None)
+
         # initialize the feature keys
-        for attr_key in [DEFAULT_ATTR_KEYS.MASK, *axis_names] + [
-            p.__name__ if callable(p) else p for p in self._extra_properties
-        ]:
+        for attr_key in axis_names + [p.__name__ if callable(p) else p for p in self._extra_properties]:
             if attr_key not in graph.node_features_keys:
-                graph.add_node_feature_key(attr_key, None)
+                graph.add_node_feature_key(attr_key, -1.0)
 
         labels = np.asarray(labels)
+
+        nodes_data = []
 
         for obj in regionprops(
             labels,
@@ -137,4 +141,10 @@ class RegionPropsNodes(BaseNodesOperator):
             attributes[DEFAULT_ATTR_KEYS.MASK] = Mask(obj.image, obj.bbox)
             attributes[DEFAULT_ATTR_KEYS.T] = t
 
-            graph.add_node(attributes, validate_keys=False)
+            nodes_data.append(attributes)
+            obj._cache.clear()  # clearing to reduce memory footprint
+
+        if len(nodes_data) > 0:
+            graph.bulk_add_nodes(nodes_data)
+        else:
+            LOG.warning("No valid nodes found for time point %d", t)

@@ -1,15 +1,32 @@
 import polars as pl
 import pytest
+import sqlalchemy as sa
 
 from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.graph._base_graph import BaseGraph
 from tracksdata.graph._rustworkx_graph import RustWorkXGraph
+from tracksdata.graph._sql_graph import SQLGraph
 
 
-@pytest.fixture(params=[RustWorkXGraph])
+@pytest.fixture(params=[RustWorkXGraph, SQLGraph])
 def graph_backend(request) -> BaseGraph:
     """Fixture that provides all implementations of BaseGraph."""
-    return request.param()
+    graph_class: BaseGraph = request.param
+
+    if graph_class == SQLGraph:
+        db_name = ":memory:"
+        engine = sa.create_engine(sa.engine.URL.create("sqlite", database=db_name))
+        # clear database
+        with engine.connect() as conn:
+            conn.execute(sa.text("DROP TABLE IF EXISTS nodes"))
+            conn.execute(sa.text("DROP TABLE IF EXISTS edges"))
+            conn.commit()
+        return graph_class(
+            drivername="sqlite",
+            database=db_name,
+        )
+    else:
+        return graph_class()
 
 
 def test_already_existing_keys(graph_backend: BaseGraph) -> None:
@@ -34,10 +51,7 @@ def testing_empty_graph(graph_backend: BaseGraph) -> None:
     assert graph_backend.num_nodes == 0
     assert graph_backend.num_edges == 0
 
-    with pytest.raises(ValueError):
-        graph_backend.node_features()
-
-    # graph could be disconnected so this should not raise an error
+    assert graph_backend.node_features().is_empty()
     assert graph_backend.edge_features().is_empty()
 
 
@@ -80,6 +94,7 @@ def test_add_edge(graph_backend: BaseGraph) -> None:
     # Add two nodes first
     node1 = graph_backend.add_node({"t": 0, "x": 1.0})
     node2 = graph_backend.add_node({"t": 1, "x": 2.0})
+    node3 = graph_backend.add_node({"t": 2, "x": 1.0})
 
     # Add edge feature key
     graph_backend.add_edge_feature_key("weight", 0.0)
@@ -96,10 +111,12 @@ def test_add_edge(graph_backend: BaseGraph) -> None:
 
     # testing adding new add attribute
     graph_backend.add_edge_feature_key("new_feature", 0.0)
-    edge_id = graph_backend.add_edge(node1, node2, attributes={"new_feature": 1.0, "weight": 0.1})
+    edge_id = graph_backend.add_edge(node2, node3, attributes={"new_feature": 1.0, "weight": 0.1})
     assert isinstance(edge_id, int)
 
     # testing default value was assigned correctly
+    # at some point there was a bug and this was needed
+    # df = graph_backend.edge_features(node_ids=[node1, node2, node3])
     df = graph_backend.edge_features()
     assert df["new_feature"].to_list() == [0.0, 1.0]
     assert df["weight"].to_list() == [0.5, 0.1]

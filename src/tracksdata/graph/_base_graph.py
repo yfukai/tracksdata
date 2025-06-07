@@ -2,7 +2,6 @@ import abc
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any
 
-import numpy as np
 import polars as pl
 from numpy.typing import ArrayLike
 
@@ -45,8 +44,7 @@ class BaseGraph(abc.ABC):
             if ref_key not in attributes.keys():
                 raise ValueError(
                     f"Attribute '{ref_key}' not found in attributes: "
-                    f"'{attributes.keys()}'\nAll '{reference_keys}' "
-                    "attributes must be provided."
+                    f"'{attributes.keys()}'\nRequested keys: '{reference_keys}'"
                 )
 
     @abc.abstractmethod
@@ -78,6 +76,24 @@ class BaseGraph(abc.ABC):
             The ID of the added node.
         """
 
+    def bulk_add_nodes(
+        self,
+        nodes: list[dict[str, Any]],
+    ) -> None:
+        """
+        Faster method to add multiple nodes to the graph with less overhead and fewer checks.
+
+        Parameters
+        ----------
+        nodes : list[dict[str, Any]]
+            The data of the nodes to be added.
+            The keys of the data will be used as the attributes of the nodes.
+            Must have "t" key.
+        """
+        # this method benefits the SQLGraph backend
+        for node in nodes:
+            self.add_node(node, validate_keys=False)
+
     @abc.abstractmethod
     def add_edge(
         self,
@@ -108,11 +124,36 @@ class BaseGraph(abc.ABC):
             The ID of the added edge.
         """
 
+    def bulk_add_edges(
+        self,
+        edges: list[dict[str, Any]],
+    ) -> None:
+        """
+        Faster method to add multiple edges to the graph with less overhead and fewer checks.
+
+        Parameters
+        ----------
+        edges : list[dict[str, Any]]
+            The data of the edges to be added.
+            The keys of the data will be used as the attributes of the edges.
+            Must have "source_id" and "target_id" keys.
+            For example:
+            >>> `graph.bulk_add_edges([dict(source_id=0, target_id=1, weight=1.0)])`
+        """
+        # this method benefits the SQLGraph backend
+        for edge in edges:
+            self.add_edge(
+                edge.pop("source_id"),
+                edge.pop("target_id"),
+                edge,
+                validate_keys=False,
+            )
+
     @abc.abstractmethod
     def filter_nodes_by_attribute(
         self,
         attributes: dict[str, Any],
-    ) -> np.ndarray:
+    ) -> list[int]:
         """
         Filter nodes by attributes.
 
@@ -124,9 +165,24 @@ class BaseGraph(abc.ABC):
 
         Returns
         -------
-        np.ndarray
+        list[int]
             The IDs of the filtered nodes.
         """
+
+    def _validate_subgraph_args(
+        self,
+        node_ids: Sequence[int] | None = None,
+        node_attr_filter: dict[str, Any] | None = None,
+        edge_attr_filter: dict[str, Any] | None = None,
+    ) -> None:
+        if node_ids is not None and (node_attr_filter is not None or edge_attr_filter is not None):
+            raise ValueError("Node IDs and attributes' filters cannot be used together")
+
+        if node_attr_filter is not None and edge_attr_filter is not None:
+            raise ValueError("Node attributes' filters and edge attributes' filters cannot be used together")
+
+        if node_ids is None and node_attr_filter is None and edge_attr_filter is None:
+            raise ValueError("Either node IDs or one of the attributes' filters must be provided")
 
     @abc.abstractmethod
     def subgraph(

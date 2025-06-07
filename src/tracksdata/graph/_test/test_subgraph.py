@@ -1,17 +1,12 @@
+# flake8: noqa: F811
 from collections.abc import Callable
 
 import polars as pl
 import pytest
+from test_graph_backends import graph_backend  # noqa: F401
 
 from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.graph._base_graph import BaseGraph
-from tracksdata.graph._rustworkx_graph import RustWorkXGraph
-
-
-@pytest.fixture(params=[RustWorkXGraph])
-def graph_backend(request) -> BaseGraph:
-    """Fixture that provides all implementations of BaseGraph."""
-    return request.param()
 
 
 def parametrize_subgraph_tests(func: Callable[..., None]) -> Callable[..., None]:

@@ -104,22 +104,20 @@ class DistanceEdges(BaseEdgesOperator):
         # converting back to arbitrary indexing
         prev_neigh_ids[is_valid] = prev_node_ids[prev_neigh_ids[is_valid]]
 
-        count = 0
+        edges_data = []
         for cur_id, neigh_ids, neigh_dist, neigh_valid in zip(
             cur_node_ids, prev_neigh_ids, distances, is_valid, strict=True
         ):
             for neigh_id, dist in zip(neigh_ids[neigh_valid], neigh_dist[neigh_valid], strict=True):
-                graph.add_edge(
-                    neigh_id,
-                    cur_id,
-                    attributes={self.output_key: dist},
-                    validate_keys=False,
+                edges_data.append(
+                    {
+                        "source_id": neigh_id,
+                        "target_id": cur_id,
+                        self.output_key: dist,
+                    }
                 )
-                count += 1
 
-        if count == 0:
-            LOG.warning(
-                "No valid edges found for the pair of time point (%d, %d)",
-                t,
-                t - 1,
-            )
+        if len(edges_data) > 0:
+            graph.bulk_add_edges(edges_data)
+        else:
+            LOG.warning("No valid edges found for the pair of time point (%d, %d)", t, t - 1)

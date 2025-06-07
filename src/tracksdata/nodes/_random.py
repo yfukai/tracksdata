@@ -11,14 +11,17 @@ class RandomNodes(BaseNodesOperator):
     def __init__(
         self,
         n_time_points: int,
-        n_nodes: tuple[int, int],
+        n_nodes_per_tp: tuple[int, int],
         n_dim: Literal[2, 3] = 3,
         random_state: int = 0,
         show_progress: bool = False,
     ):
         super().__init__(show_progress=show_progress)
+        if isinstance(n_nodes_per_tp, int):
+            raise ValueError("`n_nodes_per_tp` must be a tuple of two integers")
+
         self.n_time_points = n_time_points
-        self.n_nodes = n_nodes
+        self.n_nodes = n_nodes_per_tp
 
         if n_dim == 2:
             self.spatial_cols = ["x", "y"]
@@ -91,9 +94,4 @@ class RandomNodes(BaseNodesOperator):
             size=(n_nodes_at_t, len(self.spatial_cols)),
         )
 
-        for c in coords:
-            graph.add_node(
-                {"t": t, **dict(zip(self.spatial_cols, c, strict=True))},
-                **kwargs,
-                validate_keys=False,
-            )
+        graph.bulk_add_nodes([{"t": t, **dict(zip(self.spatial_cols, c, strict=True)), **kwargs} for c in coords])

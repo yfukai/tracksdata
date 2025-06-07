@@ -7,8 +7,8 @@ class DefaultAttrKeys:
 
     EDGE_ID = "edge_id"
     EDGE_WEIGHT = "weight"
-    EDGE_SOURCE = "source"
-    EDGE_TARGET = "target"
+    EDGE_SOURCE = "source_id"
+    EDGE_TARGET = "target_id"
 
 
 DEFAULT_ATTR_KEYS = DefaultAttrKeys()
