@@ -1,9 +1,9 @@
 import numpy as np
 import pytest
 
-from tracksdata.array._graph_array import GraphArrayView
+from tracksdata.array import GraphArrayView
 from tracksdata.constants import DEFAULT_ATTR_KEYS
-from tracksdata.graph._rustworkx_graph import RustWorkXGraph
+from tracksdata.graph import RustWorkXGraph
 from tracksdata.nodes._mask import Mask
 
 # NOTE: this could be generic test for all array backends

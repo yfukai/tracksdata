@@ -3,9 +3,8 @@ import pytest
 import sqlalchemy as sa
 
 from tracksdata.constants import DEFAULT_ATTR_KEYS
+from tracksdata.graph import RustWorkXGraph, SQLGraph
 from tracksdata.graph._base_graph import BaseGraph
-from tracksdata.graph._rustworkx_graph import RustWorkXGraph
-from tracksdata.graph._sql_graph import SQLGraph
 
 
 @pytest.fixture(params=[RustWorkXGraph, SQLGraph])

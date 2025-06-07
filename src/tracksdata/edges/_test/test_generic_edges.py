@@ -1,8 +1,8 @@
 import numpy as np
 
 from tracksdata.constants import DEFAULT_ATTR_KEYS
-from tracksdata.edges._generic_edges import GenericFunctionEdgeWeights
-from tracksdata.graph._rustworkx_graph import RustWorkXGraph
+from tracksdata.edges import GenericFunctionEdgeWeights
+from tracksdata.graph import RustWorkXGraph
 
 
 def _scalar_distance_func(source_val: float, target_val: float) -> float:

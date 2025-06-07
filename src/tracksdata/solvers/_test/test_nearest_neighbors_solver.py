@@ -1,7 +1,7 @@
 from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.expr import AttrExpr
-from tracksdata.graph._rustworkx_graph import RustWorkXGraph
-from tracksdata.solvers._nearest_neighbors_solver import NearestNeighborsSolver
+from tracksdata.graph import RustWorkXGraph
+from tracksdata.solvers import NearestNeighborsSolver
 
 
 def test_nearest_neighbors_solver_init_default() -> None:

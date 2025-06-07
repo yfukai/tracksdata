@@ -1,6 +1,6 @@
 from tracksdata.constants import DEFAULT_ATTR_KEYS
-from tracksdata.edges._distance_edges import DistanceEdges
-from tracksdata.graph._rustworkx_graph import RustWorkXGraph
+from tracksdata.edges import DistanceEdges
+from tracksdata.graph import RustWorkXGraph
 
 
 def test_distance_edges_init_default_params() -> None:
