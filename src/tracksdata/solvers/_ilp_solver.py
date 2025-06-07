@@ -1,10 +1,21 @@
+import numpy as np
 import polars as pl
-from ilpy import Constraints, Objective, Preference, Solver, Variable, VariableType
+from ilpy import (
+    Constraints,
+    Objective,
+    Preference,
+    Solution,
+    Solver,
+    SolverStatus,
+    Variable,
+    VariableType,
+)
 
 from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.expr import AttrExpr, ExprInput
 from tracksdata.graph._base_graph import BaseGraph
 from tracksdata.solvers._base_solver import BaseSolver
+from tracksdata.utils._logging import LOG
 
 
 class ILPSolver(BaseSolver):
@@ -74,6 +85,10 @@ class ILPSolver(BaseSolver):
         ):
             weights = self._evaluate_expr(expr, nodes_df)
 
+            # TODO: setup some kind of filter to update weights, for example:
+            # - starting and ending frames
+            # - closeness to the image boundaries
+
             for node_id, weight in zip(node_ids, weights, strict=True):
                 variables[node_id] = Variable(f"{name}_{node_id}", index=self._count)
                 self._objective.set_coefficient(self._count, weight)
@@ -110,6 +125,28 @@ class ILPSolver(BaseSolver):
         for node_id, node_var in self._node_vars.items():
             self._constraints.add(node_var >= self._division_vars[node_id])
 
+    def _solve(self) -> Solution:
+        if self._count == 0:
+            raise ValueError("Empty ILPSolver model, there is nothing to solve.")
+
+        solver = Solver(
+            num_variables=self._count,
+            default_variable_type=VariableType.Binary,
+            preference=Preference.Scip,
+        )
+        solver.set_objective(self._objective)
+        solver.set_constraints(self._constraints)
+        solution = solver.solve()
+
+        if np.asarray(solution, dtype=bool).all():
+            LOG.warning("Trivial solution found with all variables set to 0!")
+            return solution
+
+        if solution.status != SolverStatus.OPTIMAL:
+            LOG.warning(f"Solver did not converge to an optimal solution, returned status {solution.status}.")
+
+        return solution
+
     def solve(
         self,
         graph: BaseGraph,
@@ -130,14 +167,7 @@ class ILPSolver(BaseSolver):
         self._add_objective_and_variables(nodes_df, edges_df)
         self._add_constraints(edges_df)
 
-        solver = Solver(
-            num_variables=self._count,
-            default_variable_type=VariableType.Binary,
-            preference=Preference.Scip,
-        )
-        solver.set_objective(self._objective)
-        solver.set_constraints(self._constraints)
-        solution = solver.solve()
+        solution = self._solve()
 
         selected_nodes = [node_id for node_id, var in self._node_vars.items() if solution[var.index] > 0.5]
 
