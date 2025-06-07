@@ -1,9 +1,9 @@
 import numpy as np
 
 from tracksdata.constants import DEFAULT_ATTR_KEYS
-from tracksdata.edges._iou_edges import IoUEdgeWeights
-from tracksdata.graph._rustworkx_graph import RustWorkXGraph
-from tracksdata.nodes._mask import Mask
+from tracksdata.edges import IoUEdgeWeights
+from tracksdata.graph import RustWorkXGraph
+from tracksdata.nodes import Mask
 
 
 def test_iou_edges_init_default() -> None:

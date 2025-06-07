@@ -4,8 +4,8 @@ import pytest
 
 from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.expr import AttrExpr
-from tracksdata.graph._rustworkx_graph import RustWorkXGraph
-from tracksdata.solvers._ilp_solver import ILPSolver
+from tracksdata.graph import RustWorkXGraph
+from tracksdata.solvers import ILPSolver
 
 
 def test_ilp_solver_init_default() -> None:

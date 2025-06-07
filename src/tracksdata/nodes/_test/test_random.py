@@ -2,8 +2,8 @@ import numpy as np
 import pytest
 
 from tracksdata.constants import DEFAULT_ATTR_KEYS
-from tracksdata.graph._rustworkx_graph import RustWorkXGraph
-from tracksdata.nodes._random import RandomNodes
+from tracksdata.graph import RustWorkXGraph
+from tracksdata.nodes import RandomNodes
 
 
 def test_random_nodes_init_2d() -> None:

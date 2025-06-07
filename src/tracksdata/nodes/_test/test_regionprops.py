@@ -3,9 +3,8 @@ import pytest
 from skimage.measure._regionprops import RegionProperties
 
 from tracksdata.constants import DEFAULT_ATTR_KEYS
-from tracksdata.graph._rustworkx_graph import RustWorkXGraph
-from tracksdata.nodes._mask import Mask
-from tracksdata.nodes._regionprops import RegionPropsNodes
+from tracksdata.graph import RustWorkXGraph
+from tracksdata.nodes import Mask, RegionPropsNodes
 
 
 def test_regionprops_init_default() -> None:
