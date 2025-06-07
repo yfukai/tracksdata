@@ -1,8 +1,10 @@
 import os
 from pathlib import Path
 
+import click
 import napari
 import numpy as np
+from profilehooks import profile as profile_hook
 from tifffile import imread
 
 from tracksdata.edges._distance_edges import DistanceEdges
@@ -11,10 +13,12 @@ from tracksdata.expr import AttrExpr
 from tracksdata.functional._napari import to_napari_format
 from tracksdata.graph._rustworkx_graph import RustWorkXGraph
 from tracksdata.nodes._regionprops import RegionPropsNodes
-from tracksdata.solvers._nearest_neighbors_solver import NearestNeighborsSolver
+
+# from tracksdata.solvers._nearest_neighbors_solver import NearestNeighborsSolver
+from tracksdata.solvers._ilp_solver import ILPSolver
 
 
-def main() -> None:
+def _minimal_example(show_napari_viewer: bool) -> None:
     # load from HeLa
     data_dir = Path(os.environ["CTC_DIR"]) / "training/Fluo-N2DL-HeLa/01_GT/TRA"
     assert data_dir.exists(), f"Data directory {data_dir} does not exist."
@@ -31,9 +35,16 @@ def main() -> None:
 
     dist_weight = 1 / dist_operator.distance_threshold
 
-    solver = NearestNeighborsSolver(
+    # solver = NearestNeighborsSolver(
+    #     edge_weight=-AttrExpr("iou") + AttrExpr("weight") * dist_weight,
+    #     max_children=2,
+    # )
+    solver = ILPSolver(
         edge_weight=-AttrExpr("iou") + AttrExpr("weight") * dist_weight,
-        max_children=2,
+        node_weight=0.0,
+        appearance_weight=10.0,
+        disappearance_weight=10.0,
+        division_weight=1.0,
     )
 
     graph = RustWorkXGraph()
@@ -51,10 +62,20 @@ def main() -> None:
 
     print("Opening napari viewer ...")
 
-    viewer = napari.Viewer()
-    viewer.add_labels(labels)
-    viewer.add_tracks(tracks_df, graph=track_graph)
-    napari.run()
+    if show_napari_viewer:
+        viewer = napari.Viewer()
+        viewer.add_labels(labels)
+        viewer.add_tracks(tracks_df, graph=track_graph)
+        napari.run()
+
+
+@click.command()
+@click.option("--profile", is_flag=True, type=bool, default=False)
+def main(profile: bool) -> None:
+    if profile:
+        profile_hook(_minimal_example, immediate=True, sort="time")(show_napari_viewer=False)
+    else:
+        _minimal_example(show_napari_viewer=True)
 
 
 if __name__ == "__main__":

@@ -310,6 +310,10 @@ class RustWorkXGraph(BaseGraph):
         # Create columns directly instead of building intermediate dictionaries
         columns = {key: [] for key in feature_keys}
 
+        if DEFAULT_ATTR_KEYS.NODE_ID in feature_keys:
+            columns[DEFAULT_ATTR_KEYS.NODE_ID] = np.asarray(node_ids, dtype=int)
+            feature_keys.remove(DEFAULT_ATTR_KEYS.NODE_ID)
+
         # Build columns in a vectorized way
         for node_id in node_ids:
             node_data = rx_graph[node_id]

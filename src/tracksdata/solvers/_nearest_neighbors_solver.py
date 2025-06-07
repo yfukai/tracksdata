@@ -2,7 +2,7 @@ import numpy as np
 from numba import njit, typed
 
 from tracksdata.constants import DEFAULT_ATTR_KEYS
-from tracksdata.expr import AttrExpr
+from tracksdata.expr import AttrExpr, ExprInput
 from tracksdata.graph._base_graph import BaseGraph
 from tracksdata.solvers._base_solver import BaseSolver
 
@@ -68,16 +68,12 @@ class NearestNeighborsSolver(BaseSolver):
     def __init__(
         self,
         max_children: int = 2,
-        edge_weight: str | AttrExpr = DEFAULT_ATTR_KEYS.EDGE_WEIGHT,
+        edge_weight: str | ExprInput = DEFAULT_ATTR_KEYS.EDGE_WEIGHT,
         output_key: str = DEFAULT_ATTR_KEYS.SOLUTION,
     ):
         self.max_children = max_children
         self.solution_key = output_key
-
-        if not isinstance(edge_weight, AttrExpr):
-            self.edge_weight_expr = AttrExpr(edge_weight)
-        else:
-            self.edge_weight_expr = edge_weight
+        self.edge_weight_expr = AttrExpr(edge_weight)
 
     def solve(
         self,
