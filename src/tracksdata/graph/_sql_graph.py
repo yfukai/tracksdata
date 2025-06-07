@@ -50,6 +50,7 @@ class SQLGraph(BaseGraph):
         password: str | None = None,
         host: str | None = None,
         port: int | None = None,
+        overwrite: bool = False,
     ):
         # Create unique classes for this instance
         self._define_schema()
@@ -63,6 +64,10 @@ class SQLGraph(BaseGraph):
             database=database,
         )
         self._engine = sa.create_engine(self._url)
+
+        if overwrite:
+            self.Base.metadata.drop_all(self._engine)
+
         self.Base.metadata.create_all(self._engine)
 
         self._max_id_per_time = {}

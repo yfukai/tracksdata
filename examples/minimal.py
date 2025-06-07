@@ -7,15 +7,12 @@ import numpy as np
 from profilehooks import profile as profile_hook
 from tifffile import imread
 
-from tracksdata.edges._distance_edges import DistanceEdges
-from tracksdata.edges._iou_edges import IoUEdgeWeights
+from tracksdata.edges import DistanceEdges, IoUEdgeWeights
 from tracksdata.expr import AttrExpr
 from tracksdata.functional._napari import to_napari_format
-from tracksdata.graph._rustworkx_graph import RustWorkXGraph
-from tracksdata.nodes._regionprops import RegionPropsNodes
-
-# from tracksdata.solvers._nearest_neighbors_solver import NearestNeighborsSolver
-from tracksdata.solvers._ilp_solver import ILPSolver
+from tracksdata.graph import RustWorkXGraph, SQLGraph  # noqa: F401
+from tracksdata.nodes import RegionPropsNodes
+from tracksdata.solvers import ILPSolver, NearestNeighborsSolver  # noqa: F401
 
 
 def _minimal_example(show_napari_viewer: bool) -> None:
@@ -35,17 +32,17 @@ def _minimal_example(show_napari_viewer: bool) -> None:
 
     dist_weight = 1 / dist_operator.distance_threshold
 
-    # solver = NearestNeighborsSolver(
-    #     edge_weight=-AttrExpr("iou") + AttrExpr("weight") * dist_weight,
-    #     max_children=2,
-    # )
-    solver = ILPSolver(
+    solver = NearestNeighborsSolver(
         edge_weight=-AttrExpr("iou") + AttrExpr("weight") * dist_weight,
-        node_weight=0.0,
-        appearance_weight=10.0,
-        disappearance_weight=10.0,
-        division_weight=1.0,
+        max_children=2,
     )
+    # solver = ILPSolver(
+    #     edge_weight=-AttrExpr("iou") + AttrExpr("weight") * dist_weight,
+    #     node_weight=0.0,
+    #     appearance_weight=10.0,
+    #     disappearance_weight=10.0,
+    #     division_weight=1.0,
+    # )
 
     graph = RustWorkXGraph()
     nodes_operator.add_nodes(graph, labels=labels)
