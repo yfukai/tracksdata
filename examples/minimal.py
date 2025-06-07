@@ -11,7 +11,9 @@ from tracksdata.expr import AttrExpr
 from tracksdata.functional._napari import to_napari_format
 from tracksdata.graph._rustworkx_graph import RustWorkXGraph
 from tracksdata.nodes._regionprops import RegionPropsNodes
-from tracksdata.solvers._nearest_neighbors_solver import NearestNeighborsSolver
+
+# from tracksdata.solvers._nearest_neighbors_solver import NearestNeighborsSolver
+from tracksdata.solvers._ilp_solver import ILPSolver
 
 
 def main() -> None:
@@ -31,9 +33,16 @@ def main() -> None:
 
     dist_weight = 1 / dist_operator.distance_threshold
 
-    solver = NearestNeighborsSolver(
+    # solver = NearestNeighborsSolver(
+    #     edge_weight=-AttrExpr("iou") + AttrExpr("weight") * dist_weight,
+    #     max_children=2,
+    # )
+    solver = ILPSolver(
         edge_weight=-AttrExpr("iou") + AttrExpr("weight") * dist_weight,
-        max_children=2,
+        node_weight=0.0,
+        appearance_weight=10.0,
+        disappearance_weight=10.0,
+        division_weight=1.0,
     )
 
     graph = RustWorkXGraph()
