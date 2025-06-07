@@ -154,15 +154,24 @@ class ILPSolver(BaseSolver):
         if self._count == 0:
             raise ValueError("Empty ILPSolver model, there is nothing to solve.")
 
-        solver = Solver(
-            num_variables=self._count,
-            default_variable_type=VariableType.Binary,
-            preference=Preference.Scip,
-        )
-        solver.set_num_threads(self.num_threads)
-        solver.set_objective(self._objective)
-        solver.set_constraints(self._constraints)
-        solution = solver.solve()
+        solution = None
+        for preference in [Preference.Gurobi, Preference.Scip]:
+            try:
+                solver = Solver(
+                    num_variables=self._count,
+                    default_variable_type=VariableType.Binary,
+                    preference=preference,
+                )
+                solver.set_num_threads(self.num_threads)
+                solver.set_objective(self._objective)
+                solver.set_constraints(self._constraints)
+                solution = solver.solve()
+            except Exception as e:
+                LOG.warning(f"Solver failed with {preference.name}, trying Scip.\nGot error:\n{e}")
+                continue
+
+        if solution is None:
+            raise RuntimeError("Failed to solve the ILP problem with any solver.")
 
         if not np.asarray(solution, dtype=bool).any():
             LOG.warning("Trivial solution found with all variables set to 0!")
