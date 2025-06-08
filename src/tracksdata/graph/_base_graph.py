@@ -1,13 +1,16 @@
 import abc
 from collections.abc import Sequence
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, TypeVar
 
 import polars as pl
 from numpy.typing import ArrayLike
 
 if TYPE_CHECKING:
     from tracksdata.graph._graph_view import GraphView
+
+
+T = TypeVar("T", bound="BaseGraph")
 
 
 class BaseGraph(abc.ABC):
@@ -362,7 +365,7 @@ class BaseGraph(abc.ABC):
         """
 
     @classmethod
-    def from_ctc(cls, data_dir: str | Path, **kwargs) -> "BaseGraph":
+    def from_ctc(cls: type[T], data_dir: str | Path, **kwargs) -> T:
         """
         Create a graph from a CTC data directory.
 
