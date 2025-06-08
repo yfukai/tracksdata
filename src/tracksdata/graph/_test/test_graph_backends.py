@@ -433,7 +433,7 @@ def _download_to(url: str, output_path: Path) -> None:
 def ctc_data_dir(pytestconfig: pytest.Config) -> Path:
     """Fixture to download CTC data."""
 
-    temp_dir = Path(pytestconfig.cache._cachedir)
+    temp_dir = Path(pytestconfig.cache._cachedir) / "donwloads"
     temp_dir.mkdir(parents=True, exist_ok=True)
 
     zip_dir = temp_dir / "Fluo-C2DL-Huh7.zip"
