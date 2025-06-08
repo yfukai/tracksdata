@@ -26,6 +26,7 @@ classifiers = [
   "Programming Language :: Python :: Implementation :: PyPy",
 ]
 dependencies = [
+  "dask",
   "blosc2",
   "numpy > 2",
   "scikit-image >= 0.24.0",

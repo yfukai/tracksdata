@@ -1,5 +1,6 @@
 import abc
 from collections.abc import Sequence
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import polars as pl
@@ -353,3 +354,35 @@ class BaseGraph(abc.ABC):
         attributes : dict[str, Any]
             Attributes to be updated.
         """
+
+    @classmethod
+    def from_ctc(cls, data_dir: str | Path, **kwargs) -> "BaseGraph":
+        """
+        Create a graph from a CTC data directory.
+
+        Parameters
+        ----------
+        data_dir : str | Path
+            The path to the CTC data directory.
+        **kwargs : Any
+            Additional arguments to pass to the graph constructor.
+
+        Examples
+        --------
+        >>> graph = BaseGraph.from_ctc("Fluo-N2DL-HeLa/01_GT/TRA")
+
+        See Also
+        --------
+        tracksdata.io._ctc.load_ctc : Load a CTC ground truth file into a graph.
+        RegionPropsNodes : Operator to create nodes from label images.
+
+        Returns
+        -------
+        BaseGraph
+            A graph with the nodes and edges from the CTC data directory.
+        """
+        from tracksdata.io._ctc import load_ctc
+
+        graph = cls(**kwargs)
+        load_ctc(data_dir, graph)
+        return graph
