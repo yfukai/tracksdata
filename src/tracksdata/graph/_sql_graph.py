@@ -254,13 +254,6 @@ class SQLGraph(BaseGraph):
                 node_ids = np.unique(node_ids).tolist()
                 edge_filtered = True
 
-            if edge_feature_keys is not None:
-                edge_query = edge_query.options(
-                    load_only(
-                        *[getattr(self.Edge, key) for key in edge_feature_keys],
-                    ),
-                )
-
             node_query = session.query(self.Node)
 
             if node_ids is not None:
