@@ -136,11 +136,11 @@ class RustWorkXGraph(BaseGraph):
         else:
             return [node_map[n] for n in rx_graph.filter_nodes(_filter_func)]
 
-    def node_ids(self) -> np.ndarray:
+    def node_ids(self) -> list[int]:
         """
         Get the IDs of all nodes in the graph.
         """
-        return np.asarray(list(self.rx_graph.node_indices()), dtype=int)
+        return [int(i) for i in self.rx_graph.node_indices()]
 
     def subgraph(
         self,

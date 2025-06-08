@@ -186,6 +186,12 @@ class BaseGraph(abc.ABC):
             raise ValueError("Either node IDs or one of the attributes' filters must be provided")
 
     @abc.abstractmethod
+    def node_ids(self) -> list[int]:
+        """
+        Get the IDs of all nodes in the graph.
+        """
+
+    @abc.abstractmethod
     def subgraph(
         self,
         *,
