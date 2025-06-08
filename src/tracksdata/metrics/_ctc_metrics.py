@@ -125,11 +125,6 @@ def compute_ctc_metrics_data(
     return input_tracks, reference_tracks, matching_data
 
 
-def _validate_graph(graph: RustWorkXGraph, track_id_key: str) -> None:
-    if track_id_key not in graph.node_features_keys:
-        graph.assign_track_ids(track_id_key)
-
-
 def evaluate_ctc_metrics(
     input_graph: RustWorkXGraph,
     reference_graph: RustWorkXGraph,
