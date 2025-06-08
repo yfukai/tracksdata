@@ -23,10 +23,6 @@ def test_ctc_metrics(ctc_data_dir: Path) -> None:
         threads=1,
     )
 
-    print(ref_matching_data)
-
-    print("\n\nmineee!")
-
     # they are the same, I know
     # testing both backends at once
     input_graph = RustWorkXGraph.from_ctc(ctc_data_dir)
@@ -39,14 +35,14 @@ def test_ctc_metrics(ctc_data_dir: Path) -> None:
         reference_track_id_key=DEFAULT_ATTR_KEYS.TRACK_ID,
     )
 
-    print(matching_data)
-
     for key, values in matching_data.items():
         expected_values = ref_matching_data[key]
         for t, (v, e) in enumerate(zip(values, expected_values, strict=True)):
             # I'm not really sure why only the ious shape are different
-            print(key, t, len(v), len(e))
             np.testing.assert_array_equal(v, e, err_msg=f"{key=} t={t}")
+
+    # TODO:
+    # - test compressed tracks representation
 
     return
 

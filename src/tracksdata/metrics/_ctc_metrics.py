@@ -34,7 +34,7 @@ def _matching_data(
 
     mapped_ref = []
     mapped_comp = []
-    ious = []
+    # ious = []
 
     for t in set.union(set(groups_by_time["ref"].keys()), set(groups_by_time["comp"].keys())):
         _mapped_ref = []
@@ -43,8 +43,8 @@ def _matching_data(
         _mapped_comp = []
         mapped_comp.append(_mapped_comp)
 
-        _ious = []
-        ious.append(_ious)
+        # _ious = []
+        # ious.append(_ious)
 
         try:
             ref_group = groups_by_time["ref"][t]
@@ -60,14 +60,16 @@ def _matching_data(
                 inter = ref_mask.intersection(comp_mask)
                 ctc_score = inter / ref_mask.size()
                 if ctc_score > 0.5:
-                    iou = inter / (ref_mask.size() + comp_mask.size() - inter)
                     _mapped_ref.append(ref_id)
                     _mapped_comp.append(comp_id)
-                    _ious.append(iou.item())
+
+                    # NOTE: there was something weird with IoU, the length when compared with `ctc_metrics` is always +1
+                    # iou = inter / (ref_mask.size() + comp_mask.size() - inter)
+                    # _ious.append(iou.item())
 
     result["mapped_ref"] = mapped_ref
     result["mapped_comp"] = mapped_comp
-    result["ious"] = ious
+    # result["ious"] = ious
 
     return result
 
