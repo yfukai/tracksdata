@@ -2,7 +2,7 @@ import blosc2
 import numpy as np
 from numpy.typing import NDArray
 
-from tracksdata.functional._iou import fast_iou_with_bbox
+from tracksdata.functional._iou import fast_intersection_with_bbox, fast_iou_with_bbox
 
 
 class Mask:
@@ -49,3 +49,9 @@ class Mask:
 
     def iou(self, other: "Mask") -> float:
         return fast_iou_with_bbox(self._bbox, other._bbox, self._mask, other._mask)
+
+    def intersection(self, other: "Mask") -> float:
+        return fast_intersection_with_bbox(self._bbox, other._bbox, self._mask, other._mask)
+
+    def size(self) -> int:
+        return self._mask.sum()

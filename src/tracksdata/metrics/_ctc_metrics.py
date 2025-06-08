@@ -4,9 +4,79 @@ from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.graph import RustWorkXGraph
 
 
+def _matching_data(
+    input_graph: RustWorkXGraph,
+    reference_graph: RustWorkXGraph,
+    reference_track_id_key: str,
+    input_track_id_key: str,
+) -> dict[str, list[list]]:
+    result = {}
+
+    groups_by_time = {
+        "ref": {},
+        "comp": {},
+    }
+
+    # computing unique labels for each graph
+    for name, graph, track_id_key in [
+        ("ref", reference_graph, reference_track_id_key),
+        ("comp", input_graph, input_track_id_key),
+    ]:
+        nodes_df = graph.node_features(feature_keys=[DEFAULT_ATTR_KEYS.T, track_id_key, DEFAULT_ATTR_KEYS.MASK])
+        labels = {}
+
+        for (t,), group in nodes_df.group_by(DEFAULT_ATTR_KEYS.T):
+            labels[t] = group[track_id_key].to_list()
+            # storing masks of each frame
+            groups_by_time[name][t] = group
+
+        result[f"labels_{name}"] = [labels[t] for t in sorted(labels.keys())]
+
+    mapped_ref = []
+    mapped_comp = []
+    ious = []
+
+    for t in set.union(set(groups_by_time["ref"].keys()), set(groups_by_time["comp"].keys())):
+        _mapped_ref = []
+        mapped_ref.append(_mapped_ref)
+
+        _mapped_comp = []
+        mapped_comp.append(_mapped_comp)
+
+        _ious = []
+        ious.append(_ious)
+
+        try:
+            ref_group = groups_by_time["ref"][t]
+            comp_group = groups_by_time["comp"][t]
+        except KeyError:
+            continue
+
+        for ref_id, ref_mask in zip(ref_group[reference_track_id_key], ref_group[DEFAULT_ATTR_KEYS.MASK], strict=True):
+            for comp_id, comp_mask in zip(
+                comp_group[input_track_id_key], comp_group[DEFAULT_ATTR_KEYS.MASK], strict=True
+            ):
+                # intersection over reference is used to select the matches
+                inter = ref_mask.intersection(comp_mask)
+                ctc_score = inter / ref_mask.size()
+                if ctc_score > 0.5:
+                    iou = inter / (ref_mask.size() + comp_mask.size() - inter)
+                    _mapped_ref.append(ref_id)
+                    _mapped_comp.append(comp_id)
+                    _ious.append(iou.item())
+
+    result["mapped_ref"] = mapped_ref
+    result["mapped_comp"] = mapped_comp
+    result["ious"] = ious
+
+    return result
+
+
 def compute_ctc_metrics_data(
     input_graph: RustWorkXGraph,
     reference_graph: RustWorkXGraph,
+    input_track_id_key: str,
+    reference_track_id_key: str,
 ) -> tuple[np.ndarray, np.ndarray, dict[str, list[list]]]:
     """
     Compute intermediate data required for CTC metrics.
@@ -20,6 +90,10 @@ def compute_ctc_metrics_data(
         Input graph.
     reference_graph : RustWorkXGraph
         Reference graph.
+    input_track_id_key : str
+        Key to obtain the track id from the input graph.
+    reference_track_id_key : str
+        Key to obtain the track id from the reference graph.
 
     Returns
     -------
@@ -40,6 +114,13 @@ def compute_ctc_metrics_data(
     #  - continue here
     #  - compute compressed (n, 4) representation from BaseGraph
     #  - fast matching with IoU functions
+
+    input_tracks = ...
+    reference_tracks = ...
+
+    matching_data = _matching_data(input_graph, reference_graph, input_track_id_key, reference_track_id_key)
+
+    return input_tracks, reference_tracks, matching_data
 
 
 def _validate_graph(graph: RustWorkXGraph, track_id_key: str) -> None:
