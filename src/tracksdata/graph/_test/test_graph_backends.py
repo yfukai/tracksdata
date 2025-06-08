@@ -437,7 +437,7 @@ def ctc_data_dir(pytestconfig: pytest.Config) -> Path:
     temp_dir.mkdir(parents=True, exist_ok=True)
 
     zip_dir = temp_dir / "Fluo-C2DL-Huh7.zip"
-    out_dir = temp_dir / "Fluo-C2DL-Huh7/01_GT/TRA"
+    out_dir = temp_dir / "Fluo-C2DL-Huh7/02_GT/TRA"
     url = "https://data.celltrackingchallenge.net/training-datasets/Fluo-C2DL-Huh7.zip"
 
     if not zip_dir.exists():
