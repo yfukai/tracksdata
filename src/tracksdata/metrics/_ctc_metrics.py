@@ -2,6 +2,7 @@ import numpy as np
 
 from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.graph import RustWorkXGraph
+from tracksdata.utils._logging import LOG
 
 
 def _matching_data(
@@ -177,20 +178,21 @@ def evaluate_ctc_metrics(
     if reference_track_id_key not in reference_graph.node_features_keys:
         reference_graph.assign_track_ids(reference_track_id_key)
 
-    input_tracks, reference_tracks, matching_data = compute_ctc_metrics_data(input_graph, reference_graph)
+    input_tracks, reference_tracks, matching_data = compute_ctc_metrics_data(
+        input_graph, reference_graph, input_track_id_key, reference_track_id_key
+    )
 
     if metrics is None:
         metrics: list[str] = ALL_METRICS.copy()
-        metrics.remove("SEG")
 
     if "SEG" in metrics:
-        raise ValueError("SEG metric is not supported. Please remove it from the `metrics` list.")
+        LOG.warning("IMPORTANT! 'SEG' metric results are based on TRA masks, not the SEG masks.")
 
     results = calculate_metrics(
-        input_tracks,
-        reference_tracks,
-        matching_data,
-        segm={},
+        comp_tracks=input_tracks,
+        ref_tracks=reference_tracks,
+        traj=matching_data,
+        segm=matching_data,
         metrics=metrics,
         is_valid=True,
     )
