@@ -148,3 +148,12 @@ def load_ctc(
 
         for i in range(len(node_ids) - 1):
             graph.add_edge(node_ids[i], node_ids[i + 1], {})
+
+    # is duplicating an attribute that bad?
+    graph.add_node_feature_key(DEFAULT_ATTR_KEYS.TRACK_ID, -1)
+    graph.update_node_features(
+        node_ids=nodes_df[DEFAULT_ATTR_KEYS.NODE_ID].to_list(),
+        attributes={
+            DEFAULT_ATTR_KEYS.TRACK_ID: nodes_df["label"].to_list(),
+        },
+    )

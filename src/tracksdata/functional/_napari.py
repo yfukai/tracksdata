@@ -44,6 +44,7 @@ def to_napari_format(
 
     node_ids, track_ids, tracks_graph = graph_track_ids(solution_graph.rx_graph)
 
+    # FIXME: maybe graph_track_ids should take a `BaseGraph` as input
     node_map = solution_graph._node_map_to_root
     node_ids = [node_map[node_id] for node_id in node_ids.tolist()]
 
