@@ -1,8 +1,7 @@
-import numpy as np
+import polars as pl
 
 from tracksdata.array._graph_array import GraphArrayView
 from tracksdata.constants import DEFAULT_ATTR_KEYS
-from tracksdata.functional._rx import graph_track_ids
 from tracksdata.graph._base_graph import BaseGraph
 
 
@@ -13,7 +12,7 @@ def to_napari_format(
     output_track_id_key: str = DEFAULT_ATTR_KEYS.TRACK_ID,
 ) -> tuple[
     GraphArrayView,
-    np.ndarray,
+    pl.DataFrame,
     dict[int, int],
 ]:
     """
@@ -37,23 +36,16 @@ def to_napari_format(
 
     Returns
     -------
+    tuple[GraphArrayView, pl.DataFrame, dict[int, int]]
+        - array_view: The array view of the solution graph.
+        - tracks_data: The tracks data as a polars DataFrame.
+        - dict_graph: A dictionary of parent -> child relationships.
     """
     solution_graph = graph.subgraph(
         edge_attr_filter={solution_key: True},
     )
 
-    node_ids, track_ids, tracks_graph = graph_track_ids(solution_graph.rx_graph)
-
-    # FIXME: maybe graph_track_ids should take a `BaseGraph` as input
-    node_map = solution_graph._node_map_to_root
-    node_ids = [node_map[node_id] for node_id in node_ids.tolist()]
-
-    solution_graph.add_node_feature_key(output_track_id_key, -1)
-    solution_graph.update_node_features(
-        node_ids=node_ids,
-        attributes={output_track_id_key: track_ids},
-    )
-
+    tracks_graph = solution_graph.assign_track_ids(output_track_id_key)
     dict_graph = {child: parent for parent, child in tracks_graph.edge_list()}
 
     spatial_cols = ["z", "y", "x"][-len(shape) + 1 :]

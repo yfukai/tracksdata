@@ -1,14 +1,12 @@
 import numpy as np
 
 from tracksdata.constants import DEFAULT_ATTR_KEYS
-from tracksdata.functional._rx import graph_track_ids
 from tracksdata.graph import RustWorkXGraph
-from tracksdata.graph._base_graph import BaseGraph
 
 
 def compute_ctc_metrics_data(
-    input_graph: BaseGraph,
-    reference_graph: BaseGraph,
+    input_graph: RustWorkXGraph,
+    reference_graph: RustWorkXGraph,
 ) -> tuple[np.ndarray, np.ndarray, dict[str, list[list]]]:
     """
     Compute intermediate data required for CTC metrics.
@@ -18,9 +16,9 @@ def compute_ctc_metrics_data(
 
     Parameters
     ----------
-    input_graph : BaseGraph
+    input_graph : RustWorkXGraph
         Input graph.
-    reference_graph : BaseGraph
+    reference_graph : RustWorkXGraph
         Reference graph.
 
     Returns
@@ -38,41 +36,20 @@ def compute_ctc_metrics_data(
             - ious: A list of lists containing the intersection over union values
                     between mapped reference and computed masks.
     """
-
-
-def _validate_graph(graph: BaseGraph, track_id_key: str) -> BaseGraph:
-    """
-    Validate the graph.
-    """
-    if track_id_key in graph.node_features_keys:
-        return graph
-
-    if not isinstance(graph, RustWorkXGraph):
-        # could be replaced by having `.rx_graph` on the base class
-        # rx_graph should take attributes so we avoid loading all the features
-        graph = graph.subgraph(node_ids=graph.node_ids(), edge_feature_keys=[])
-
     # TODO:
-    #  - this is pretty bad, we should not be using the rx graph here
-    node_ids, track_ids, tracks_graph = graph_track_ids(graph.rx_graph)
+    #  - continue here
+    #  - compute compressed (n, 4) representation from BaseGraph
+    #  - fast matching with IoU functions
 
-    if hasattr(graph, "_node_map_to_root"):
-        # FIXME: maybe graph_track_ids should take a `BaseGraph` as input
-        node_map = graph._node_map_to_root
-        node_ids = [node_map[node_id] for node_id in node_ids.tolist()]
 
-    graph.add_node_feature_key(track_id_key, -1)
-    graph.update_node_features(
-        node_ids=node_ids,
-        attributes={track_id_key: track_ids},
-    )
-
-    return graph
+def _validate_graph(graph: RustWorkXGraph, track_id_key: str) -> None:
+    if track_id_key not in graph.node_features_keys:
+        graph.assign_track_ids(track_id_key)
 
 
 def evaluate_ctc_metrics(
-    input_graph: BaseGraph,
-    reference_graph: BaseGraph,
+    input_graph: RustWorkXGraph,
+    reference_graph: RustWorkXGraph,
     input_track_id_key: str = DEFAULT_ATTR_KEYS.TRACK_ID,
     reference_track_id_key: str = DEFAULT_ATTR_KEYS.TRACK_ID,
     metrics: list[str] | None = None,
@@ -87,9 +64,9 @@ def evaluate_ctc_metrics(
 
     Parameters
     ----------
-    input_graph : BaseGraph
+    input_graph : RustWorkXGraph
         Input graph.
-    reference_graph : BaseGraph
+    reference_graph : RustWorkXGraph
         Reference graph.
     input_track_id_key : str, optional
         Key to obtain the track id from the input graph.
@@ -116,8 +93,11 @@ def evaluate_ctc_metrics(
             "`py-ctcmetrics` is required to evaluate CTC metrics.\nPlease install it with `pip install py-ctcmetrics`."
         ) from e
 
-    input_graph = _validate_graph(input_graph, input_track_id_key)
-    reference_graph = _validate_graph(reference_graph, reference_track_id_key)
+    if input_track_id_key not in input_graph.node_features_keys:
+        input_graph.assign_track_ids(input_track_id_key)
+
+    if reference_track_id_key not in reference_graph.node_features_keys:
+        reference_graph.assign_track_ids(reference_track_id_key)
 
     input_tracks, reference_tracks, matching_data = compute_ctc_metrics_data(input_graph, reference_graph)
 

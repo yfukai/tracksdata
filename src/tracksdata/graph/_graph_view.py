@@ -5,6 +5,7 @@ import polars as pl
 import rustworkx as rx
 
 from tracksdata.constants import DEFAULT_ATTR_KEYS
+from tracksdata.functional._rx import graph_track_ids
 from tracksdata.graph._base_graph import BaseGraph
 from tracksdata.graph._rustworkx_graph import RustWorkXGraph
 
@@ -247,3 +248,41 @@ class GraphView(RustWorkXGraph):
                 edge_ids=map_ids(self._edge_map_from_root, edge_ids),
                 attributes=attributes,
             )
+
+    def assign_track_ids(
+        self,
+        output_key: str = DEFAULT_ATTR_KEYS.TRACK_ID,
+    ) -> rx.PyDiGraph:
+        """
+        Compute and assign track ids to nodes.
+
+        Parameters
+        ----------
+        output_key : str
+            The key of the output track id attribute.
+
+        Returns
+        -------
+        rx.PyDiGraph
+            A compressed graph (parent -> child) with track ids lineage relationships.
+        """
+        try:
+            node_ids, track_ids, tracks_graph = graph_track_ids(self.rx_graph)
+        except RuntimeError as e:
+            raise RuntimeError(
+                "Are you sure this graph is a valid lineage graph?\n"
+                "This function expects a solved graph.\n"
+                "Often used from `graph.filter_nodes_by_attribute({'solution': True})`"
+            ) from e
+
+        node_ids = map_ids(self._node_map_to_root, node_ids)
+
+        if output_key not in self.node_features_keys:
+            self.add_node_feature_key(output_key, -1)
+
+        self.update_node_features(
+            node_ids=node_ids,
+            attributes={output_key: track_ids},
+        )
+
+        return tracks_graph
