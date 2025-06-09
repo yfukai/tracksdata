@@ -70,7 +70,7 @@ def _matching_data(
                     _mapped_comp.append(comp_id)
 
                     # NOTE: there was something weird with IoU, the length when compared with `ctc_metrics`
-                    #             sometimes it had an extra element
+                    #       sometimes it had an extra element
                     iou = inter / (ref_mask.size() + comp_mask.size() - inter)
                     _ious.append(iou.item())
 
@@ -140,7 +140,7 @@ def evaluate_ctc_metrics(
     If you use this function, please cite the respective papers of each metric, as described in:
     https://github.com/CellTrackingChallenge/py-ctcmetrics?tab=readme-ov-file#acknowledgement-and-citations
 
-    Note that the `SEG` metric is not supported.
+    IMPORTANT: The `SEG` metric is computed from the TRA masks.
 
     Parameters
     ----------
