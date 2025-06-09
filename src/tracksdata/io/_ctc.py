@@ -1,6 +1,7 @@
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import polars as pl
 from dask.array.image import imread as dask_imread
 from tifffile import imread as tiff_imread
@@ -9,6 +10,51 @@ from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.graph._base_graph import BaseGraph
 from tracksdata.nodes import RegionPropsNodes
 from tracksdata.utils._logging import LOG
+
+
+def compressed_tracks_table(graph: BaseGraph) -> np.ndarray:
+    """
+    Compress the tracks of a graph into a (n, 4)-tabular format.
+
+    Where
+    - n is the number of tracks
+    - 4 is the number of columns:
+        - track_id: the track ID
+        - start: the start frame
+        - end: the end frame
+        - parent_track_id: the parent track ID
+
+    Parameters
+    ----------
+    graph : BaseGraph
+        The graph to compress the tracks from.
+
+    Returns
+    -------
+    tracks : np.ndarray
+        The compressed tracks.
+    """
+    nodes_df = graph.node_features(
+        feature_keys=[
+            DEFAULT_ATTR_KEYS.NODE_ID,
+            DEFAULT_ATTR_KEYS.T,
+            DEFAULT_ATTR_KEYS.TRACK_ID,
+        ]
+    )
+
+    table = []
+
+    for (track_id,), group in nodes_df.group_by(DEFAULT_ATTR_KEYS.TRACK_ID):
+        start = group[DEFAULT_ATTR_KEYS.T].min()
+        end = group[DEFAULT_ATTR_KEYS.T].max()
+        table.append([track_id, start, end, 0])
+
+    out_array = np.asarray(table, dtype=int)
+    out_array = out_array[np.argsort(out_array[:, 0])]
+
+    # TODO: include parent id
+
+    return out_array
 
 
 def _load_tracks_file(tracks_file: Path) -> dict[int, int]:

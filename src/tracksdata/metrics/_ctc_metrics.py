@@ -2,6 +2,7 @@ import numpy as np
 
 from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.graph import RustWorkXGraph
+from tracksdata.io._ctc import compressed_tracks_table
 from tracksdata.utils._logging import LOG
 
 
@@ -35,7 +36,7 @@ def _matching_data(
 
     mapped_ref = []
     mapped_comp = []
-    # ious = []
+    ious = []
 
     for t in set.union(set(groups_by_time["ref"].keys()), set(groups_by_time["comp"].keys())):
         _mapped_ref = []
@@ -44,8 +45,8 @@ def _matching_data(
         _mapped_comp = []
         mapped_comp.append(_mapped_comp)
 
-        # _ious = []
-        # ious.append(_ious)
+        _ious = []
+        ious.append(_ious)
 
         try:
             ref_group = groups_by_time["ref"][t]
@@ -65,12 +66,12 @@ def _matching_data(
                     _mapped_comp.append(comp_id)
 
                     # NOTE: there was something weird with IoU, the length when compared with `ctc_metrics` is always +1
-                    # iou = inter / (ref_mask.size() + comp_mask.size() - inter)
-                    # _ious.append(iou.item())
+                    iou = inter / (ref_mask.size() + comp_mask.size() - inter)
+                    _ious.append(iou.item())
 
     result["mapped_ref"] = mapped_ref
     result["mapped_comp"] = mapped_comp
-    # result["ious"] = ious
+    result["ious"] = ious
 
     return result
 
@@ -118,8 +119,8 @@ def compute_ctc_metrics_data(
     #  - compute compressed (n, 4) representation from BaseGraph
     #  - fast matching with IoU functions
 
-    input_tracks = ...
-    reference_tracks = ...
+    input_tracks = compressed_tracks_table(input_graph)
+    reference_tracks = compressed_tracks_table(reference_graph)
 
     matching_data = _matching_data(input_graph, reference_graph, input_track_id_key, reference_track_id_key)
 
@@ -196,5 +197,7 @@ def evaluate_ctc_metrics(
         metrics=metrics,
         is_valid=True,
     )
+
+    results = {k: v.item() if hasattr(v, "item") else v for k, v in results.items()}
 
     return results
