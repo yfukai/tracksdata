@@ -12,6 +12,10 @@ def _matching_data(
     reference_track_id_key: str,
     input_track_id_key: str,
 ) -> dict[str, list[list]]:
+    """
+    Compute matching data for CTC metrics.
+    See `compute_ctc_metrics_data` for more information.
+    """
     result = {}
 
     groups_by_time = {
