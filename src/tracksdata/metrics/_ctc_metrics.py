@@ -69,7 +69,8 @@ def _matching_data(
                     _mapped_ref.append(ref_id)
                     _mapped_comp.append(comp_id)
 
-                    # NOTE: there was something weird with IoU, the length when compared with `ctc_metrics` is always +1
+                    # NOTE: there was something weird with IoU, the length when compared with `ctc_metrics`
+                    #             sometimes it had an extra element
                     iou = inter / (ref_mask.size() + comp_mask.size() - inter)
                     _ious.append(iou.item())
 
