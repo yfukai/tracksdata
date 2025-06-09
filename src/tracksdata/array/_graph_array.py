@@ -5,7 +5,7 @@ from tracksdata.array._base_array import ArrayIndex, BaseReadOnlyArray
 from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.graph._base_graph import BaseGraph
 from tracksdata.nodes._mask import Mask
-from tracksdata.utils._convert import polars_dtype_to_numpy_dtype
+from tracksdata.utils._dtypes import polars_dtype_to_numpy_dtype
 
 
 class GraphArrayView(BaseReadOnlyArray):
