@@ -3,23 +3,23 @@
 # Default target
 help:
 	@echo "Available targets:"
-	@echo "  test        - Run tests without coverage"
-	@echo "  test-cov    - Run tests with coverage and generate HTML report"
+	@echo "  test         - Run tests without coverage"
+	@echo "  test-cov     - Run tests with coverage and generate HTML report"
 	@echo "  test-cov-xml - Run tests with coverage and generate XML report"
-	@echo "  install     - Install dependencies with test extras"
-	@echo "  clean       - Clean coverage files and cache"
+	@echo "  install      - Install dependencies with test extras"
+	@echo "  clean        - Clean coverage files and cache"
 
 # Install dependencies
-install:
+install: install
 	uv sync --extra test
 
 # Run tests without coverage
-test:
+test: install
 	@echo "Running tests..."
 	uv run pytest -v
 
 # Run tests with coverage and generate HTML report
-test-cov:
+test-cov: install
 	@echo "Running tests with coverage..."
 	uv run pytest --cov=src/tracksdata --cov-report=html --cov-report=term-missing -v
 	@echo ""
@@ -27,7 +27,7 @@ test-cov:
 	@echo "You can open it with: open htmlcov/index.html (macOS) or xdg-open htmlcov/index.html (Linux)"
 
 # Run tests with coverage and generate XML report
-test-cov-xml:
+test-cov-xml: install
 	@echo "Running tests with coverage (XML output)..."
 	uv run pytest --cov=src/tracksdata --cov-report=xml --cov-report=term-missing -v
 	@echo ""

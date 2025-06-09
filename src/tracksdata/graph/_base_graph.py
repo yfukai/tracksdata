@@ -1,13 +1,16 @@
 import abc
 from collections.abc import Sequence
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, TypeVar
 
 import polars as pl
 from numpy.typing import ArrayLike
 
 if TYPE_CHECKING:
     from tracksdata.graph._graph_view import GraphView
+
+
+T = TypeVar("T", bound="BaseGraph")
 
 
 class BaseGraph(abc.ABC):
@@ -68,8 +71,6 @@ class BaseGraph(abc.ABC):
             Whether to check if the attributes keys are valid.
             If False, the attributes keys will not be checked,
             useful to speed up the operation when doing bulk insertions.
-
-        TODO: should "t" be it's own parameter?
 
         Returns
         -------
@@ -151,6 +152,52 @@ class BaseGraph(abc.ABC):
             )
 
     @abc.abstractmethod
+    def sucessors(
+        self,
+        node_ids: list[int] | int,
+        feature_keys: Sequence[str] | str | None = None,
+    ) -> dict[int, pl.DataFrame] | pl.DataFrame:
+        """
+        Get the sucessors of a list of nodes.
+
+        Parameters
+        ----------
+        node_ids : list[int] | int
+            The IDs of the nodes to get the sucessors for.
+        feature_keys : Sequence[str] | str | None
+            The feature keys to get.
+            If None, all features are used.
+
+        Returns
+        -------
+        dict[int, pl.DataFrame] | pl.DataFrame
+            The sucessors of the nodes indexed by node ID if a list of nodes is provided.
+        """
+
+    @abc.abstractmethod
+    def predecessors(
+        self,
+        node_ids: list[int] | int,
+        feature_keys: Sequence[str] | str | None = None,
+    ) -> dict[int, pl.DataFrame] | pl.DataFrame:
+        """
+        Get the predecessors of a list of nodes.
+
+        Parameters
+        ----------
+        node_ids : list[int] | int
+            The IDs of the nodes to get the predecessors for.
+        feature_keys : Sequence[str] | str | None
+            The feature keys to get.
+            If None, all features are used.
+
+        Returns
+        -------
+        dict[int, pl.DataFrame] | pl.DataFrame
+            The predecessors of the nodes indexed by node ID if a list of nodes is provided.
+        """
+
+    @abc.abstractmethod
     def filter_nodes_by_attribute(
         self,
         attributes: dict[str, Any],
@@ -184,6 +231,12 @@ class BaseGraph(abc.ABC):
 
         if node_ids is None and node_attr_filter is None and edge_attr_filter is None:
             raise ValueError("Either node IDs or one of the attributes' filters must be provided")
+
+    @abc.abstractmethod
+    def node_ids(self) -> list[int]:
+        """
+        Get the IDs of all nodes in the graph.
+        """
 
     @abc.abstractmethod
     def subgraph(
@@ -356,7 +409,7 @@ class BaseGraph(abc.ABC):
         """
 
     @classmethod
-    def from_ctc(cls, data_dir: str | Path, **kwargs) -> "BaseGraph":
+    def from_ctc(cls: type[T], data_dir: str | Path, **kwargs) -> T:
         """
         Create a graph from a CTC data directory.
 

@@ -79,7 +79,7 @@ def intersection_with_bbox_3d(bbox1: np.ndarray, bbox2: np.ndarray, mask1: np.nd
 
 
 @njit
-def fast_iou_with_bbox(bbox1: np.ndarray, bbox2: np.ndarray, mask1: np.ndarray, mask2: np.ndarray) -> float:
+def fast_intersection_with_bbox(bbox1: np.ndarray, bbox2: np.ndarray, mask1: np.ndarray, mask2: np.ndarray) -> float:
     if not intersects(bbox1, bbox2):
         return 0.0
     if mask1.ndim == 2:
@@ -88,7 +88,13 @@ def fast_iou_with_bbox(bbox1: np.ndarray, bbox2: np.ndarray, mask1: np.ndarray, 
         inter = intersection_with_bbox_3d(bbox1, bbox2, mask1, mask2)
     else:
         raise NotImplementedError("Masks with more than 3 dimensions are not supported")
-    if inter == 0:
+    return inter
+
+
+@njit
+def fast_iou_with_bbox(bbox1: np.ndarray, bbox2: np.ndarray, mask1: np.ndarray, mask2: np.ndarray) -> float:
+    inter = fast_intersection_with_bbox(bbox1, bbox2, mask1, mask2)
+    if inter == 0.0:
         return 0.0
     union = mask1.sum() + mask2.sum() - inter
     return (inter / union).item()

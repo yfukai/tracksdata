@@ -1,4 +1,4 @@
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
@@ -7,6 +7,7 @@ import rustworkx as rx
 from numpy.typing import ArrayLike
 
 from tracksdata.constants import DEFAULT_ATTR_KEYS
+from tracksdata.functional._rx import graph_track_ids
 from tracksdata.graph._base_graph import BaseGraph
 from tracksdata.utils._logging import LOG
 
@@ -95,10 +96,121 @@ class RustWorkXGraph(BaseGraph):
         attributes[DEFAULT_ATTR_KEYS.EDGE_ID] = edge_id
         return edge_id
 
+    def _get_neighbors(
+        self,
+        neighbors_func: Callable[[rx.PyDiGraph, int], rx.NodeIndices],
+        node_ids: list[int] | int,
+        feature_keys: Sequence[str] | str | None = None,
+    ) -> dict[int, pl.DataFrame] | pl.DataFrame:
+        """
+        Get the predecessors or sucessors of a list of nodes.
+        See more information below.
+        """
+        single_node = False
+        if isinstance(node_ids, int):
+            node_ids = [node_ids]
+            single_node = True
+
+        if isinstance(feature_keys, str):
+            feature_keys = [feature_keys]
+
+        rx_graph = self.rx_graph
+        valid_schema = None
+
+        neighbors = {}
+        for node_id in node_ids:
+            neighbors_indices = neighbors_func(rx_graph, node_id)
+            neighbors_data: list[dict[str, Any]] = [rx_graph[i] for i in neighbors_indices]
+
+            if feature_keys is not None:
+                neighbors_data = [
+                    {k: edge_data[k] for k in feature_keys if k != DEFAULT_ATTR_KEYS.NODE_ID}
+                    for edge_data in neighbors_data
+                ]
+
+            if len(neighbors_data) > 0:
+                df = pl.DataFrame(neighbors_data)
+                if feature_keys is None or DEFAULT_ATTR_KEYS.NODE_ID in feature_keys:
+                    df = df.with_columns(
+                        pl.Series(DEFAULT_ATTR_KEYS.NODE_ID, np.asarray(neighbors_indices, dtype=int)),
+                    )
+                neighbors[node_id] = df
+                valid_schema = neighbors[node_id].schema
+
+        if single_node:
+            try:
+                # could not find sucessors for this node
+                return neighbors[node_ids[0]]
+            except KeyError:
+                return pl.DataFrame()
+
+        for node_id in node_ids:
+            if node_id not in neighbors:
+                if valid_schema is None:
+                    neighbors[node_id] = pl.DataFrame()
+                else:
+                    neighbors[node_id] = pl.DataFrame(schema=valid_schema)
+
+        return neighbors
+
+    def sucessors(
+        self,
+        node_ids: list[int] | int,
+        feature_keys: Sequence[str] | str | None = None,
+    ) -> dict[int, pl.DataFrame] | pl.DataFrame:
+        """
+        Get the sucessors of a list of nodes.
+
+        Parameters
+        ----------
+        node_ids : list[int] | int
+            The IDs of the nodes to get the sucessors for.
+        feature_keys : Sequence[str] | str | None
+            The feature keys to get.
+            If None, all features are used.
+
+        Returns
+        -------
+        dict[int, pl.DataFrame] | pl.DataFrame
+            The sucessors of the nodes indexed by node ID if a list of nodes is provided.
+        """
+        return self._get_neighbors(
+            rx.PyDiGraph.successor_indices,
+            node_ids,
+            feature_keys,
+        )
+
+    def predecessors(
+        self,
+        node_ids: list[int] | int,
+        feature_keys: Sequence[str] | str | None = None,
+    ) -> dict[int, pl.DataFrame] | pl.DataFrame:
+        """
+        Get the predecessors of a list of nodes.
+
+        Parameters
+        ----------
+        node_ids : list[int] | int
+            The IDs of the nodes to get the predecessors for.
+        feature_keys : Sequence[str] | str | None
+            The feature keys to get.
+            If None, all features are used.
+
+        Returns
+        -------
+        dict[int, pl.DataFrame] | pl.DataFrame
+            The predecessors of the nodes indexed by node ID if a list of nodes is provided.
+        """
+        return self._get_neighbors(
+            rx.PyDiGraph.predecessor_indices,
+            node_ids,
+            feature_keys,
+        )
+
     def filter_nodes_by_attribute(
         self,
         attributes: dict[str, Any],
-    ) -> np.ndarray:
+    ) -> list[int]:
         """
         Filter nodes by attributes.
 
@@ -110,7 +222,7 @@ class RustWorkXGraph(BaseGraph):
 
         Returns
         -------
-        np.ndarray
+        list[int]
             The IDs of the filtered nodes.
         """
         rx_graph = self.rx_graph
@@ -123,7 +235,6 @@ class RustWorkXGraph(BaseGraph):
 
             # subgraph of selected nodes
             rx_graph, node_map = rx_graph.subgraph_with_nodemap(selected_nodes)
-            # node_map = np.asarray(selected_nodes)
 
         def _filter_func(node_attr: dict[str, Any]) -> bool:
             for key, value in attributes.items():
@@ -136,11 +247,11 @@ class RustWorkXGraph(BaseGraph):
         else:
             return [node_map[n] for n in rx_graph.filter_nodes(_filter_func)]
 
-    def node_ids(self) -> np.ndarray:
+    def node_ids(self) -> list[int]:
         """
         Get the IDs of all nodes in the graph.
         """
-        return np.asarray(list(self.rx_graph.node_indices()), dtype=int)
+        return [int(i) for i in self.rx_graph.node_indices()]
 
     def subgraph(
         self,
@@ -439,7 +550,7 @@ class RustWorkXGraph(BaseGraph):
 
         for key, value in attributes.items():
             if np.isscalar(value):
-                value = np.full(len(node_ids), value)
+                value = [value] * len(node_ids)
 
             for node_id, v in zip(node_ids, value, strict=False):
                 self._graph[node_id][key] = v
@@ -477,3 +588,39 @@ class RustWorkXGraph(BaseGraph):
             edge_attr = edge_map[edge_id][2]  # 0=source, 1=target, 2=attributes
             for key, value in attributes.items():
                 edge_attr[key] = value[i]
+
+    def assign_track_ids(
+        self,
+        output_key: str = DEFAULT_ATTR_KEYS.TRACK_ID,
+    ) -> rx.PyDiGraph:
+        """
+        Compute and assign track ids to nodes.
+
+        Parameters
+        ----------
+        output_key : str
+            The key of the output track id attribute.
+
+        Returns
+        -------
+        rx.PyDiGraph
+            A compressed graph (parent -> child) with track ids lineage relationships.
+        """
+        try:
+            node_ids, track_ids, tracks_graph = graph_track_ids(self.rx_graph)
+        except RuntimeError as e:
+            raise RuntimeError(
+                "Are you sure this graph is a valid lineage graph?\n"
+                "This function expects a solved graph.\n"
+                "Often used from `graph.filter_nodes_by_attribute({'solution': True})`"
+            ) from e
+
+        if output_key not in self.node_features_keys:
+            self.add_node_feature_key(output_key, -1)
+
+        self.update_node_features(
+            node_ids=node_ids,
+            attributes={output_key: track_ids},
+        )
+
+        return tracks_graph

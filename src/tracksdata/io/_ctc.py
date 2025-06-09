@@ -1,6 +1,7 @@
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import polars as pl
 from dask.array.image import imread as dask_imread
 from tifffile import imread as tiff_imread
@@ -9,6 +10,60 @@ from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.graph._base_graph import BaseGraph
 from tracksdata.nodes import RegionPropsNodes
 from tracksdata.utils._logging import LOG
+
+
+def compressed_tracks_table(graph: BaseGraph) -> np.ndarray:
+    """
+    Compress the tracks of a graph into a (n, 4)-tabular format.
+
+    Where
+    - n is the number of tracks
+    - 4 is the number of columns:
+        - track_id: the track ID
+        - start: the start frame
+        - end: the end frame
+        - parent_track_id: the parent track ID
+
+    Parameters
+    ----------
+    graph : BaseGraph
+        The graph to compress the tracks from.
+
+    Returns
+    -------
+    tracks : np.ndarray
+        The compressed tracks.
+    """
+    nodes_df = graph.node_features(
+        feature_keys=[
+            DEFAULT_ATTR_KEYS.NODE_ID,
+            DEFAULT_ATTR_KEYS.T,
+            DEFAULT_ATTR_KEYS.TRACK_ID,
+        ]
+    )
+
+    tracks_data = []
+    node_ids = []
+
+    for (track_id,), group in nodes_df.group_by(DEFAULT_ATTR_KEYS.TRACK_ID):
+        start = group[DEFAULT_ATTR_KEYS.T].min()
+        end = group[DEFAULT_ATTR_KEYS.T].max()
+        tracks_data.append([track_id, start, end, 0])
+        node_ids.append(group.filter(pl.col(DEFAULT_ATTR_KEYS.T) == start)[DEFAULT_ATTR_KEYS.NODE_ID].item())
+
+    parents = graph.predecessors(
+        node_ids,
+        feature_keys=[DEFAULT_ATTR_KEYS.TRACK_ID],
+    )
+    for track_id, node_id in zip(tracks_data, node_ids, strict=True):
+        df = parents[node_id]
+        if len(df) > 0:
+            track_id[3] = df[DEFAULT_ATTR_KEYS.TRACK_ID].item()
+
+    out_array = np.asarray(tracks_data, dtype=int)
+    out_array = out_array[np.argsort(out_array[:, 0])]
+
+    return out_array
 
 
 def _load_tracks_file(tracks_file: Path) -> dict[int, int]:
@@ -138,7 +193,7 @@ def load_ctc(
     else:
         track_id_to_last_node = {}  # for completeness, it won't be used if this is true
 
-    for track_id, group in nodes_by_label:
+    for (track_id,), group in nodes_by_label:
         node_ids = group.sort(DEFAULT_ATTR_KEYS.T)[DEFAULT_ATTR_KEYS.NODE_ID].to_list()
 
         first_node = node_ids[0]
@@ -148,3 +203,12 @@ def load_ctc(
 
         for i in range(len(node_ids) - 1):
             graph.add_edge(node_ids[i], node_ids[i + 1], {})
+
+    # is duplicating an attribute that bad?
+    graph.add_node_feature_key(DEFAULT_ATTR_KEYS.TRACK_ID, -1)
+    graph.update_node_features(
+        node_ids=nodes_df[DEFAULT_ATTR_KEYS.NODE_ID].to_list(),
+        attributes={
+            DEFAULT_ATTR_KEYS.TRACK_ID: nodes_df["label"].to_list(),
+        },
+    )

@@ -1,29 +1,11 @@
-import os
-import zipfile
 from pathlib import Path
 
 import polars as pl
 import pytest
-import requests
 
 from tracksdata.constants import DEFAULT_ATTR_KEYS
-from tracksdata.graph import RustWorkXGraph, SQLGraph
+from tracksdata.graph import SQLGraph
 from tracksdata.graph._base_graph import BaseGraph
-
-
-@pytest.fixture(params=[RustWorkXGraph, SQLGraph])
-def graph_backend(request) -> BaseGraph:
-    """Fixture that provides all implementations of BaseGraph."""
-    graph_class: BaseGraph = request.param
-
-    if graph_class == SQLGraph:
-        return graph_class(
-            drivername="sqlite",
-            database=":memory:",
-            overwrite=True,
-        )
-    else:
-        return graph_class()
 
 
 def test_already_existing_keys(graph_backend: BaseGraph) -> None:
@@ -421,43 +403,6 @@ def test_edge_features_include_targets(graph_backend: BaseGraph) -> None:
     assert single_exclusive_edge_ids == expected_single_exclusive, msg
 
 
-def _download_to(url: str, output_path: Path) -> None:
-    """Download CTC data."""
-    with open(output_path, "wb") as f:
-        response = requests.get(url)
-        response.raise_for_status()
-        f.write(response.content)
-
-
-@pytest.fixture(scope="session")
-def ctc_data_dir(pytestconfig: pytest.Config) -> Path:
-    """Fixture to download CTC data."""
-
-    temp_dir = Path(pytestconfig.cache._cachedir) / "donwloads"
-    temp_dir.mkdir(parents=True, exist_ok=True)
-
-    zip_dir = temp_dir / "Fluo-C2DL-Huh7.zip"
-    out_dir = temp_dir / "Fluo-C2DL-Huh7/02_GT/TRA"
-    url = "https://data.celltrackingchallenge.net/training-datasets/Fluo-C2DL-Huh7.zip"
-
-    if not zip_dir.exists():
-        _download_to(url, zip_dir)
-
-    if not out_dir.exists():
-        try:
-            with zipfile.ZipFile(zip_dir) as zip_file:
-                zip_file.extractall(temp_dir)
-
-        except zipfile.BadZipFile:
-            os.remove(zip_dir)
-            _download_to(url, zip_dir)
-            # retry
-            with zipfile.ZipFile(zip_dir) as zip_file:
-                zip_file.extractall(temp_dir)
-
-    return out_dir
-
-
 def test_from_ctc(
     ctc_data_dir: Path,
     graph_backend: BaseGraph,
@@ -474,3 +419,234 @@ def test_from_ctc(
 
     assert graph.num_nodes > 0
     assert graph.num_edges > 0
+
+
+def test_sucessors(graph_backend: BaseGraph) -> None:
+    """Test getting successors of nodes."""
+    # Add feature keys
+    graph_backend.add_node_feature_key("x", 0.0)
+    graph_backend.add_node_feature_key("y", 0.0)
+    graph_backend.add_edge_feature_key("weight", 0.0)
+
+    # Create a simple graph structure: node0 -> node1 -> node2
+    #                                      \-> node3
+    node0 = graph_backend.add_node({"t": 0, "x": 0.0, "y": 0.0})
+    node1 = graph_backend.add_node({"t": 1, "x": 1.0, "y": 1.0})
+    node2 = graph_backend.add_node({"t": 2, "x": 2.0, "y": 2.0})
+    node3 = graph_backend.add_node({"t": 2, "x": 3.0, "y": 3.0})
+
+    # Add edges
+    graph_backend.add_edge(node0, node1, {"weight": 0.5})  # node0 -> node1
+    graph_backend.add_edge(node0, node3, {"weight": 0.7})  # node0 -> node3
+    graph_backend.add_edge(node1, node2, {"weight": 0.3})  # node1 -> node2
+
+    # Test successors of node0 (should return node1 and node3)
+    successors_df = graph_backend.sucessors(node0)
+    assert isinstance(successors_df, pl.DataFrame)
+    assert len(successors_df) == 2  # node0 has 2 successors
+
+    # Check that we get the correct target nodes (order doesn't matter)
+    successor_nodes = set(successors_df[DEFAULT_ATTR_KEYS.NODE_ID].to_list())
+    assert successor_nodes == {node1, node3}
+
+    # Test successors of node1 (should return node2)
+    successors_df = graph_backend.sucessors(node1)
+    assert isinstance(successors_df, pl.DataFrame)
+    assert len(successors_df) == 1  # node1 has 1 successor
+    assert successors_df[DEFAULT_ATTR_KEYS.NODE_ID].to_list()[0] == node2
+
+    # Test successors of node2 (should return empty - no successors)
+    successors_df = graph_backend.sucessors(node2)
+    assert isinstance(successors_df, pl.DataFrame)
+    assert len(successors_df) == 0  # node2 has no successors
+
+    # Test with multiple nodes
+    successors_dict = graph_backend.sucessors([node0, node1, node2])
+    assert isinstance(successors_dict, dict)
+    assert len(successors_dict) == 3
+
+    # Check node0's successors
+    assert len(successors_dict[node0]) == 2
+    # Check node1's successors
+    assert len(successors_dict[node1]) == 1
+    # Check node2's successors (empty)
+    assert len(successors_dict[node2]) == 0
+
+
+def test_predecessors(graph_backend: BaseGraph) -> None:
+    """Test getting predecessors of nodes."""
+    # Add feature keys
+    graph_backend.add_node_feature_key("x", 0.0)
+    graph_backend.add_node_feature_key("y", 0.0)
+    graph_backend.add_edge_feature_key("weight", 0.0)
+
+    # Create a simple graph structure: node0 -> node1 -> node2
+    #                                      \-> node3
+    node0 = graph_backend.add_node({"t": 0, "x": 0.0, "y": 0.0})
+    node1 = graph_backend.add_node({"t": 1, "x": 1.0, "y": 1.0})
+    node2 = graph_backend.add_node({"t": 2, "x": 2.0, "y": 2.0})
+    node3 = graph_backend.add_node({"t": 2, "x": 3.0, "y": 3.0})
+
+    # Add edges
+    graph_backend.add_edge(node0, node1, {"weight": 0.5})  # node0 -> node1
+    graph_backend.add_edge(node0, node3, {"weight": 0.7})  # node0 -> node3
+    graph_backend.add_edge(node1, node2, {"weight": 0.3})  # node1 -> node2
+
+    # Test predecessors of node0 (should return empty - no predecessors)
+    predecessors_df = graph_backend.predecessors(node0)
+    assert isinstance(predecessors_df, pl.DataFrame)
+    assert len(predecessors_df) == 0  # node0 has no predecessors
+
+    # Test predecessors of node1 (should return node0)
+    predecessors_df = graph_backend.predecessors(node1)
+    assert isinstance(predecessors_df, pl.DataFrame)
+    assert len(predecessors_df) == 1  # node1 has 1 predecessor
+
+    # Check that we get the correct source node
+    assert predecessors_df[DEFAULT_ATTR_KEYS.NODE_ID].to_list()[0] == node0
+
+    # Test predecessors of node2 (should return node1)
+    predecessors_df = graph_backend.predecessors(node2)
+    assert isinstance(predecessors_df, pl.DataFrame)
+    assert len(predecessors_df) == 1  # node2 has 1 predecessor
+    assert predecessors_df[DEFAULT_ATTR_KEYS.NODE_ID].to_list()[0] == node1
+
+    # Test predecessors of node3 (should return node0)
+    predecessors_df = graph_backend.predecessors(node3)
+    assert isinstance(predecessors_df, pl.DataFrame)
+    assert len(predecessors_df) == 1  # node3 has 1 predecessor
+    assert predecessors_df[DEFAULT_ATTR_KEYS.NODE_ID].to_list()[0] == node0
+
+    # Test with multiple nodes
+    predecessors_dict = graph_backend.predecessors([node0, node1, node2, node3])
+    assert isinstance(predecessors_dict, dict)
+    assert len(predecessors_dict) == 4
+
+    # Check predecessors
+    assert len(predecessors_dict[node0]) == 0  # node0 has no predecessors
+    assert len(predecessors_dict[node1]) == 1  # node1 has 1 predecessor
+    assert len(predecessors_dict[node2]) == 1  # node2 has 1 predecessor
+    assert len(predecessors_dict[node3]) == 1  # node3 has 1 predecessor
+
+
+def test_sucessors_with_feature_keys(graph_backend: BaseGraph) -> None:
+    """Test getting successors with specific feature keys."""
+    # Add feature keys
+    graph_backend.add_node_feature_key("x", 0.0)
+    graph_backend.add_node_feature_key("y", 0.0)
+    graph_backend.add_node_feature_key("label", "X")
+    graph_backend.add_edge_feature_key("weight", 0.0)
+
+    # Create nodes
+    node0 = graph_backend.add_node({"t": 0, "x": 0.0, "y": 0.0, "label": "A"})
+    node1 = graph_backend.add_node({"t": 1, "x": 1.0, "y": 1.0, "label": "B"})
+    node2 = graph_backend.add_node({"t": 1, "x": 2.0, "y": 2.0, "label": "C"})
+
+    # Add edges
+    graph_backend.add_edge(node0, node1, {"weight": 0.5})
+    graph_backend.add_edge(node0, node2, {"weight": 0.7})
+
+    # Test with single feature key as string
+    successors_df = graph_backend.sucessors(node0, feature_keys="x")
+    assert isinstance(successors_df, pl.DataFrame)
+    assert "x" in successors_df.columns
+    assert "y" not in successors_df.columns
+
+    # Should not contain other feature keys when we specify specific ones
+    available_cols = set(successors_df.columns)
+    # The exact columns depend on implementation, but x should be there
+    assert "x" in available_cols
+
+    # Test with multiple feature keys as list
+    successors_df = graph_backend.sucessors(node0, feature_keys=["x", "label"])
+    assert isinstance(successors_df, pl.DataFrame)
+    assert "x" in successors_df.columns
+    assert "label" in successors_df.columns
+    assert "y" not in successors_df.columns
+
+    # Verify the content makes sense
+    if len(successors_df) > 0:
+        x_values = successors_df["x"].to_list()
+        label_values = successors_df["label"].to_list()
+        # These should correspond to node1 and node2's features
+        assert set(x_values) == {1.0, 2.0}
+        assert set(label_values) == {"B", "C"}
+
+
+def test_predecessors_with_feature_keys(graph_backend: BaseGraph) -> None:
+    """Test getting predecessors with specific feature keys."""
+    # Add feature keys
+    graph_backend.add_node_feature_key("x", 0.0)
+    graph_backend.add_node_feature_key("y", 0.0)
+    graph_backend.add_node_feature_key("label", "X")
+    graph_backend.add_edge_feature_key("weight", 0.0)
+
+    # Create nodes
+    node0 = graph_backend.add_node({"t": 0, "x": 0.0, "y": 0.0, "label": "A"})
+    node1 = graph_backend.add_node({"t": 0, "x": 1.0, "y": 1.0, "label": "B"})
+    node2 = graph_backend.add_node({"t": 1, "x": 2.0, "y": 2.0, "label": "C"})
+
+    # Add edges (both node0 and node1 point to node2)
+    graph_backend.add_edge(node0, node2, {"weight": 0.5})
+    graph_backend.add_edge(node1, node2, {"weight": 0.7})
+
+    # Test with single feature key as string
+    predecessors_df = graph_backend.predecessors(node2, feature_keys="label")
+    assert isinstance(predecessors_df, pl.DataFrame)
+    assert "label" in predecessors_df.columns
+    assert "y" not in predecessors_df.columns
+    assert "x" not in predecessors_df.columns
+
+    # Test with multiple feature keys as list
+    predecessors_df = graph_backend.predecessors(node2, feature_keys=["x", "label"])
+    assert isinstance(predecessors_df, pl.DataFrame)
+    assert "x" in predecessors_df.columns
+    assert "label" in predecessors_df.columns
+    assert "y" not in predecessors_df.columns
+
+    # Verify the content makes sense - should have 2 predecessors
+    assert len(predecessors_df) == 2
+    x_values = predecessors_df["x"].to_list()
+    label_values = predecessors_df["label"].to_list()
+    # These should correspond to node0 and node1's features
+    assert set(x_values) == {0.0, 1.0}
+    assert set(label_values) == {"A", "B"}
+
+
+def test_sucessors_predecessors_edge_cases(graph_backend: BaseGraph) -> None:
+    """Test edge cases for successors and predecessors methods."""
+    # Add feature keys
+    graph_backend.add_node_feature_key("x", 0.0)
+    graph_backend.add_edge_feature_key("weight", 0.0)
+
+    # Create isolated nodes (no edges)
+    node0 = graph_backend.add_node({"t": 0, "x": 0.0})
+    node1 = graph_backend.add_node({"t": 1, "x": 1.0})
+
+    # Test successors/predecessors of isolated nodes
+    successors_df = graph_backend.sucessors(node0)
+    assert isinstance(successors_df, pl.DataFrame)
+    assert len(successors_df) == 0
+
+    predecessors_df = graph_backend.predecessors(node1)
+    assert isinstance(predecessors_df, pl.DataFrame)
+    assert len(predecessors_df) == 0
+
+    # Test with empty list of nodes
+    successors_dict = graph_backend.sucessors([])
+    assert isinstance(successors_dict, dict)
+    assert len(successors_dict) == 0
+
+    predecessors_dict = graph_backend.predecessors([])
+    assert isinstance(predecessors_dict, dict)
+    assert len(predecessors_dict) == 0
+
+    # Test with non-existent feature keys (should work but return limited columns)
+    # This depends on implementation - some might raise errors, others might ignore
+    try:
+        successors_df = graph_backend.sucessors(node0, feature_keys=["nonexistent"])
+        # If it doesn't raise an error, it should return empty or handle gracefully
+        assert isinstance(successors_df, pl.DataFrame)
+    except (KeyError, AttributeError):
+        # This is also acceptable behavior
+        pass
