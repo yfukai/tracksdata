@@ -168,6 +168,20 @@ class GraphView(RustWorkXGraph):
 
         return parent_edge_id
 
+    def sucessors(
+        self,
+        node_ids: list[int] | int,
+        feature_keys: Sequence[str] | str | None = None,
+    ) -> dict[int, pl.DataFrame] | pl.DataFrame:
+        return self._root.sucessors(node_ids, feature_keys)
+
+    def predecessors(
+        self,
+        node_ids: list[int] | int,
+        feature_keys: Sequence[str] | str | None = None,
+    ) -> dict[int, pl.DataFrame] | pl.DataFrame:
+        return self._root.predecessors(node_ids, feature_keys)
+
     def filter_nodes_by_attribute(
         self,
         attributes: dict[str, Any],

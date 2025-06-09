@@ -154,6 +154,52 @@ class BaseGraph(abc.ABC):
             )
 
     @abc.abstractmethod
+    def sucessors(
+        self,
+        node_ids: list[int] | int,
+        feature_keys: Sequence[str] | str | None = None,
+    ) -> dict[int, pl.DataFrame] | pl.DataFrame:
+        """
+        Get the sucessors of a list of nodes.
+
+        Parameters
+        ----------
+        node_ids : list[int] | int
+            The IDs of the nodes to get the sucessors for.
+        feature_keys : Sequence[str] | str | None
+            The feature keys to get.
+            If None, all features are used.
+
+        Returns
+        -------
+        dict[int, pl.DataFrame] | pl.DataFrame
+            The sucessors of the nodes indexed by node ID if a list of nodes is provided.
+        """
+
+    @abc.abstractmethod
+    def predecessors(
+        self,
+        node_ids: list[int] | int,
+        feature_keys: Sequence[str] | str | None = None,
+    ) -> dict[int, pl.DataFrame] | pl.DataFrame:
+        """
+        Get the predecessors of a list of nodes.
+
+        Parameters
+        ----------
+        node_ids : list[int] | int
+            The IDs of the nodes to get the predecessors for.
+        feature_keys : Sequence[str] | str | None
+            The feature keys to get.
+            If None, all features are used.
+
+        Returns
+        -------
+        dict[int, pl.DataFrame] | pl.DataFrame
+            The predecessors of the nodes indexed by node ID if a list of nodes is provided.
+        """
+
+    @abc.abstractmethod
     def filter_nodes_by_attribute(
         self,
         attributes: dict[str, Any],

@@ -1,4 +1,4 @@
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
@@ -95,6 +95,98 @@ class RustWorkXGraph(BaseGraph):
         edge_id = self.rx_graph.add_edge(source_id, target_id, attributes)
         attributes[DEFAULT_ATTR_KEYS.EDGE_ID] = edge_id
         return edge_id
+
+    def _get_neighbors(
+        self,
+        neighbors_func: Callable[[rx.PyDiGraph, int], rx.NodeIndices],
+        node_ids: list[int] | int,
+        feature_keys: Sequence[str] | str | None = None,
+    ) -> dict[int, pl.DataFrame] | pl.DataFrame:
+        """
+        Get the predecessors or sucessors of a list of nodes.
+        See more information below.
+        """
+        single_node = False
+        if isinstance(node_ids, int):
+            node_ids = [node_ids]
+            single_node = True
+
+        if isinstance(feature_keys, str):
+            feature_keys = [feature_keys]
+
+        rx_graph = self.rx_graph
+
+        neighbors = {}
+        for node_id in node_ids:
+            neighbors_indices = neighbors_func(rx_graph, node_id)
+            neighbors_data = [rx_graph[i] for i in neighbors_indices]
+
+            for i, data in zip(neighbors_indices, neighbors_data, strict=False):
+                data[DEFAULT_ATTR_KEYS.NODE_ID] = i
+
+            if feature_keys is not None:
+                neighbors_data = [{k: edge_data[k] for k in feature_keys} for edge_data in neighbors_data]
+
+            neighbors[node_id] = pl.DataFrame(neighbors_data)
+
+        if single_node:
+            return neighbors[node_ids[0]]
+
+        return neighbors
+
+    def sucessors(
+        self,
+        node_ids: list[int] | int,
+        feature_keys: Sequence[str] | str | None = None,
+    ) -> dict[int, pl.DataFrame] | pl.DataFrame:
+        """
+        Get the sucessors of a list of nodes.
+
+        Parameters
+        ----------
+        node_ids : list[int] | int
+            The IDs of the nodes to get the sucessors for.
+        feature_keys : Sequence[str] | str | None
+            The feature keys to get.
+            If None, all features are used.
+
+        Returns
+        -------
+        dict[int, pl.DataFrame] | pl.DataFrame
+            The sucessors of the nodes indexed by node ID if a list of nodes is provided.
+        """
+        return self._get_neighbors(
+            rx.PyDiGraph.successor_indices,
+            node_ids,
+            feature_keys,
+        )
+
+    def predecessors(
+        self,
+        node_ids: list[int] | int,
+        feature_keys: Sequence[str] | str | None = None,
+    ) -> dict[int, pl.DataFrame] | pl.DataFrame:
+        """
+        Get the predecessors of a list of nodes.
+
+        Parameters
+        ----------
+        node_ids : list[int] | int
+            The IDs of the nodes to get the predecessors for.
+        feature_keys : Sequence[str] | str | None
+            The feature keys to get.
+            If None, all features are used.
+
+        Returns
+        -------
+        dict[int, pl.DataFrame] | pl.DataFrame
+            The predecessors of the nodes indexed by node ID if a list of nodes is provided.
+        """
+        return self._get_neighbors(
+            rx.PyDiGraph.predecessor_indices,
+            node_ids,
+            feature_keys,
+        )
 
     def filter_nodes_by_attribute(
         self,

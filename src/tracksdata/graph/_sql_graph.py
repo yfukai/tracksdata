@@ -208,6 +208,75 @@ class SQLGraph(BaseGraph):
             session.bulk_insert_mappings(self.Edge, edges)
             session.commit()
 
+    def _get_neighbors(
+        self,
+        node_key: str,
+        neighbor_key: str,
+        node_ids: list[int] | int,
+        feature_keys: Sequence[str] | str | None = None,
+    ) -> dict[int, pl.DataFrame] | pl.DataFrame:
+        """
+        Get the predecessors or sucessors of a list of nodes.
+        See more information below.
+        """
+        single_node = False
+        if isinstance(node_ids, int):
+            node_ids = [node_ids]
+            single_node = True
+
+        if isinstance(feature_keys, str):
+            feature_keys = [feature_keys]
+
+        with Session(self._engine) as session:
+            if feature_keys is None:
+                # all columns
+                node_columns = [self.Node]
+            else:
+                node_columns = [getattr(self.Node, key) for key in feature_keys]
+
+            query = session.query(getattr(self.Edge, node_key), *node_columns)
+            query = query.join(self.Edge, getattr(self.Edge, neighbor_key) == self.Node.node_id)
+            query = query.filter(getattr(self.Edge, node_key).in_(node_ids))
+
+            node_df = pl.read_database(
+                query.statement,
+                connection=session.connection(),
+            )
+
+        if single_node:
+            return node_df
+
+        neighbors_dict = {node_id: group for (node_id,), group in node_df.group_by(node_key)}
+        for node_id in node_ids:
+            if node_id not in neighbors_dict:
+                neighbors_dict[node_id] = pl.DataFrame(schema=node_df.schema)
+
+        return neighbors_dict
+
+    def sucessors(
+        self,
+        node_ids: list[int] | int,
+        feature_keys: Sequence[str] | str | None = None,
+    ) -> dict[int, pl.DataFrame] | pl.DataFrame:
+        return self._get_neighbors(
+            node_key=DEFAULT_ATTR_KEYS.EDGE_SOURCE,
+            neighbor_key=DEFAULT_ATTR_KEYS.EDGE_TARGET,
+            node_ids=node_ids,
+            feature_keys=feature_keys,
+        )
+
+    def predecessors(
+        self,
+        node_ids: list[int] | int,
+        feature_keys: Sequence[str] | str | None = None,
+    ) -> dict[int, pl.DataFrame] | pl.DataFrame:
+        return self._get_neighbors(
+            node_key=DEFAULT_ATTR_KEYS.EDGE_TARGET,
+            neighbor_key=DEFAULT_ATTR_KEYS.EDGE_SOURCE,
+            node_ids=node_ids,
+            feature_keys=feature_keys,
+        )
+
     def filter_nodes_by_attribute(
         self,
         attributes: dict[str, Any],
