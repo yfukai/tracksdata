@@ -12,6 +12,7 @@ from sqlalchemy.sql.type_api import TypeEngine
 
 from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.graph._base_graph import BaseGraph
+from tracksdata.utils._dataframe import unpack_array_features
 from tracksdata.utils._logging import LOG
 
 if TYPE_CHECKING:
@@ -415,6 +416,7 @@ class SQLGraph(BaseGraph):
         *,
         node_ids: Sequence[int] | None = None,
         feature_keys: Sequence[str] | str | None = None,
+        unpack: bool = False,
     ) -> pl.DataFrame:
         if isinstance(feature_keys, str):
             feature_keys = [feature_keys]
@@ -448,9 +450,14 @@ class SQLGraph(BaseGraph):
 
         # indices are included by default and must be removed
         if feature_keys is not None:
-            return nodes_df.select([pl.col(c) for c in feature_keys])
+            df = nodes_df.select([pl.col(c) for c in feature_keys])
         else:
-            return nodes_df.drop(DEFAULT_ATTR_KEYS.NODE_ID)
+            df = nodes_df.drop(DEFAULT_ATTR_KEYS.NODE_ID)
+
+        if unpack:
+            df = unpack_array_features(df)
+
+        return df
 
     def edge_features(
         self,
@@ -458,6 +465,7 @@ class SQLGraph(BaseGraph):
         node_ids: list[int] | None = None,
         feature_keys: Sequence[str] | None = None,
         include_targets: bool = False,
+        unpack: bool = False,
     ) -> pl.DataFrame:
         if isinstance(feature_keys, str):
             feature_keys = [feature_keys]
@@ -499,7 +507,10 @@ class SQLGraph(BaseGraph):
                 connection=session.connection(),
             )
 
-            return edges_df
+        if unpack:
+            edges_df = unpack_array_features(edges_df)
+
+        return edges_df
 
     @property
     def node_features_keys(self) -> list[str]:
