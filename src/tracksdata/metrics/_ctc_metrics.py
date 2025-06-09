@@ -114,11 +114,6 @@ def compute_ctc_metrics_data(
             - ious: A list of lists containing the intersection over union values
                     between mapped reference and computed masks.
     """
-    # TODO:
-    #  - continue here
-    #  - compute compressed (n, 4) representation from BaseGraph
-    #  - fast matching with IoU functions
-
     input_tracks = compressed_tracks_table(input_graph)
     reference_tracks = compressed_tracks_table(reference_graph)
 

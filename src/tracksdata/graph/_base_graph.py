@@ -72,8 +72,6 @@ class BaseGraph(abc.ABC):
             If False, the attributes keys will not be checked,
             useful to speed up the operation when doing bulk insertions.
 
-        TODO: should "t" be it's own parameter?
-
         Returns
         -------
         int
