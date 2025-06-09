@@ -120,16 +120,21 @@ class RustWorkXGraph(BaseGraph):
         neighbors = {}
         for node_id in node_ids:
             neighbors_indices = neighbors_func(rx_graph, node_id)
-            neighbors_data = [rx_graph[i] for i in neighbors_indices]
-
-            for i, data in zip(neighbors_indices, neighbors_data, strict=True):
-                data[DEFAULT_ATTR_KEYS.NODE_ID] = i
+            neighbors_data: list[dict[str, Any]] = [rx_graph[i] for i in neighbors_indices]
 
             if feature_keys is not None:
-                neighbors_data = [{k: edge_data[k] for k in feature_keys} for edge_data in neighbors_data]
+                neighbors_data = [
+                    {k: edge_data[k] for k in feature_keys if k != DEFAULT_ATTR_KEYS.NODE_ID}
+                    for edge_data in neighbors_data
+                ]
 
             if len(neighbors_data) > 0:
-                neighbors[node_id] = pl.DataFrame(neighbors_data)
+                df = pl.DataFrame(neighbors_data)
+                if feature_keys is None or DEFAULT_ATTR_KEYS.NODE_ID in feature_keys:
+                    df = df.with_columns(
+                        pl.Series(DEFAULT_ATTR_KEYS.NODE_ID, np.asarray(neighbors_indices, dtype=int)),
+                    )
+                neighbors[node_id] = df
                 valid_schema = neighbors[node_id].schema
 
         if single_node:
