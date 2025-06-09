@@ -51,6 +51,7 @@ test = [
 ]
 docs = [
   "mkdocs",
+  "mkdocs-api-autonav",
   "mkdocs-material",
   "mkdocstrings-python"
 ]

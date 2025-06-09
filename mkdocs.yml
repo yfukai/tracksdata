@@ -5,4 +5,24 @@ theme:
 
 plugins:
   - search
-  - mkdocstrings
+  - api-autonav:
+      modules: ['src/tracksdata']
+  # from: https://github.com/tlambert03/mkdocs-api-autonav/tree/main
+  - mkdocstrings:
+      handlers:
+        python:
+          import:
+            - https://docs.python.org/3/objects.inv
+          options:
+            docstring_section_style: list # or "table"
+            docstring_style: "numpy"
+            filters: ["!^_"]
+            heading_level: 1
+            merge_init_into_class: true
+            parameter_headings: true
+            separate_signature: true
+            show_root_heading: true
+            show_signature_annotations: true
+            show_symbol_type_heading: true
+            show_symbol_type_toc: true
+            summary: true
