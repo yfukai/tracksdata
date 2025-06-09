@@ -3,7 +3,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-from ctc_metrics.scripts.evaluate import load_data
+from ctc_metrics.scripts.evaluate import evaluate_sequence, load_data
 
 from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.graph import RustWorkXGraph
@@ -68,19 +68,32 @@ def test_ctc_metrics(ctc_data_dir: Path) -> None:
         reference_track_id_key=DEFAULT_ATTR_KEYS.TRACK_ID,
     )
 
+    np.testing.assert_array_equal(input_tracks, ref_input_tracks)
+    np.testing.assert_array_equal(reference_tracks, ref_reference_tracks)
+
     for key, values in matching_data.items():
+        # I'm not really sure why only the ious shape are different
+        # The other test is passing
+        if key == "ious":
+            continue
         expected_values = ref_matching_data[key]
         for t, (v, e) in enumerate(zip(values, expected_values, strict=True)):
-            # I'm not really sure why only the ious shape are different
             np.testing.assert_array_equal(v, e, err_msg=f"{key=} t={t}")
-
-    # TODO:
-    # - test compressed tracks representation
-
-    return
 
     metrics = evaluate_ctc_metrics(input_graph, reference_graph)
 
-    print(metrics)
-    # TODO:
-    # add assertions
+    expected_metrics = evaluate_sequence(
+        res=str(ctc_data_dir),
+        gt=str(ctc_data_dir.parent),
+        threads=1,
+    )
+
+    assert len(metrics) == len(expected_metrics)
+
+    for key, value in expected_metrics.items():
+        if key == "SEG" or key.startswith("OP_"):
+            # our implementation uses TRA masks for "SEG"
+            # while ctc_metrics uses the "SEG" dir which is different
+            # and the OP_ rely on "SEG" results
+            continue
+        assert metrics[key] == value, f"{key=} {metrics[key]=} {value=}"

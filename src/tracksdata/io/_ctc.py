@@ -42,17 +42,26 @@ def compressed_tracks_table(graph: BaseGraph) -> np.ndarray:
         ]
     )
 
-    table = []
+    tracks_data = []
+    node_ids = []
 
     for (track_id,), group in nodes_df.group_by(DEFAULT_ATTR_KEYS.TRACK_ID):
         start = group[DEFAULT_ATTR_KEYS.T].min()
         end = group[DEFAULT_ATTR_KEYS.T].max()
-        table.append([track_id, start, end, 0])
+        tracks_data.append([track_id, start, end, 0])
+        node_ids.append(group.filter(pl.col(DEFAULT_ATTR_KEYS.T) == start)[DEFAULT_ATTR_KEYS.NODE_ID].item())
 
-    out_array = np.asarray(table, dtype=int)
+    parents = graph.predecessors(
+        node_ids,
+        feature_keys=[DEFAULT_ATTR_KEYS.TRACK_ID],
+    )
+    for track_id, node_id in zip(tracks_data, node_ids, strict=True):
+        df = parents[node_id]
+        if len(df) > 0:
+            track_id[3] = df[DEFAULT_ATTR_KEYS.TRACK_ID].item()
+
+    out_array = np.asarray(tracks_data, dtype=int)
     out_array = out_array[np.argsort(out_array[:, 0])]
-
-    # TODO: include parent id
 
     return out_array
 
@@ -184,7 +193,7 @@ def load_ctc(
     else:
         track_id_to_last_node = {}  # for completeness, it won't be used if this is true
 
-    for track_id, group in nodes_by_label:
+    for (track_id,), group in nodes_by_label:
         node_ids = group.sort(DEFAULT_ATTR_KEYS.T)[DEFAULT_ATTR_KEYS.NODE_ID].to_list()
 
         first_node = node_ids[0]
