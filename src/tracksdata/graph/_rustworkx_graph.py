@@ -115,22 +115,36 @@ class RustWorkXGraph(BaseGraph):
             feature_keys = [feature_keys]
 
         rx_graph = self.rx_graph
+        valid_schema = None
 
         neighbors = {}
         for node_id in node_ids:
             neighbors_indices = neighbors_func(rx_graph, node_id)
             neighbors_data = [rx_graph[i] for i in neighbors_indices]
 
-            for i, data in zip(neighbors_indices, neighbors_data, strict=False):
+            for i, data in zip(neighbors_indices, neighbors_data, strict=True):
                 data[DEFAULT_ATTR_KEYS.NODE_ID] = i
 
             if feature_keys is not None:
                 neighbors_data = [{k: edge_data[k] for k in feature_keys} for edge_data in neighbors_data]
 
-            neighbors[node_id] = pl.DataFrame(neighbors_data)
+            if len(neighbors_data) > 0:
+                neighbors[node_id] = pl.DataFrame(neighbors_data)
+                valid_schema = neighbors[node_id].schema
 
         if single_node:
-            return neighbors[node_ids[0]]
+            try:
+                # could not find sucessors for this node
+                return neighbors[node_ids[0]]
+            except KeyError:
+                return pl.DataFrame()
+
+        for node_id in node_ids:
+            if node_id not in neighbors:
+                if valid_schema is None:
+                    neighbors[node_id] = pl.DataFrame()
+                else:
+                    neighbors[node_id] = pl.DataFrame(schema=valid_schema)
 
         return neighbors
 

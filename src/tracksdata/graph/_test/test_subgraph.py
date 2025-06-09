@@ -5,6 +5,7 @@ import polars as pl
 import pytest
 
 from tracksdata.constants import DEFAULT_ATTR_KEYS
+from tracksdata.graph import GraphView
 from tracksdata.graph._base_graph import BaseGraph
 
 
@@ -693,3 +694,52 @@ def test_subgraph_attr_filter_error_conditions(graph_backend: BaseGraph) -> None
     # Test error: no parameters provided
     with pytest.raises(ValueError, match="Either node IDs or one of the attributes' filters must be provided"):
         graph_with_data.subgraph()
+
+
+@parametrize_subgraph_tests
+def test_sucessors_with_data(graph_backend: BaseGraph, use_subgraph: bool) -> None:
+    """Test getting successors of nodes on both original graphs and subgraphs."""
+    graph_with_data = create_test_graph(graph_backend, use_subgraph)
+    node_ids = graph_with_data._test_nodes
+
+    edges_df = graph_with_data.edge_features()
+
+    successors_dict = graph_with_data.sucessors(node_ids)
+
+    for node_id in node_ids:
+        sucessors = successors_dict[node_id]
+        expected_sucessors = edges_df.filter(pl.col(DEFAULT_ATTR_KEYS.EDGE_SOURCE) == node_id)[
+            DEFAULT_ATTR_KEYS.EDGE_TARGET
+        ].to_list()
+        assert set(sucessors[DEFAULT_ATTR_KEYS.NODE_ID].to_list()) == set(expected_sucessors)
+
+    # test out of sync
+    if isinstance(graph_with_data, GraphView):
+        graph_with_data.sync = False
+        graph_with_data.add_node({"t": 0, "x": 0.0, "y": 0.0, "label": "test"})
+        with pytest.raises(RuntimeError, match="Out of sync graph view cannot be used to get sucessors"):
+            graph_with_data.sucessors(node_ids)
+
+
+@parametrize_subgraph_tests
+def test_predecessors_with_data(graph_backend: BaseGraph, use_subgraph: bool) -> None:
+    """Test getting predecessors of nodes on both original graphs and subgraphs."""
+    graph_with_data = create_test_graph(graph_backend, use_subgraph)
+
+    node_ids = graph_with_data._test_nodes
+    edges_df = graph_with_data.edge_features()
+
+    predecessors_dict = graph_with_data.predecessors(node_ids)
+
+    for node_id in node_ids:
+        predecessors = predecessors_dict[node_id]
+        expected_predecessors = edges_df.filter(pl.col(DEFAULT_ATTR_KEYS.EDGE_TARGET) == node_id)[
+            DEFAULT_ATTR_KEYS.EDGE_SOURCE
+        ].to_list()
+        assert set(predecessors[DEFAULT_ATTR_KEYS.NODE_ID].to_list()) == set(expected_predecessors)
+    # test out of sync
+    if isinstance(graph_with_data, GraphView):
+        graph_with_data.sync = False
+        graph_with_data.add_node({"t": 0, "x": 0.0, "y": 0.0, "label": "test"})
+        with pytest.raises(RuntimeError, match="Out of sync graph view cannot be used to get predecessors"):
+            graph_with_data.predecessors(node_ids)
