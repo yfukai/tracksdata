@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import numpy as np
 import polars as pl
 import pytest
 
@@ -142,13 +143,20 @@ def test_time_points(graph_backend: BaseGraph) -> None:
 def test_node_features(graph_backend: BaseGraph) -> None:
     """Test retrieving node features."""
     graph_backend.add_node_feature_key("x", None)
+    graph_backend.add_node_feature_key("coordinates", np.array([0.0, 0.0]))
 
-    node1 = graph_backend.add_node({"t": 0, "x": 1.0})
-    node2 = graph_backend.add_node({"t": 1, "x": 2.0})
+    node1 = graph_backend.add_node({"t": 0, "x": 1.0, "coordinates": np.array([10.0, 20.0])})
+    node2 = graph_backend.add_node({"t": 1, "x": 2.0, "coordinates": np.array([30.0, 40.0])})
 
     df = graph_backend.node_features(node_ids=[node1, node2], feature_keys=["x"])
     assert isinstance(df, pl.DataFrame)
     assert df["x"].to_list() == [1.0, 2.0]
+
+    # Test unpack functionality
+    df_unpacked = graph_backend.node_features(node_ids=[node1, node2], feature_keys=["coordinates"], unpack=True)
+    if "coordinates_0" in df_unpacked.columns:
+        assert df_unpacked["coordinates_0"].to_list() == [10.0, 30.0]
+        assert df_unpacked["coordinates_1"].to_list() == [20.0, 40.0]
 
 
 def test_edge_features(graph_backend: BaseGraph) -> None:
@@ -157,11 +165,19 @@ def test_edge_features(graph_backend: BaseGraph) -> None:
     node2 = graph_backend.add_node({"t": 1})
 
     graph_backend.add_edge_feature_key("weight", 0.0)
-    graph_backend.add_edge(node1, node2, attributes={"weight": 0.5})
+    graph_backend.add_edge_feature_key("vector", np.array([0.0, 0.0]))
+
+    graph_backend.add_edge(node1, node2, attributes={"weight": 0.5, "vector": np.array([1.0, 2.0])})
 
     df = graph_backend.edge_features(feature_keys=["weight"])
     assert isinstance(df, pl.DataFrame)
     assert df["weight"].to_list() == [0.5]
+
+    # Test unpack functionality
+    df_unpacked = graph_backend.edge_features(feature_keys=["vector"], unpack=True)
+    if "vector_0" in df_unpacked.columns:
+        assert df_unpacked["vector_0"].to_list() == [1.0]
+        assert df_unpacked["vector_1"].to_list() == [2.0]
 
 
 def test_edge_features_subgraph_edge_ids(graph_backend: BaseGraph) -> None:

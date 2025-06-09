@@ -287,6 +287,7 @@ class BaseGraph(abc.ABC):
         *,
         node_ids: Sequence[int] | None = None,
         feature_keys: Sequence[str] | str | None = None,
+        unpack: bool = False,
     ) -> pl.DataFrame:
         """
         Get the features of the nodes as a pandas DataFrame.
@@ -299,6 +300,8 @@ class BaseGraph(abc.ABC):
         feature_keys : Sequence[str] | str | None
             The feature keys to get.
             If None, all features are used.
+        unpack : bool
+            Whether to unpack array features into multiple scalar features.
 
         Returns
         -------
@@ -313,6 +316,7 @@ class BaseGraph(abc.ABC):
         node_ids: list[int] | None = None,
         feature_keys: Sequence[str] | None = None,
         include_targets: bool = False,
+        unpack: bool = False,
     ) -> pl.DataFrame:
         """
         Get the features of the edges as a polars DataFrame.
@@ -328,6 +332,8 @@ class BaseGraph(abc.ABC):
         include_targets : bool
             Whether to include edges out-going from the given node_ids even
             if the target node is not in the given node_ids.
+        unpack : bool
+            Whether to unpack array features into multiple scalar features.
         """
 
     @property
