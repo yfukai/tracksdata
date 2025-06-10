@@ -414,13 +414,13 @@ class RustWorkXGraph(BaseGraph):
             node_ids = list(rx_graph.node_indices())
 
         if feature_keys is None:
-            feature_keys = self.node_features_keys
-
-        if len(node_ids) == 0:
-            return pl.DataFrame({key: [] for key in feature_keys})
+            feature_keys = [DEFAULT_ATTR_KEYS.NODE_ID, *self.node_features_keys]
 
         if isinstance(feature_keys, str):
             feature_keys = [feature_keys]
+
+        if len(node_ids) == 0:
+            return pl.DataFrame({key: [] for key in feature_keys})
 
         # Create columns directly instead of building intermediate dictionaries
         columns = {key: [] for key in feature_keys}

@@ -463,14 +463,12 @@ class SQLGraph(BaseGraph):
 
         # indices are included by default and must be removed
         if feature_keys is not None:
-            df = nodes_df.select([pl.col(c) for c in feature_keys])
-        else:
-            df = nodes_df.drop(DEFAULT_ATTR_KEYS.NODE_ID)
+            nodes_df = nodes_df.select([pl.col(c) for c in feature_keys])
 
         if unpack:
-            df = unpack_array_features(df)
+            nodes_df = unpack_array_features(nodes_df)
 
-        return df
+        return nodes_df
 
     def edge_features(
         self,
