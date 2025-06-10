@@ -58,8 +58,8 @@ def create_test_graph(graph_backend: BaseGraph, use_subgraph: bool = False) -> B
         subgraph = graph_backend.subgraph(node_ids=subgraph_nodes)
 
         # Store the subgraph nodes for testing (keep original order for assertions)
-        subgraph._test_nodes = [node1, node2, node4]  # type: ignore
-        subgraph._test_edges = [edge1, edge3]  # edges within the subgraph (both go from t=0 to t=1)  # type: ignore
+        subgraph._test_nodes = [node2, node4, node1]  # type: ignore
+        subgraph._test_edges = [edge3, edge1]  # edges within the subgraph (both go from t=0 to t=1)  # type: ignore
         subgraph._is_subgraph = True  # type: ignore
         return subgraph
     else:
@@ -705,13 +705,15 @@ def test_sucessors_with_data(graph_backend: BaseGraph, use_subgraph: bool) -> No
     edges_df = graph_with_data.edge_features()
 
     successors_dict = graph_with_data.sucessors(node_ids)
+    out_degree = graph_with_data.out_degree(node_ids)
 
-    for node_id in node_ids:
+    for i, node_id in enumerate(node_ids):
         sucessors = successors_dict[node_id]
         expected_sucessors = edges_df.filter(pl.col(DEFAULT_ATTR_KEYS.EDGE_SOURCE) == node_id)[
             DEFAULT_ATTR_KEYS.EDGE_TARGET
         ].to_list()
         assert set(sucessors[DEFAULT_ATTR_KEYS.NODE_ID].to_list()) == set(expected_sucessors)
+        assert out_degree[i] == len(expected_sucessors)
 
     # test out of sync
     if isinstance(graph_with_data, GraphView):
@@ -730,13 +732,16 @@ def test_predecessors_with_data(graph_backend: BaseGraph, use_subgraph: bool) ->
     edges_df = graph_with_data.edge_features()
 
     predecessors_dict = graph_with_data.predecessors(node_ids)
+    in_degree = graph_with_data.in_degree(node_ids)
 
-    for node_id in node_ids:
+    for i, node_id in enumerate(node_ids):
         predecessors = predecessors_dict[node_id]
         expected_predecessors = edges_df.filter(pl.col(DEFAULT_ATTR_KEYS.EDGE_TARGET) == node_id)[
             DEFAULT_ATTR_KEYS.EDGE_SOURCE
         ].to_list()
         assert set(predecessors[DEFAULT_ATTR_KEYS.NODE_ID].to_list()) == set(expected_predecessors)
+        assert in_degree[i] == len(expected_predecessors)
+
     # test out of sync
     if isinstance(graph_with_data, GraphView):
         graph_with_data.sync = False
