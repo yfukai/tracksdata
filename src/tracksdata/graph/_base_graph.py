@@ -478,9 +478,9 @@ class BaseGraph(abc.ABC):
     def match(
         self,
         other: "BaseGraph",
-        match_node_id_key: str,
+        matched_node_id_key: str,
         match_score_key: str,
-        edge_match_key: str,
+        matched_edge_mask_key: str,
     ) -> None:
         """
         Match the nodes of the graph to the nodes of another graph.
@@ -489,12 +489,12 @@ class BaseGraph(abc.ABC):
         ----------
         other : BaseGraph
             The other graph to match to.
-        match_node_id_key : str
-            The key of the node ID to match on.
+        matched_node_id_key : str
+            The key of the output value of the corresponding node ID in the other graph.
         match_score_key : str
-            The key of the match score to use.
-        edge_match_key : str
-            The key of the edge match to use.
+            The key of the output value of the match score between matched nodes
+        matched_edge_mask_key : str
+            The key of the output as a boolean value indicating if a corresponding edge exists in the other graph.
         """
         from tracksdata.metrics._ctc_metrics import _matching_data
 
@@ -506,14 +506,14 @@ class BaseGraph(abc.ABC):
             optimal_matching=True,
         )
 
-        if match_node_id_key not in self.node_features_keys:
-            self.add_node_feature_key(match_node_id_key, -1)
+        if matched_node_id_key not in self.node_features_keys:
+            self.add_node_feature_key(matched_node_id_key, -1)
 
         if match_score_key not in self.node_features_keys:
             self.add_node_feature_key(match_score_key, 0.0)
 
-        if edge_match_key not in self.edge_features_keys:
-            self.add_edge_feature_key(edge_match_key, False)
+        if matched_edge_mask_key not in self.edge_features_keys:
+            self.add_edge_feature_key(matched_edge_mask_key, False)
 
         node_ids = functools.reduce(operator.iadd, matching_data["mapped_comp"])
         other_ids = functools.reduce(operator.iadd, matching_data["mapped_ref"])
@@ -525,7 +525,7 @@ class BaseGraph(abc.ABC):
 
         self.update_node_features(
             node_ids=node_ids,
-            attributes={match_node_id_key: other_ids, match_score_key: ious},
+            attributes={matched_node_id_key: other_ids, match_score_key: ious},
         )
 
         other_to_node_ids = dict(zip(other_ids, node_ids, strict=False))
@@ -552,5 +552,5 @@ class BaseGraph(abc.ABC):
 
         self.update_edge_features(
             edge_ids=edge_ids,
-            attributes={edge_match_key: True},
+            attributes={matched_edge_mask_key: True},
         )

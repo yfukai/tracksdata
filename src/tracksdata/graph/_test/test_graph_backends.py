@@ -756,9 +756,9 @@ def test_match_method(graph_backend: BaseGraph) -> None:
 
     graph_backend.match(
         other=other_graph,
-        match_node_id_key=match_node_id_key,
+        matched_node_id_key=match_node_id_key,
         match_score_key=match_score_key,
-        edge_match_key=edge_match_key,
+        matched_edge_mask_key=edge_match_key,
     )
 
     # Verify that feature keys were added
@@ -768,6 +768,7 @@ def test_match_method(graph_backend: BaseGraph) -> None:
 
     # Get node features to check matching results
     nodes_df = graph_backend.node_features(feature_keys=[DEFAULT_ATTR_KEYS.NODE_ID, match_node_id_key, match_score_key])
+    print(nodes_df)
 
     # Verify specific expected matches based on IoU
     # Create a mapping from node_id to matched values
