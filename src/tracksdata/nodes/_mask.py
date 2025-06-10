@@ -11,6 +11,16 @@ class Mask:
         mask: NDArray[np.bool_],
         bbox: np.ndarray,
     ):
+        bbox = np.asarray(bbox)
+
+        if mask.ndim != bbox.shape[0] // 2:
+            raise ValueError(f"Mask dimension {mask.ndim} does not match bbox dimension {bbox.shape[0]} // 2")
+
+        bbox_size = bbox[mask.ndim :] - bbox[: mask.ndim]
+
+        if np.any(mask.shape != bbox_size):
+            raise ValueError(f"Mask shape {mask.shape} does not match bbox size {bbox_size}")
+
         self._mask = mask
         self._bbox = bbox
 
