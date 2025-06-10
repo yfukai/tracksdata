@@ -91,7 +91,7 @@ def test_mask_indices_with_array_offset() -> None:
 def test_mask_indices_3d() -> None:
     """Test mask_indices with 3D mask."""
     mask_array = np.array([[[True, False], [False, False]], [[False, False], [False, True]]], dtype=bool)
-    bbox = np.array([1, 2, 3, 4, 5, 6])  # min_z, min_y, min_x, max_z, max_y, max_x
+    bbox = np.array([1, 2, 3, 3, 4, 5])  # min_z, min_y, min_x, max_z, max_y, max_x
 
     mask = Mask(mask_array, bbox)
     indices = mask.mask_indices()
