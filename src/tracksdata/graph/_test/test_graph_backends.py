@@ -483,7 +483,13 @@ def test_sucessors_and_degree(graph_backend: BaseGraph) -> None:
     successors_dict = graph_backend.sucessors([node0, node1, node2])
     assert isinstance(successors_dict, dict)
     assert len(successors_dict) == 3
+
+    # testing query all
+    assert graph_backend.out_degree() == [2, 1, 0, 0]
+
+    # testing different ordering
     assert graph_backend.out_degree([node0, node1, node2]) == [2, 1, 0]
+    assert graph_backend.out_degree([node1, node2, node0]) == [1, 0, 2]
 
     # Check node0's successors
     assert len(successors_dict[node0]) == 2
@@ -545,7 +551,10 @@ def test_predecessors_and_degree(graph_backend: BaseGraph) -> None:
     predecessors_dict = graph_backend.predecessors([node0, node1, node2, node3])
     assert isinstance(predecessors_dict, dict)
     assert len(predecessors_dict) == 4
+    assert graph_backend.in_degree() == [0, 1, 1, 1]
+    # testing different ordering
     assert graph_backend.in_degree([node0, node1, node2, node3]) == [0, 1, 1, 1]
+    assert graph_backend.in_degree([node1, node2, node3, node0]) == [1, 1, 1, 0]
 
     # Check predecessors
     assert len(predecessors_dict[node0]) == 0  # node0 has no predecessors

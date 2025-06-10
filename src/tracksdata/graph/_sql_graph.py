@@ -676,7 +676,7 @@ class SQLGraph(BaseGraph):
 
     def _get_degree(
         self,
-        node_ids: list[int] | int,
+        node_ids: list[int] | int | None,
         node_key: str,
     ) -> list[int] | int:
         if isinstance(node_ids, int):
@@ -694,18 +694,23 @@ class SQLGraph(BaseGraph):
             # get the number of edges for each using group by and count
             node_id_col = getattr(self.Edge, node_key)
             query = session.query(node_id_col, sa.func.count(node_id_col)).group_by(node_id_col)
-            query = query.filter(node_id_col.in_(node_ids))
+            if node_ids is not None:
+                query = query.filter(node_id_col.in_(node_ids))
             degree = dict(query.all())
+
+        if node_ids is None:
+            # this is necessary to make sure it's the same order as node_ids
+            return [degree.get(node_id, 0) for node_id in self.node_ids()]
 
         return [degree.get(node_id, 0) for node_id in node_ids]
 
-    def in_degree(self, node_ids: list[int] | int) -> list[int] | int:
+    def in_degree(self, node_ids: list[int] | int | None = None) -> list[int] | int:
         """
         Get the in-degree of a list of nodes.
         """
         return self._get_degree(node_ids, DEFAULT_ATTR_KEYS.EDGE_TARGET)
 
-    def out_degree(self, node_ids: list[int] | int) -> list[int] | int:
+    def out_degree(self, node_ids: list[int] | int | None = None) -> list[int] | int:
         """
         Get the out-degree of a list of nodes.
         """
