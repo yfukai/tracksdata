@@ -445,3 +445,15 @@ class BaseGraph(abc.ABC):
         graph = cls(**kwargs)
         load_ctc(data_dir, graph)
         return graph
+
+    @abc.abstractmethod
+    def in_degree(self, node_ids: list[int] | int) -> list[int] | int:
+        """
+        Get the in-degree of a list of nodes.
+        """
+
+    @abc.abstractmethod
+    def out_degree(self, node_ids: list[int] | int) -> list[int] | int:
+        """
+        Get the out-degree of a list of nodes.
+        """
