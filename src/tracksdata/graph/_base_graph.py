@@ -1,10 +1,15 @@
 import abc
+import functools
+import operator
 from collections.abc import Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, TypeVar, overload
 
 import polars as pl
 from numpy.typing import ArrayLike
+
+from tracksdata.constants import DEFAULT_ATTR_KEYS
+from tracksdata.utils._logging import LOG
 
 if TYPE_CHECKING:
     from tracksdata.graph._graph_view import GraphView
@@ -469,3 +474,73 @@ class BaseGraph(abc.ABC):
         """
         Get the out-degree of a list of nodes.
         """
+
+    def match(
+        self,
+        other: "BaseGraph",
+        match_node_id_key: str,
+        match_score_key: str,
+        edge_match_key: str,
+    ) -> None:
+        """
+        Match the nodes of the graph to the nodes of another graph.
+
+        Parameters
+        ----------
+        other : BaseGraph
+            The other graph to match to.
+        match_node_id_key : str
+            The key of the node ID to match on.
+        match_score_key : str
+            The key of the match score to use.
+        edge_match_key : str
+            The key of the edge match to use.
+        """
+        from tracksdata.metrics._ctc_metrics import _matching_data
+
+        matching_data = _matching_data(
+            self,
+            other,
+            input_graph_key=DEFAULT_ATTR_KEYS.NODE_ID,
+            reference_graph_key=DEFAULT_ATTR_KEYS.NODE_ID,
+        )
+
+        if match_node_id_key not in self.node_features_keys:
+            self.add_node_feature_key(match_node_id_key, -1)
+
+        if match_score_key not in self.node_features_keys:
+            self.add_node_feature_key(match_score_key, 0.0)
+
+        if edge_match_key not in self.edge_features_keys:
+            self.add_edge_feature_key(edge_match_key, False)
+
+        node_ids = functools.reduce(operator.iadd, matching_data["mapped_comp"])
+        ref_ids = functools.reduce(operator.iadd, matching_data["mapped_ref"])
+        ious = functools.reduce(operator.iadd, matching_data["ious"])
+
+        if len(node_ids) == 0:
+            LOG.warning("No matching nodes found.")
+            return
+
+        self.update_node_features(
+            node_ids=node_ids,
+            attributes={match_node_id_key: ref_ids, match_score_key: ious},
+        )
+
+        self_edges_df = self.edge_features(feature_keys=[])
+        other_edges_df = other.edge_features(feature_keys=[])
+
+        edge_ids = self_edges_df.join(
+            other_edges_df,
+            on=[DEFAULT_ATTR_KEYS.EDGE_SOURCE, DEFAULT_ATTR_KEYS.EDGE_TARGET],
+            how="inner",
+        )[DEFAULT_ATTR_KEYS.EDGE_ID]
+
+        if len(edge_ids) == 0:
+            LOG.warning("No matching edges found.")
+            return
+
+        self.update_edge_features(
+            edge_ids=edge_ids,
+            attributes={edge_match_key: True},
+        )

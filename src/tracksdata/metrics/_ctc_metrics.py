@@ -1,16 +1,21 @@
+from typing import TYPE_CHECKING
+
 import numpy as np
 
 from tracksdata.constants import DEFAULT_ATTR_KEYS
-from tracksdata.graph import RustWorkXGraph
 from tracksdata.io._ctc import compressed_tracks_table
 from tracksdata.utils._logging import LOG
 
+if TYPE_CHECKING:
+    from tracksdata.graph import RustWorkXGraph
+    from tracksdata.graph._base_graph import BaseGraph
+
 
 def _matching_data(
-    input_graph: RustWorkXGraph,
-    reference_graph: RustWorkXGraph,
-    reference_track_id_key: str,
-    input_track_id_key: str,
+    input_graph: "BaseGraph",
+    reference_graph: "BaseGraph",
+    input_graph_key: str,
+    reference_graph_key: str,
 ) -> dict[str, list[list]]:
     """
     Compute matching data for CTC metrics.
@@ -25,8 +30,8 @@ def _matching_data(
 
     # computing unique labels for each graph
     for name, graph, track_id_key in [
-        ("ref", reference_graph, reference_track_id_key),
-        ("comp", input_graph, input_track_id_key),
+        ("ref", reference_graph, reference_graph_key),
+        ("comp", input_graph, input_graph_key),
     ]:
         nodes_df = graph.node_features(feature_keys=[DEFAULT_ATTR_KEYS.T, track_id_key, DEFAULT_ATTR_KEYS.MASK])
         labels = {}
@@ -58,10 +63,8 @@ def _matching_data(
         except KeyError:
             continue
 
-        for ref_id, ref_mask in zip(ref_group[reference_track_id_key], ref_group[DEFAULT_ATTR_KEYS.MASK], strict=True):
-            for comp_id, comp_mask in zip(
-                comp_group[input_track_id_key], comp_group[DEFAULT_ATTR_KEYS.MASK], strict=True
-            ):
+        for ref_id, ref_mask in zip(ref_group[reference_graph_key], ref_group[DEFAULT_ATTR_KEYS.MASK], strict=True):
+            for comp_id, comp_mask in zip(comp_group[input_graph_key], comp_group[DEFAULT_ATTR_KEYS.MASK], strict=True):
                 # intersection over reference is used to select the matches
                 inter = ref_mask.intersection(comp_mask)
                 ctc_score = inter / ref_mask.size()
@@ -82,8 +85,8 @@ def _matching_data(
 
 
 def compute_ctc_metrics_data(
-    input_graph: RustWorkXGraph,
-    reference_graph: RustWorkXGraph,
+    input_graph: "BaseGraph",
+    reference_graph: "BaseGraph",
     input_track_id_key: str,
     reference_track_id_key: str,
 ) -> tuple[np.ndarray, np.ndarray, dict[str, list[list]]]:
@@ -128,8 +131,8 @@ def compute_ctc_metrics_data(
 
 
 def evaluate_ctc_metrics(
-    input_graph: RustWorkXGraph,
-    reference_graph: RustWorkXGraph,
+    input_graph: "RustWorkXGraph",
+    reference_graph: "RustWorkXGraph",
     input_track_id_key: str = DEFAULT_ATTR_KEYS.TRACK_ID,
     reference_track_id_key: str = DEFAULT_ATTR_KEYS.TRACK_ID,
     metrics: list[str] | None = None,
