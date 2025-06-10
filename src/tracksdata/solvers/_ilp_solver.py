@@ -166,6 +166,7 @@ class ILPSolver(BaseSolver):
                 solver.set_objective(self._objective)
                 solver.set_constraints(self._constraints)
                 solution = solver.solve()
+                break
             except Exception as e:
                 LOG.warning(f"Solver failed with {preference.name}, trying Scip.\nGot error:\n{e}")
                 continue

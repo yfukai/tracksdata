@@ -12,6 +12,7 @@ from sqlalchemy.sql.type_api import TypeEngine
 
 from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.graph._base_graph import BaseGraph
+from tracksdata.utils._dataframe import unpack_array_features
 from tracksdata.utils._logging import LOG
 
 if TYPE_CHECKING:
@@ -169,6 +170,17 @@ class SQLGraph(BaseGraph):
         self.Base = Base
         self.Node = Node
         self.Edge = Edge
+
+        self._boolean_columns = {self.Node: [], self.Edge: []}
+
+    def _cast_boolean_columns(self, table_class: type[DeclarativeBase], df: pl.DataFrame) -> pl.DataFrame:
+        """
+        This is required because polars bypasses the boolean type and converts it to integer.
+        """
+        for col in self._boolean_columns[table_class]:
+            if col in df.columns:
+                df = df.with_columns(pl.col(col).cast(pl.Boolean))
+        return df
 
     def _update_max_id_per_time(self) -> None:
         """
@@ -424,6 +436,7 @@ class SQLGraph(BaseGraph):
                 query.statement,
                 connection=session.connection(),
             )
+            node_df = self._cast_boolean_columns(self.Node, node_df)
 
         if single_node:
             return node_df
@@ -686,6 +699,7 @@ class SQLGraph(BaseGraph):
         *,
         node_ids: Sequence[int] | None = None,
         feature_keys: Sequence[str] | str | None = None,
+        unpack: bool = False,
     ) -> pl.DataFrame:
         if isinstance(feature_keys, str):
             feature_keys = [feature_keys]
@@ -712,6 +726,7 @@ class SQLGraph(BaseGraph):
             query.statement,
             connection=session.connection(),
         )
+        nodes_df = self._cast_boolean_columns(self.Node, nodes_df)
 
         # match node_ids ordering
         if node_ids is not None and not nodes_df.is_empty():
@@ -719,9 +734,14 @@ class SQLGraph(BaseGraph):
 
         # indices are included by default and must be removed
         if feature_keys is not None:
-            return nodes_df.select([pl.col(c) for c in feature_keys])
+            df = nodes_df.select([pl.col(c) for c in feature_keys])
         else:
-            return nodes_df.drop(DEFAULT_ATTR_KEYS.NODE_ID)
+            df = nodes_df.drop(DEFAULT_ATTR_KEYS.NODE_ID)
+
+        if unpack:
+            df = unpack_array_features(df)
+
+        return df
 
     def edge_features(
         self,
@@ -729,6 +749,7 @@ class SQLGraph(BaseGraph):
         node_ids: list[int] | None = None,
         feature_keys: Sequence[str] | None = None,
         include_targets: bool = False,
+        unpack: bool = False,
     ) -> pl.DataFrame:
         if isinstance(feature_keys, str):
             feature_keys = [feature_keys]
@@ -769,8 +790,12 @@ class SQLGraph(BaseGraph):
                 self._raw_query(query),
                 connection=session.connection(),
             )
+            edges_df = self._cast_boolean_columns(self.Edge, edges_df)
 
-            return edges_df
+        if unpack:
+            edges_df = unpack_array_features(edges_df)
+
+        return edges_df
 
     @property
     def node_features_keys(self) -> list[str]:
@@ -792,14 +817,15 @@ class SQLGraph(BaseGraph):
         if isinstance(default_value, float):
             return sa.Float
 
+        # must come before integer, otherwise it will be interpreted as it
+        elif isinstance(default_value, bool):
+            return sa.Boolean
+
         elif isinstance(default_value, int):
             return sa.Integer
 
         elif isinstance(default_value, str):
             return sa.String
-
-        elif isinstance(default_value, bool):
-            return sa.Boolean
 
         elif isinstance(default_value, Enum):
             return sa.Enum(default_value.__class__)
@@ -817,6 +843,10 @@ class SQLGraph(BaseGraph):
         default_value: Any,
     ) -> None:
         sa_type = self._sqlalchemy_type_inference(default_value)
+
+        if sa_type == sa.Boolean:
+            self._boolean_columns[table_class].append(key)
+
         sa_column = sa.Column(key, sa_type, default=default_value)
 
         str_dialect_type = sa_column.type.compile(dialect=self._engine.dialect)
@@ -933,3 +963,40 @@ class SQLGraph(BaseGraph):
         attributes: dict[str, Any],
     ) -> None:
         self._update_table(self.Edge, edge_ids, DEFAULT_ATTR_KEYS.EDGE_ID, attributes)
+
+    def _get_degree(
+        self,
+        node_ids: list[int] | int,
+        node_key: str,
+    ) -> list[int] | int:
+        if isinstance(node_ids, int):
+            with Session(self._engine) as session:
+                query = (
+                    session.query(
+                        getattr(self.Edge, node_key),
+                    )
+                    .filter(getattr(self.Edge, node_key) == node_ids)
+                    .count()
+                )
+            return int(query)
+
+        with Session(self._engine) as session:
+            # get the number of edges for each using group by and count
+            node_id_col = getattr(self.Edge, node_key)
+            query = session.query(node_id_col, sa.func.count(node_id_col)).group_by(node_id_col)
+            query = query.filter(node_id_col.in_(node_ids))
+            degree = dict(query.all())
+
+        return [degree.get(node_id, 0) for node_id in node_ids]
+
+    def in_degree(self, node_ids: list[int] | int) -> list[int] | int:
+        """
+        Get the in-degree of a list of nodes.
+        """
+        return self._get_degree(node_ids, DEFAULT_ATTR_KEYS.EDGE_TARGET)
+
+    def out_degree(self, node_ids: list[int] | int) -> list[int] | int:
+        """
+        Get the out-degree of a list of nodes.
+        """
+        return self._get_degree(node_ids, DEFAULT_ATTR_KEYS.EDGE_SOURCE)

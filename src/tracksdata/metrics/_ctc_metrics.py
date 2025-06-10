@@ -1,20 +1,50 @@
+from typing import TYPE_CHECKING
+
 import numpy as np
+import scipy.sparse as sp
 
 from tracksdata.constants import DEFAULT_ATTR_KEYS
-from tracksdata.graph import RustWorkXGraph
 from tracksdata.io._ctc import compressed_tracks_table
 from tracksdata.utils._logging import LOG
 
+if TYPE_CHECKING:
+    from tracksdata.graph import RustWorkXGraph
+    from tracksdata.graph._base_graph import BaseGraph
+
 
 def _matching_data(
-    input_graph: RustWorkXGraph,
-    reference_graph: RustWorkXGraph,
-    reference_track_id_key: str,
-    input_track_id_key: str,
+    input_graph: "BaseGraph",
+    reference_graph: "BaseGraph",
+    input_graph_key: str,
+    reference_graph_key: str,
+    optimal_matching: bool = False,
+    min_reference_intersection: float = 0.5,
 ) -> dict[str, list[list]]:
     """
     Compute matching data for CTC metrics.
-    See `compute_ctc_metrics_data` for more information.
+
+    This function includes an optional functionality of solving the optimal matching
+    to avoid duplicated matches from `input_graph` to `reference_graph`.
+
+    Parameters
+    ----------
+    input_graph : BaseGraph
+        Input graph.
+    reference_graph : BaseGraph
+        Reference graph.
+    input_graph_key : str
+        Key to obtain the track id from the input graph.
+    reference_graph_key : str
+        Key to obtain the track id from the reference graph.
+    optimal_matching : bool, optional
+        Whether to solve the optimal matching.
+    min_reference_intersection : float, optional
+        Minimum coverage of a reference mask to be considered as a possible match.
+
+    Returns
+    -------
+    dict[str, list[list]]
+        Dictionary with the matching data, see `compute_ctc_metrics_data` for more information.
     """
     result = {}
 
@@ -25,8 +55,8 @@ def _matching_data(
 
     # computing unique labels for each graph
     for name, graph, track_id_key in [
-        ("ref", reference_graph, reference_track_id_key),
-        ("comp", input_graph, input_track_id_key),
+        ("ref", reference_graph, reference_graph_key),
+        ("comp", input_graph, input_graph_key),
     ]:
         nodes_df = graph.node_features(feature_keys=[DEFAULT_ATTR_KEYS.T, track_id_key, DEFAULT_ATTR_KEYS.MASK])
         labels = {}
@@ -43,36 +73,58 @@ def _matching_data(
     ious = []
 
     for t in set.union(set(groups_by_time["ref"].keys()), set(groups_by_time["comp"].keys())):
-        _mapped_ref = []
-        mapped_ref.append(_mapped_ref)
-
-        _mapped_comp = []
-        mapped_comp.append(_mapped_comp)
-
-        _ious = []
-        ious.append(_ious)
-
         try:
             ref_group = groups_by_time["ref"][t]
             comp_group = groups_by_time["comp"][t]
         except KeyError:
+            ious.append([])
+            mapped_ref.append([])
+            mapped_comp.append([])
             continue
 
-        for ref_id, ref_mask in zip(ref_group[reference_track_id_key], ref_group[DEFAULT_ATTR_KEYS.MASK], strict=True):
-            for comp_id, comp_mask in zip(
-                comp_group[input_track_id_key], comp_group[DEFAULT_ATTR_KEYS.MASK], strict=True
+        _mapped_ref = []
+        _mapped_comp = []
+        _ious = []
+        _rows = []
+        _cols = []
+
+        for i, (ref_id, ref_mask) in enumerate(
+            zip(ref_group[reference_graph_key], ref_group[DEFAULT_ATTR_KEYS.MASK], strict=True)
+        ):
+            for j, (comp_id, comp_mask) in enumerate(
+                zip(comp_group[input_graph_key], comp_group[DEFAULT_ATTR_KEYS.MASK], strict=True)
             ):
                 # intersection over reference is used to select the matches
                 inter = ref_mask.intersection(comp_mask)
                 ctc_score = inter / ref_mask.size()
-                if ctc_score > 0.5:
+                if ctc_score > min_reference_intersection:
                     _mapped_ref.append(ref_id)
                     _mapped_comp.append(comp_id)
+                    _rows.append(i)
+                    _cols.append(j)
 
                     # NOTE: there was something weird with IoU, the length when compared with `ctc_metrics`
                     #       sometimes it had an extra element
                     iou = inter / (ref_mask.size() + comp_mask.size() - inter)
                     _ious.append(iou.item())
+
+        if optimal_matching and len(_rows) > 0:
+            LOG.info("Solving optimal matching ...")
+            _ious = np.asarray(_ious, dtype=np.float32)
+            _mapped_ref = np.asarray(_mapped_ref, dtype=int)
+            _mapped_comp = np.asarray(_mapped_comp, dtype=int)
+
+            weights = sp.csr_array((_ious, (_rows, _cols)), dtype=np.float32)
+            rows_id, cols_id = sp.csgraph.min_weight_full_bipartite_matching(weights, maximize=True)
+
+            _mapped_ref = _mapped_ref[rows_id].tolist()
+            _mapped_comp = _mapped_comp[cols_id].tolist()
+            _ious = weights[rows_id, cols_id].tolist()
+            LOG.info("Done!")
+
+        mapped_ref.append(_mapped_ref)
+        mapped_comp.append(_mapped_comp)
+        ious.append(_ious)
 
     result["mapped_ref"] = mapped_ref
     result["mapped_comp"] = mapped_comp
@@ -82,8 +134,8 @@ def _matching_data(
 
 
 def compute_ctc_metrics_data(
-    input_graph: RustWorkXGraph,
-    reference_graph: RustWorkXGraph,
+    input_graph: "BaseGraph",
+    reference_graph: "BaseGraph",
     input_track_id_key: str,
     reference_track_id_key: str,
 ) -> tuple[np.ndarray, np.ndarray, dict[str, list[list]]]:
@@ -128,8 +180,8 @@ def compute_ctc_metrics_data(
 
 
 def evaluate_ctc_metrics(
-    input_graph: RustWorkXGraph,
-    reference_graph: RustWorkXGraph,
+    input_graph: "RustWorkXGraph",
+    reference_graph: "RustWorkXGraph",
     input_track_id_key: str = DEFAULT_ATTR_KEYS.TRACK_ID,
     reference_track_id_key: str = DEFAULT_ATTR_KEYS.TRACK_ID,
     metrics: list[str] | None = None,

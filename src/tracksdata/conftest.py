@@ -18,7 +18,6 @@ def graph_backend(request) -> BaseGraph:
         return graph_class(
             drivername="sqlite",
             database=":memory:",
-            overwrite=True,
         )
     else:
         return graph_class()

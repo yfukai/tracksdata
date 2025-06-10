@@ -1,10 +1,15 @@
 import abc
+import functools
+import operator
 from collections.abc import Sequence
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar, overload
 
 import polars as pl
 from numpy.typing import ArrayLike
+
+from tracksdata.constants import DEFAULT_ATTR_KEYS
+from tracksdata.utils._logging import LOG
 
 if TYPE_CHECKING:
     from tracksdata.graph._graph_view import GraphView
@@ -287,6 +292,7 @@ class BaseGraph(abc.ABC):
         *,
         node_ids: Sequence[int] | None = None,
         feature_keys: Sequence[str] | str | None = None,
+        unpack: bool = False,
     ) -> pl.DataFrame:
         """
         Get the features of the nodes as a pandas DataFrame.
@@ -299,6 +305,8 @@ class BaseGraph(abc.ABC):
         feature_keys : Sequence[str] | str | None
             The feature keys to get.
             If None, all features are used.
+        unpack : bool
+            Whether to unpack array features into multiple scalar features.
 
         Returns
         -------
@@ -313,6 +321,7 @@ class BaseGraph(abc.ABC):
         node_ids: list[int] | None = None,
         feature_keys: Sequence[str] | None = None,
         include_targets: bool = False,
+        unpack: bool = False,
     ) -> pl.DataFrame:
         """
         Get the features of the edges as a polars DataFrame.
@@ -328,6 +337,8 @@ class BaseGraph(abc.ABC):
         include_targets : bool
             Whether to include edges out-going from the given node_ids even
             if the target node is not in the given node_ids.
+        unpack : bool
+            Whether to unpack array features into multiple scalar features.
         """
 
     @property
@@ -439,3 +450,107 @@ class BaseGraph(abc.ABC):
         graph = cls(**kwargs)
         load_ctc(data_dir, graph)
         return graph
+
+    @overload
+    def in_degree(self, node_ids: int) -> int: ...
+
+    @overload
+    def in_degree(self, node_ids: list[int]) -> list[int]: ...
+
+    @overload
+    def out_degree(self, node_ids: int) -> int: ...
+
+    @overload
+    def out_degree(self, node_ids: list[int]) -> list[int]: ...
+
+    @abc.abstractmethod
+    def in_degree(self, node_ids: list[int] | int) -> list[int] | int:
+        """
+        Get the in-degree of a list of nodes.
+        """
+
+    @abc.abstractmethod
+    def out_degree(self, node_ids: list[int] | int) -> list[int] | int:
+        """
+        Get the out-degree of a list of nodes.
+        """
+
+    def match(
+        self,
+        other: "BaseGraph",
+        matched_node_id_key: str,
+        match_score_key: str,
+        matched_edge_mask_key: str,
+    ) -> None:
+        """
+        Match the nodes of the graph to the nodes of another graph.
+
+        Parameters
+        ----------
+        other : BaseGraph
+            The other graph to match to.
+        matched_node_id_key : str
+            The key of the output value of the corresponding node ID in the other graph.
+        match_score_key : str
+            The key of the output value of the match score between matched nodes
+        matched_edge_mask_key : str
+            The key of the output as a boolean value indicating if a corresponding edge exists in the other graph.
+        """
+        from tracksdata.metrics._ctc_metrics import _matching_data
+
+        matching_data = _matching_data(
+            self,
+            other,
+            input_graph_key=DEFAULT_ATTR_KEYS.NODE_ID,
+            reference_graph_key=DEFAULT_ATTR_KEYS.NODE_ID,
+            optimal_matching=True,
+        )
+
+        if matched_node_id_key not in self.node_features_keys:
+            self.add_node_feature_key(matched_node_id_key, -1)
+
+        if match_score_key not in self.node_features_keys:
+            self.add_node_feature_key(match_score_key, 0.0)
+
+        if matched_edge_mask_key not in self.edge_features_keys:
+            self.add_edge_feature_key(matched_edge_mask_key, False)
+
+        node_ids = functools.reduce(operator.iadd, matching_data["mapped_comp"])
+        other_ids = functools.reduce(operator.iadd, matching_data["mapped_ref"])
+        ious = functools.reduce(operator.iadd, matching_data["ious"])
+
+        if len(node_ids) == 0:
+            LOG.warning("No matching nodes found.")
+            return
+
+        self.update_node_features(
+            node_ids=node_ids,
+            attributes={matched_node_id_key: other_ids, match_score_key: ious},
+        )
+
+        other_to_node_ids = dict(zip(other_ids, node_ids, strict=False))
+
+        self_edges_df = self.edge_features(feature_keys=[])
+        other_edges_df = other.edge_features(feature_keys=[])
+
+        other_edges_df = other_edges_df.with_columns(
+            {
+                col: other_edges_df[col].map_elements(other_to_node_ids.get, return_dtype=pl.Int64).alias(col)
+                for col in [DEFAULT_ATTR_KEYS.EDGE_SOURCE, DEFAULT_ATTR_KEYS.EDGE_TARGET]
+            }
+        )
+
+        edge_ids = self_edges_df.join(
+            other_edges_df,
+            on=[DEFAULT_ATTR_KEYS.EDGE_SOURCE, DEFAULT_ATTR_KEYS.EDGE_TARGET],
+            how="inner",
+        )[DEFAULT_ATTR_KEYS.EDGE_ID]
+
+        if len(edge_ids) == 0:
+            LOG.warning("No matching edges found.")
+            return
+
+        self.update_edge_features(
+            edge_ids=edge_ids,
+            attributes={matched_edge_mask_key: True},
+        )

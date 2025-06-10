@@ -9,6 +9,7 @@ from numpy.typing import ArrayLike
 from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.functional._rx import graph_track_ids
 from tracksdata.graph._base_graph import BaseGraph
+from tracksdata.utils._dataframe import unpack_array_features
 from tracksdata.utils._logging import LOG
 
 if TYPE_CHECKING:
@@ -386,6 +387,7 @@ class RustWorkXGraph(BaseGraph):
         *,
         node_ids: Sequence[int] | None = None,
         feature_keys: Sequence[str] | str | None = None,
+        unpack: bool = False,
     ) -> pl.DataFrame:
         """
         Get the features of the nodes as a polars DataFrame.
@@ -398,6 +400,8 @@ class RustWorkXGraph(BaseGraph):
         feature_keys : Sequence[str] | None
             The feature keys to get.
             If None, all the features of the first node are used.
+        unpack : bool
+            Whether to unpack array features into multiple scalar features.
 
         Returns
         -------
@@ -435,7 +439,12 @@ class RustWorkXGraph(BaseGraph):
             columns[key] = np.asarray(columns[key])
 
         # Create DataFrame and set node_id as index in one shot
-        return pl.DataFrame(columns)
+        df = pl.DataFrame(columns)
+
+        if unpack:
+            df = unpack_array_features(df)
+
+        return df
 
     def edge_features(
         self,
@@ -443,6 +452,7 @@ class RustWorkXGraph(BaseGraph):
         node_ids: list[int] | None = None,
         feature_keys: Sequence[str] | str | None = None,
         include_targets: bool = False,
+        unpack: bool = False,
     ) -> pl.DataFrame:
         """
         Get the features of the edges as a polars DataFrame.
@@ -458,6 +468,8 @@ class RustWorkXGraph(BaseGraph):
         include_targets : bool
             Whether to include edges out-going from the given node_ids even
             if the target node is not in the given node_ids.
+        unpack : bool
+            Whether to unpack array features into multiple scalar features.
         """
         if feature_keys is None:
             feature_keys = self.edge_features_keys
@@ -507,7 +519,10 @@ class RustWorkXGraph(BaseGraph):
 
         columns = {k: np.asarray(v) for k, v in columns.items()}
 
-        return pl.DataFrame(columns)
+        df = pl.DataFrame(columns)
+        if unpack:
+            df = unpack_array_features(df)
+        return df
 
     @property
     def num_edges(self) -> int:
@@ -624,3 +639,21 @@ class RustWorkXGraph(BaseGraph):
         )
 
         return tracks_graph
+
+    def in_degree(self, node_ids: list[int] | int) -> list[int] | int:
+        """
+        Get the in-degree of a list of nodes.
+        """
+        rx_graph = self.rx_graph
+        if isinstance(node_ids, int):
+            return rx_graph.in_degree(node_ids)
+        return [rx_graph.in_degree(node_id) for node_id in node_ids]
+
+    def out_degree(self, node_ids: list[int] | int) -> list[int] | int:
+        """
+        Get the out-degree of a list of nodes.
+        """
+        rx_graph = self.rx_graph
+        if isinstance(node_ids, int):
+            return rx_graph.out_degree(node_ids)
+        return [rx_graph.out_degree(node_id) for node_id in node_ids]

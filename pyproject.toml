@@ -105,6 +105,7 @@ skip_covered = true
 exclude_lines = [
     "@njit",  # numba is not supported by coverage
     "@jitclass",
+    "@overload",
     "pragma: no cover", # Have to re-enable the standard pragma
     "def __repr__", # Don't complain about missing debug-only code:
     "raise AssertionError",

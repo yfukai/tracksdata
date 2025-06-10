@@ -244,10 +244,12 @@ class GraphView(RustWorkXGraph):
         *,
         node_ids: Sequence[int] | None = None,
         feature_keys: Sequence[str] | str | None = None,
+        unpack: bool = False,
     ) -> pl.DataFrame:
         node_dfs = super().node_features(
             node_ids=map_ids(self._node_map_from_root, node_ids),
             feature_keys=feature_keys,
+            unpack=unpack,
         )
         node_dfs = self._map_to_root_df_node_ids(node_dfs)
         return node_dfs
@@ -258,11 +260,13 @@ class GraphView(RustWorkXGraph):
         node_ids: Sequence[int] | None = None,
         feature_keys: Sequence[str] | str | None = None,
         include_targets: bool = False,
+        unpack: bool = False,
     ) -> pl.DataFrame:
         edges_df = super().edge_features(
             node_ids=map_ids(self._node_map_from_root, node_ids),
             feature_keys=feature_keys,
             include_targets=include_targets,
+            unpack=unpack,
         )
 
         edges_df = edges_df.with_columns(
@@ -349,3 +353,21 @@ class GraphView(RustWorkXGraph):
         )
 
         return tracks_graph
+
+    def in_degree(self, node_ids: list[int] | int) -> list[int] | int:
+        """
+        Get the in-degree of a list of nodes.
+        """
+        rx_graph = self.rx_graph
+        if isinstance(node_ids, int):
+            return rx_graph.in_degree(self._node_map_from_root[node_ids])
+        return [rx_graph.in_degree(self._node_map_from_root[node_id]) for node_id in node_ids]
+
+    def out_degree(self, node_ids: list[int] | int) -> list[int] | int:
+        """
+        Get the out-degree of a list of nodes.
+        """
+        rx_graph = self.rx_graph
+        if isinstance(node_ids, int):
+            return rx_graph.out_degree(self._node_map_from_root[node_ids])
+        return [rx_graph.out_degree(self._node_map_from_root[node_id]) for node_id in node_ids]

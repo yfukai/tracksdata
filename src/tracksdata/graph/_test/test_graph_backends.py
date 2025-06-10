@@ -1,11 +1,13 @@
 from pathlib import Path
 
+import numpy as np
 import polars as pl
 import pytest
 
 from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.graph import SQLGraph
 from tracksdata.graph._base_graph import BaseGraph
+from tracksdata.nodes._mask import Mask
 
 
 def test_already_existing_keys(graph_backend: BaseGraph) -> None:
@@ -142,13 +144,20 @@ def test_time_points(graph_backend: BaseGraph) -> None:
 def test_node_features(graph_backend: BaseGraph) -> None:
     """Test retrieving node features."""
     graph_backend.add_node_feature_key("x", None)
+    graph_backend.add_node_feature_key("coordinates", np.array([0.0, 0.0]))
 
-    node1 = graph_backend.add_node({"t": 0, "x": 1.0})
-    node2 = graph_backend.add_node({"t": 1, "x": 2.0})
+    node1 = graph_backend.add_node({"t": 0, "x": 1.0, "coordinates": np.array([10.0, 20.0])})
+    node2 = graph_backend.add_node({"t": 1, "x": 2.0, "coordinates": np.array([30.0, 40.0])})
 
     df = graph_backend.node_features(node_ids=[node1, node2], feature_keys=["x"])
     assert isinstance(df, pl.DataFrame)
     assert df["x"].to_list() == [1.0, 2.0]
+
+    # Test unpack functionality
+    df_unpacked = graph_backend.node_features(node_ids=[node1, node2], feature_keys=["coordinates"], unpack=True)
+    if "coordinates_0" in df_unpacked.columns:
+        assert df_unpacked["coordinates_0"].to_list() == [10.0, 30.0]
+        assert df_unpacked["coordinates_1"].to_list() == [20.0, 40.0]
 
 
 def test_edge_features(graph_backend: BaseGraph) -> None:
@@ -157,11 +166,19 @@ def test_edge_features(graph_backend: BaseGraph) -> None:
     node2 = graph_backend.add_node({"t": 1})
 
     graph_backend.add_edge_feature_key("weight", 0.0)
-    graph_backend.add_edge(node1, node2, attributes={"weight": 0.5})
+    graph_backend.add_edge_feature_key("vector", np.array([0.0, 0.0]))
+
+    graph_backend.add_edge(node1, node2, attributes={"weight": 0.5, "vector": np.array([1.0, 2.0])})
 
     df = graph_backend.edge_features(feature_keys=["weight"])
     assert isinstance(df, pl.DataFrame)
     assert df["weight"].to_list() == [0.5]
+
+    # Test unpack functionality
+    df_unpacked = graph_backend.edge_features(feature_keys=["vector"], unpack=True)
+    if "vector_0" in df_unpacked.columns:
+        assert df_unpacked["vector_0"].to_list() == [1.0]
+        assert df_unpacked["vector_1"].to_list() == [2.0]
 
 
 def test_edge_features_subgraph_edge_ids(graph_backend: BaseGraph) -> None:
@@ -421,7 +438,7 @@ def test_from_ctc(
     assert graph.num_edges > 0
 
 
-def test_sucessors(graph_backend: BaseGraph) -> None:
+def test_sucessors_and_degree(graph_backend: BaseGraph) -> None:
     """Test getting successors of nodes."""
     # Add feature keys
     graph_backend.add_node_feature_key("x", 0.0)
@@ -444,6 +461,7 @@ def test_sucessors(graph_backend: BaseGraph) -> None:
     successors_df = graph_backend.sucessors(node0)
     assert isinstance(successors_df, pl.DataFrame)
     assert len(successors_df) == 2  # node0 has 2 successors
+    assert graph_backend.out_degree(node0) == 2
 
     # Check that we get the correct target nodes (order doesn't matter)
     successor_nodes = set(successors_df[DEFAULT_ATTR_KEYS.NODE_ID].to_list())
@@ -454,16 +472,19 @@ def test_sucessors(graph_backend: BaseGraph) -> None:
     assert isinstance(successors_df, pl.DataFrame)
     assert len(successors_df) == 1  # node1 has 1 successor
     assert successors_df[DEFAULT_ATTR_KEYS.NODE_ID].to_list()[0] == node2
+    assert graph_backend.out_degree(node1) == 1
 
     # Test successors of node2 (should return empty - no successors)
     successors_df = graph_backend.sucessors(node2)
     assert isinstance(successors_df, pl.DataFrame)
     assert len(successors_df) == 0  # node2 has no successors
+    assert graph_backend.out_degree(node2) == 0
 
     # Test with multiple nodes
     successors_dict = graph_backend.sucessors([node0, node1, node2])
     assert isinstance(successors_dict, dict)
     assert len(successors_dict) == 3
+    assert graph_backend.out_degree([node0, node1, node2]) == [2, 1, 0]
 
     # Check node0's successors
     assert len(successors_dict[node0]) == 2
@@ -473,7 +494,7 @@ def test_sucessors(graph_backend: BaseGraph) -> None:
     assert len(successors_dict[node2]) == 0
 
 
-def test_predecessors(graph_backend: BaseGraph) -> None:
+def test_predecessors_and_degree(graph_backend: BaseGraph) -> None:
     """Test getting predecessors of nodes."""
     # Add feature keys
     graph_backend.add_node_feature_key("x", 0.0)
@@ -496,11 +517,13 @@ def test_predecessors(graph_backend: BaseGraph) -> None:
     predecessors_df = graph_backend.predecessors(node0)
     assert isinstance(predecessors_df, pl.DataFrame)
     assert len(predecessors_df) == 0  # node0 has no predecessors
+    assert graph_backend.in_degree(node0) == 0
 
     # Test predecessors of node1 (should return node0)
     predecessors_df = graph_backend.predecessors(node1)
     assert isinstance(predecessors_df, pl.DataFrame)
     assert len(predecessors_df) == 1  # node1 has 1 predecessor
+    assert graph_backend.in_degree(node1) == 1
 
     # Check that we get the correct source node
     assert predecessors_df[DEFAULT_ATTR_KEYS.NODE_ID].to_list()[0] == node0
@@ -510,17 +533,20 @@ def test_predecessors(graph_backend: BaseGraph) -> None:
     assert isinstance(predecessors_df, pl.DataFrame)
     assert len(predecessors_df) == 1  # node2 has 1 predecessor
     assert predecessors_df[DEFAULT_ATTR_KEYS.NODE_ID].to_list()[0] == node1
+    assert graph_backend.in_degree(node2) == 1
 
     # Test predecessors of node3 (should return node0)
     predecessors_df = graph_backend.predecessors(node3)
     assert isinstance(predecessors_df, pl.DataFrame)
     assert len(predecessors_df) == 1  # node3 has 1 predecessor
     assert predecessors_df[DEFAULT_ATTR_KEYS.NODE_ID].to_list()[0] == node0
+    assert graph_backend.in_degree(node3) == 1
 
     # Test with multiple nodes
     predecessors_dict = graph_backend.predecessors([node0, node1, node2, node3])
     assert isinstance(predecessors_dict, dict)
     assert len(predecessors_dict) == 4
+    assert graph_backend.in_degree([node0, node1, node2, node3]) == [0, 1, 1, 1]
 
     # Check predecessors
     assert len(predecessors_dict[node0]) == 0  # node0 has no predecessors
@@ -650,3 +676,141 @@ def test_sucessors_predecessors_edge_cases(graph_backend: BaseGraph) -> None:
     except (KeyError, AttributeError):
         # This is also acceptable behavior
         pass
+
+
+def test_match_method(graph_backend: BaseGraph) -> None:
+    """Test the match method for matching nodes between two graphs."""
+    # Create first graph (self) with masks
+    graph_backend.add_node_feature_key("x", 0.0)
+    graph_backend.add_node_feature_key("y", 0.0)
+    graph_backend.add_node_feature_key(DEFAULT_ATTR_KEYS.MASK, None)
+
+    # Create masks for first graph
+    mask1_data = np.array([[True, True], [True, True]], dtype=bool)
+    mask1 = Mask(mask1_data, bbox=np.array([0, 0, 2, 2]))
+
+    mask2_data = np.array([[True, False], [True, False]], dtype=bool)
+    mask2 = Mask(mask2_data, bbox=np.array([10, 10, 12, 12]))
+
+    mask3_data = np.array([[True, True, True, True, True]], dtype=bool)
+    mask3 = Mask(mask3_data, bbox=np.array([20, 20, 21, 25]))
+
+    # Add nodes to first graph
+    node1 = graph_backend.add_node({"t": 0, "x": 1.0, "y": 1.0, DEFAULT_ATTR_KEYS.MASK: mask1})
+    node2 = graph_backend.add_node({"t": 1, "x": 2.0, "y": 2.0, DEFAULT_ATTR_KEYS.MASK: mask2})
+    node3 = graph_backend.add_node({"t": 2, "x": 3.0, "y": 3.0, DEFAULT_ATTR_KEYS.MASK: mask3})
+
+    # Add edges to first graph
+    graph_backend.add_edge_feature_key("weight", 0.0)
+    graph_backend.add_edge(node1, node2, {"weight": 0.5})
+    graph_backend.add_edge(node2, node3, {"weight": 0.3})
+
+    # this edge won't be matched
+    graph_backend.add_edge(node1, node3, {"weight": 0.3})
+
+    # Create second graph (other/reference) with overlapping masks
+    if isinstance(graph_backend, SQLGraph):
+        kwargs = {"drivername": "sqlite", "database": ":memory:"}
+    else:
+        kwargs = {}
+
+    other_graph = graph_backend.__class__(**kwargs)
+    other_graph.add_node_feature_key("x", 0.0)
+    other_graph.add_node_feature_key("y", 0.0)
+    other_graph.add_node_feature_key(DEFAULT_ATTR_KEYS.MASK, None)
+
+    # Create overlapping masks for second graph
+    # This mask overlaps significantly with mask1 (IoU > 0.5)
+    ref_mask1_data = np.array([[True, True], [True, False]], dtype=bool)
+    ref_mask1 = Mask(ref_mask1_data, bbox=np.array([0, 0, 2, 2]))
+
+    # This mask should NOT overlap with mask2 (IoU < 0.5, should not match)
+    ref_mask2_data = np.array([[True]], dtype=bool)
+    ref_mask2 = Mask(ref_mask2_data, bbox=np.array([15, 15, 16, 16]))  # Different location
+
+    # This mask overlaps significantly with mask3 (IoU > 0.5)
+    ref_mask3_data = np.array([[True, True, True, True]], dtype=bool)
+    ref_mask3 = Mask(ref_mask3_data, bbox=np.array([20, 20, 21, 24]))
+
+    # This mask also overlaps significantly with mask3 (IoU > 0.5) but less than `ref_mask3`
+    # therefore it should not match
+    ref_mask4_data = np.array([[True, True, True]], dtype=bool)
+    ref_mask4 = Mask(ref_mask4_data, bbox=np.array([20, 21, 21, 24]))
+
+    # Add nodes to reference graph
+    ref_node1 = other_graph.add_node({"t": 0, "x": 1.1, "y": 1.1, DEFAULT_ATTR_KEYS.MASK: ref_mask1})
+    ref_node2 = other_graph.add_node({"t": 1, "x": 2.1, "y": 2.1, DEFAULT_ATTR_KEYS.MASK: ref_mask2})
+    ref_node3 = other_graph.add_node({"t": 2, "x": 3.1, "y": 3.1, DEFAULT_ATTR_KEYS.MASK: ref_mask3})
+    ref_node4 = other_graph.add_node({"t": 2, "x": 3.1, "y": 3.1, DEFAULT_ATTR_KEYS.MASK: ref_mask4})
+
+    # Add edges to reference graph - matching structure with first graph
+    other_graph.add_edge_feature_key("weight", 0.0)
+    other_graph.add_edge(ref_node1, ref_node2, {"weight": 0.6})  # ref_node1 -> ref_node2
+    other_graph.add_edge(ref_node2, ref_node3, {"weight": 0.7})  # ref_node2 -> ref_node3
+    other_graph.add_edge(ref_node2, ref_node4, {"weight": 0.5})  # ref_node3 -> ref_node4
+
+    # Test the match method
+    match_node_id_key = "matched_node_id"
+    match_score_key = "match_score"
+    edge_match_key = "edge_matched"
+
+    graph_backend.match(
+        other=other_graph,
+        matched_node_id_key=match_node_id_key,
+        match_score_key=match_score_key,
+        matched_edge_mask_key=edge_match_key,
+    )
+
+    # Verify that feature keys were added
+    assert match_node_id_key in graph_backend.node_features_keys
+    assert match_score_key in graph_backend.node_features_keys
+    assert edge_match_key in graph_backend.edge_features_keys
+
+    # Get node features to check matching results
+    nodes_df = graph_backend.node_features(feature_keys=[DEFAULT_ATTR_KEYS.NODE_ID, match_node_id_key, match_score_key])
+    print(nodes_df)
+
+    # Verify specific expected matches based on IoU
+    # Create a mapping from node_id to matched values
+    node_matches = {}
+    for row in nodes_df.iter_rows(named=True):
+        node_matches[row[DEFAULT_ATTR_KEYS.NODE_ID]] = {
+            "matched_id": row[match_node_id_key],
+            "score": row[match_score_key],
+        }
+
+    assert len(nodes_df) == graph_backend.num_nodes
+
+    # Check expected matches:
+    # node1 (mask1) should match ref_node1 (ref_mask1) - high IoU
+    msg = f"node1 should match ref_node1, got {node_matches[node1]['matched_id']}"
+    assert node_matches[node1]["matched_id"] == ref_node1, msg
+    msg = f"node1 match score should be > 0.5, got {node_matches[node1]['score']}"
+    assert node_matches[node1]["score"] > 0.5, msg
+
+    # node2 (mask2) should NOT match ref_node2 (ref_mask2) - low IoU
+    msg = f"node2 should not match (should be -1), got {node_matches[node2]['matched_id']}"
+    assert node_matches[node2]["matched_id"] == -1, msg
+    msg = f"node2 match score should be 0.0, got {node_matches[node2]['score']}"
+    assert node_matches[node2]["score"] == 0.0, msg
+
+    # node3 (mask3) should match ref_node3 (ref_mask3) - high IoU
+    msg = f"node3 should match ref_node3, got {node_matches[node3]['matched_id']}"
+    assert node_matches[node3]["matched_id"] == ref_node3, msg
+    msg = f"node3 match score should be > 0.5, got {node_matches[node3]['score']}"
+    assert node_matches[node3]["score"] > 0.5, msg
+
+    # Verify match scores are reasonable (between 0 and 1)
+    for node_id, match_info in node_matches.items():
+        score = match_info["score"]
+        assert 0.0 <= score <= 1.0, f"Score {score} for node {node_id} should be between 0 and 1"
+
+    # Check edge matching
+    edges_df = graph_backend.edge_features(feature_keys=[edge_match_key])
+    assert len(edges_df) > 0
+
+    # After your bug fixes, both edges are matching
+    edge_matches = edges_df[edge_match_key].to_list()
+    expected_matches = np.array([True, True, False])
+
+    np.testing.assert_array_equal(edge_matches, expected_matches)
