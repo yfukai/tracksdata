@@ -503,6 +503,7 @@ class BaseGraph(abc.ABC):
             other,
             input_graph_key=DEFAULT_ATTR_KEYS.NODE_ID,
             reference_graph_key=DEFAULT_ATTR_KEYS.NODE_ID,
+            optimal_matching=True,
         )
 
         if match_node_id_key not in self.node_features_keys:
