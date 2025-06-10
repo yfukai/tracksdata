@@ -1,7 +1,7 @@
 import abc
 from collections.abc import Sequence
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar, overload
 
 import polars as pl
 from numpy.typing import ArrayLike
@@ -445,6 +445,18 @@ class BaseGraph(abc.ABC):
         graph = cls(**kwargs)
         load_ctc(data_dir, graph)
         return graph
+
+    @overload
+    def in_degree(self, node_ids: int) -> int: ...
+
+    @overload
+    def in_degree(self, node_ids: list[int]) -> list[int]: ...
+
+    @overload
+    def out_degree(self, node_ids: int) -> int: ...
+
+    @overload
+    def out_degree(self, node_ids: list[int]) -> list[int]: ...
 
     @abc.abstractmethod
     def in_degree(self, node_ids: list[int] | int) -> list[int] | int:
