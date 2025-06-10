@@ -354,19 +354,23 @@ class GraphView(RustWorkXGraph):
 
         return tracks_graph
 
-    def in_degree(self, node_ids: list[int] | int) -> list[int] | int:
+    def in_degree(self, node_ids: list[int] | int | None = None) -> list[int] | int:
         """
         Get the in-degree of a list of nodes.
         """
+        if node_ids is None:
+            node_ids = self.node_ids()
         rx_graph = self.rx_graph
         if isinstance(node_ids, int):
             return rx_graph.in_degree(self._node_map_from_root[node_ids])
         return [rx_graph.in_degree(self._node_map_from_root[node_id]) for node_id in node_ids]
 
-    def out_degree(self, node_ids: list[int] | int) -> list[int] | int:
+    def out_degree(self, node_ids: list[int] | int | None = None) -> list[int] | int:
         """
         Get the out-degree of a list of nodes.
         """
+        if node_ids is None:
+            node_ids = self.node_ids()
         rx_graph = self.rx_graph
         if isinstance(node_ids, int):
             return rx_graph.out_degree(self._node_map_from_root[node_ids])

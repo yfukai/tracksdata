@@ -455,22 +455,22 @@ class BaseGraph(abc.ABC):
     def in_degree(self, node_ids: int) -> int: ...
 
     @overload
-    def in_degree(self, node_ids: list[int]) -> list[int]: ...
+    def in_degree(self, node_ids: list[int] | None = None) -> list[int]: ...
 
     @overload
     def out_degree(self, node_ids: int) -> int: ...
 
     @overload
-    def out_degree(self, node_ids: list[int]) -> list[int]: ...
+    def out_degree(self, node_ids: list[int] | None = None) -> list[int]: ...
 
     @abc.abstractmethod
-    def in_degree(self, node_ids: list[int] | int) -> list[int] | int:
+    def in_degree(self, node_ids: list[int] | int | None = None) -> list[int] | int:
         """
         Get the in-degree of a list of nodes.
         """
 
     @abc.abstractmethod
-    def out_degree(self, node_ids: list[int] | int) -> list[int] | int:
+    def out_degree(self, node_ids: list[int] | int | None = None) -> list[int] | int:
         """
         Get the out-degree of a list of nodes.
         """
