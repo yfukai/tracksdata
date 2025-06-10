@@ -515,7 +515,7 @@ class BaseGraph(abc.ABC):
             self.add_edge_feature_key(edge_match_key, False)
 
         node_ids = functools.reduce(operator.iadd, matching_data["mapped_comp"])
-        ref_ids = functools.reduce(operator.iadd, matching_data["mapped_ref"])
+        other_ids = functools.reduce(operator.iadd, matching_data["mapped_ref"])
         ious = functools.reduce(operator.iadd, matching_data["ious"])
 
         if len(node_ids) == 0:
@@ -524,11 +524,20 @@ class BaseGraph(abc.ABC):
 
         self.update_node_features(
             node_ids=node_ids,
-            attributes={match_node_id_key: ref_ids, match_score_key: ious},
+            attributes={match_node_id_key: other_ids, match_score_key: ious},
         )
+
+        other_to_node_ids = dict(zip(other_ids, node_ids, strict=False))
 
         self_edges_df = self.edge_features(feature_keys=[])
         other_edges_df = other.edge_features(feature_keys=[])
+
+        other_edges_df = other_edges_df.with_columns(
+            {
+                col: other_edges_df[col].map_elements(other_to_node_ids.get, return_dtype=pl.Int64).alias(col)
+                for col in [DEFAULT_ATTR_KEYS.EDGE_SOURCE, DEFAULT_ATTR_KEYS.EDGE_TARGET]
+            }
+        )
 
         edge_ids = self_edges_df.join(
             other_edges_df,
