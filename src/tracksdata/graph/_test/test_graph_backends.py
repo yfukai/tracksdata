@@ -705,6 +705,9 @@ def test_match_method(graph_backend: BaseGraph) -> None:
     graph_backend.add_edge(node1, node2, {"weight": 0.5})
     graph_backend.add_edge(node2, node3, {"weight": 0.3})
 
+    # this edge won't be matched
+    graph_backend.add_edge(node1, node3, {"weight": 0.3})
+
     # Create second graph (other/reference) with overlapping masks
     if isinstance(graph_backend, SQLGraph):
         kwargs = {"drivername": "sqlite", "database": ":memory:"}
@@ -804,11 +807,9 @@ def test_match_method(graph_backend: BaseGraph) -> None:
     # Check edge matching
     edges_df = graph_backend.edge_features(feature_keys=[edge_match_key])
     assert len(edges_df) > 0
-    print(edges_df)
 
     # After your bug fixes, both edges are matching
     edge_matches = edges_df[edge_match_key].to_list()
+    expected_matches = np.array([True, True, False])
 
-    expected_matches = [True, True]
-
-    assert edge_matches == expected_matches
+    np.testing.assert_array_equal(edge_matches, expected_matches)
