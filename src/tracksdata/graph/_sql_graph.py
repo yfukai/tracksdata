@@ -101,6 +101,17 @@ class SQLGraph(BaseGraph):
         self.Node = Node
         self.Edge = Edge
 
+        self._boolean_columns = {self.Node: [], self.Edge: []}
+
+    def _cast_boolean_columns(self, table_class: type[DeclarativeBase], df: pl.DataFrame) -> pl.DataFrame:
+        """
+        This is required because polars bypasses the boolean type and converts it to integer.
+        """
+        for col in self._boolean_columns[table_class]:
+            if col in df.columns:
+                df = df.with_columns(pl.col(col).cast(pl.Boolean))
+        return df
+
     def _update_max_id_per_time(self) -> None:
         with Session(self._engine) as session:
             for t in session.query(self.Node.t).distinct():
@@ -243,6 +254,7 @@ class SQLGraph(BaseGraph):
                 query.statement,
                 connection=session.connection(),
             )
+            node_df = self._cast_boolean_columns(self.Node, node_df)
 
         if single_node:
             return node_df
@@ -443,6 +455,7 @@ class SQLGraph(BaseGraph):
             query.statement,
             connection=session.connection(),
         )
+        nodes_df = self._cast_boolean_columns(self.Node, nodes_df)
 
         # match node_ids ordering
         if node_ids is not None and not nodes_df.is_empty():
@@ -506,6 +519,7 @@ class SQLGraph(BaseGraph):
                 self._raw_query(query),
                 connection=session.connection(),
             )
+            edges_df = self._cast_boolean_columns(self.Edge, edges_df)
 
         if unpack:
             edges_df = unpack_array_features(edges_df)
@@ -532,14 +546,15 @@ class SQLGraph(BaseGraph):
         if isinstance(default_value, float):
             return sa.Float
 
+        # must come before integer, otherwise it will be interpreted as it
+        elif isinstance(default_value, bool):
+            return sa.Boolean
+
         elif isinstance(default_value, int):
             return sa.Integer
 
         elif isinstance(default_value, str):
             return sa.String
-
-        elif isinstance(default_value, bool):
-            return sa.Boolean
 
         elif isinstance(default_value, Enum):
             return sa.Enum(default_value.__class__)
@@ -557,6 +572,10 @@ class SQLGraph(BaseGraph):
         default_value: Any,
     ) -> None:
         sa_type = self._sqlalchemy_type_inference(default_value)
+
+        if sa_type == sa.Boolean:
+            self._boolean_columns[table_class].append(key)
+
         sa_column = sa.Column(key, sa_type, default=default_value)
 
         str_dialect_type = sa_column.type.compile(dialect=self._engine.dialect)

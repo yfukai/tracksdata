@@ -690,10 +690,10 @@ def test_match_method(graph_backend: BaseGraph) -> None:
     mask1 = Mask(mask1_data, bbox=np.array([0, 0, 2, 2]))
 
     mask2_data = np.array([[True, False], [True, False]], dtype=bool)
-    mask2 = Mask(mask2_data, bbox=np.array([10, 10, 12, 11]))
+    mask2 = Mask(mask2_data, bbox=np.array([10, 10, 12, 12]))
 
-    mask3_data = np.array([[True, True, True]], dtype=bool)
-    mask3 = Mask(mask3_data, bbox=np.array([20, 20, 21, 23]))
+    mask3_data = np.array([[True, True, True, True, True]], dtype=bool)
+    mask3 = Mask(mask3_data, bbox=np.array([20, 20, 21, 25]))
 
     # Add nodes to first graph
     node1 = graph_backend.add_node({"t": 0, "x": 1.0, "y": 1.0, DEFAULT_ATTR_KEYS.MASK: mask1})
@@ -707,7 +707,7 @@ def test_match_method(graph_backend: BaseGraph) -> None:
 
     # Create second graph (other/reference) with overlapping masks
     if isinstance(graph_backend, SQLGraph):
-        kwargs = {"drivername": "sqlite", "database": ":memory:", "overwrite": True}
+        kwargs = {"drivername": "sqlite", "database": ":memory:"}
     else:
         kwargs = {}
 
@@ -726,18 +726,25 @@ def test_match_method(graph_backend: BaseGraph) -> None:
     ref_mask2 = Mask(ref_mask2_data, bbox=np.array([15, 15, 16, 16]))  # Different location
 
     # This mask overlaps significantly with mask3 (IoU > 0.5)
-    ref_mask3_data = np.array([[True, True]], dtype=bool)
-    ref_mask3 = Mask(ref_mask3_data, bbox=np.array([20, 20, 21, 22]))
+    ref_mask3_data = np.array([[True, True, True, True]], dtype=bool)
+    ref_mask3 = Mask(ref_mask3_data, bbox=np.array([20, 20, 21, 24]))
+
+    # This mask also overlaps significantly with mask3 (IoU > 0.5) but less than `ref_mask3`
+    # therefore it should not match
+    ref_mask4_data = np.array([[True, True, True]], dtype=bool)
+    ref_mask4 = Mask(ref_mask4_data, bbox=np.array([20, 21, 21, 24]))
 
     # Add nodes to reference graph
     ref_node1 = other_graph.add_node({"t": 0, "x": 1.1, "y": 1.1, DEFAULT_ATTR_KEYS.MASK: ref_mask1})
     ref_node2 = other_graph.add_node({"t": 1, "x": 2.1, "y": 2.1, DEFAULT_ATTR_KEYS.MASK: ref_mask2})
     ref_node3 = other_graph.add_node({"t": 2, "x": 3.1, "y": 3.1, DEFAULT_ATTR_KEYS.MASK: ref_mask3})
+    ref_node4 = other_graph.add_node({"t": 2, "x": 3.1, "y": 3.1, DEFAULT_ATTR_KEYS.MASK: ref_mask4})
 
     # Add edges to reference graph - matching structure with first graph
     other_graph.add_edge_feature_key("weight", 0.0)
     other_graph.add_edge(ref_node1, ref_node2, {"weight": 0.6})  # ref_node1 -> ref_node2
     other_graph.add_edge(ref_node2, ref_node3, {"weight": 0.7})  # ref_node2 -> ref_node3
+    other_graph.add_edge(ref_node2, ref_node4, {"weight": 0.5})  # ref_node3 -> ref_node4
 
     # Test the match method
     match_node_id_key = "matched_node_id"
@@ -768,6 +775,8 @@ def test_match_method(graph_backend: BaseGraph) -> None:
             "score": row[match_score_key],
         }
 
+    assert len(nodes_df) == graph_backend.num_nodes
+
     # Check expected matches:
     # node1 (mask1) should match ref_node1 (ref_mask1) - high IoU
     msg = f"node1 should match ref_node1, got {node_matches[node1]['matched_id']}"
@@ -795,6 +804,7 @@ def test_match_method(graph_backend: BaseGraph) -> None:
     # Check edge matching
     edges_df = graph_backend.edge_features(feature_keys=[edge_match_key])
     assert len(edges_df) > 0
+    print(edges_df)
 
     # After your bug fixes, both edges are matching
     edge_matches = edges_df[edge_match_key].to_list()

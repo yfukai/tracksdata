@@ -115,7 +115,7 @@ def _matching_data(
             _mapped_comp = np.asarray(_mapped_comp, dtype=int)
 
             weights = sp.csr_array((_ious, (_rows, _cols)), dtype=np.float32)
-            rows_id, cols_id = sp.csgraph.min_weight_full_bipartite_matching(weights)
+            rows_id, cols_id = sp.csgraph.min_weight_full_bipartite_matching(weights, maximize=True)
 
             _mapped_ref = _mapped_ref[rows_id].tolist()
             _mapped_comp = _mapped_comp[cols_id].tolist()
