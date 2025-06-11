@@ -443,6 +443,9 @@ class SQLGraph(BaseGraph):
                 query = query.filter(self.Node.node_id.in_(node_ids))
 
             if feature_keys is not None:
+                # making them unique
+                feature_keys = list(set(feature_keys))
+
                 query = query.options(
                     load_only(
                         *[getattr(self.Node, key) for key in feature_keys],

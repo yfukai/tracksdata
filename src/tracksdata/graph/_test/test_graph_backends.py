@@ -823,3 +823,30 @@ def test_match_method(graph_backend: BaseGraph) -> None:
     expected_matches = np.array([True, True, False])
 
     np.testing.assert_array_equal(edge_matches, expected_matches)
+
+
+def test_features_with_duplicated_feature_keys(graph_backend: BaseGraph) -> None:
+    """Test that node features with duplicated feature keys are handled correctly."""
+    # Add feature keys
+    graph_backend.add_node_feature_key("x", 0.0)
+    graph_backend.add_node_feature_key("y", 0.0)
+
+    # Add nodes
+    graph_backend.add_node({"t": 0, "x": 1.0, "y": 1.0})
+    graph_backend.add_node({"t": 1, "x": 2.0, "y": 2.0})
+
+    # Add edges
+    graph_backend.add_edge_feature_key("weight", 0.0)
+    graph_backend.add_edge(0, 1, {"weight": 0.5})
+
+    # Test with duplicated feature keys
+    # This would crash before
+    nodes_df = graph_backend.node_features(feature_keys=["x", "y", "x"])
+    assert "x" in nodes_df.columns
+    assert "y" in nodes_df.columns
+    assert nodes_df["x"].to_list() == [1.0, 2.0]
+    assert nodes_df["y"].to_list() == [1.0, 2.0]
+
+    edges_df = graph_backend.edge_features(feature_keys=["weight", "weight", "weight"])
+    assert "weight" in edges_df.columns
+    assert edges_df["weight"].to_list() == [0.5]
