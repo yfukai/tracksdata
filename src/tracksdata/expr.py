@@ -165,7 +165,19 @@ class AttrExpr:
         bool
             True if any column is multiplied by infinity, False otherwise.
         """
-        return len(self._inf_exprs) > 0 or len(self._neg_inf_exprs) > 0
+        return self.has_pos_inf() or self.has_neg_inf()
+
+    def has_pos_inf(self) -> bool:
+        """
+        Check if any column in the expression is multiplied by positive infinity.
+        """
+        return len(self._inf_exprs) > 0
+
+    def has_neg_inf(self) -> bool:
+        """
+        Check if any column in the expression is multiplied by negative infinity.
+        """
+        return len(self._neg_inf_exprs) > 0
 
     def __invert__(self) -> "AttrExpr":
         return AttrExpr(~self.expr)
