@@ -29,27 +29,118 @@ class AttrExpr:
     expr: Expr
 
     def __init__(self, value: ExprInput) -> None:
+        self._inf_exprs = []  # expressions multiplied by +inf
+        self._neg_inf_exprs = []  # expressions multiplied by -inf
+
         if isinstance(value, str):
             self.expr = pl.col(value)
         elif isinstance(value, AttrExpr):
             self.expr = value.expr
+            # Copy infinity tracking from the other AttrExpr
+            self._inf_exprs = value.inf_exprs
+            self._neg_inf_exprs = value.neg_inf_exprs
         elif isinstance(value, Expr):
             self.expr = value
         else:
             self.expr = pl.lit(value)
 
     def _wrap(self, expr: Expr | Any) -> Union["AttrExpr", Any]:
-        return AttrExpr(expr) if isinstance(expr, Expr) else expr
+        if isinstance(expr, Expr):
+            result = AttrExpr(expr)
+            # Propagate infinity tracking
+            result._inf_exprs = self._inf_exprs.copy()
+            result._neg_inf_exprs = self._neg_inf_exprs.copy()
+            return result
+        return expr
 
     def _delegate_operator(
         self, other: ExprInput, op: Callable[[Expr, Expr], Expr], reverse: bool = False
     ) -> "AttrExpr":
+        import math
+
+        # Special handling for multiplication with infinity
+        if op == operator.mul:
+            # Check if we're multiplying with infinity
+            inf_value = None
+            expr_to_multiply = None
+
+            if not reverse:
+                # self * other
+                if isinstance(other, (int, float)) and math.isinf(other):
+                    inf_value = other
+                    expr_to_multiply = self
+                elif isinstance(other, AttrExpr):
+                    # Check if other is infinity literal
+                    other_val = self._extract_literal_value(other)
+                    if other_val is not None and math.isinf(other_val):
+                        inf_value = other_val
+                        expr_to_multiply = self
+            else:
+                # other * self
+                if isinstance(other, (int, float)) and math.isinf(other):
+                    inf_value = other
+                    expr_to_multiply = self
+
+            # If we detected infinity multiplication, track it and return zero expression
+            if inf_value is not None and expr_to_multiply is not None:
+                result = AttrExpr(pl.lit(0))  # Clean expression is zero (infinity term removed)
+
+                # Copy existing infinity tracking
+                result._inf_exprs = self._inf_exprs.copy()
+                result._neg_inf_exprs = self._neg_inf_exprs.copy()
+
+                # Add the expression to appropriate infinity list
+                if inf_value > 0:
+                    result._inf_exprs.append(expr_to_multiply)
+                else:
+                    result._neg_inf_exprs.append(expr_to_multiply)
+
+                return result
+
+        # Regular operation - no infinity involved
         left = AttrExpr(other).expr if reverse else self.expr
         right = self.expr if reverse else AttrExpr(other).expr
-        return AttrExpr(op(left, right))
+        result = AttrExpr(op(left, right))
+
+        # Combine infinity tracking from both operands
+        if isinstance(other, AttrExpr):
+            result._inf_exprs = self._inf_exprs + other._inf_exprs
+            result._neg_inf_exprs = self._neg_inf_exprs + other._neg_inf_exprs
+
+            # Special handling for subtraction: flip signs of the second operand's infinity terms
+            if op == operator.sub and not reverse:
+                # self - other: other's positive infinity becomes negative, negative becomes positive
+                result._inf_exprs = self._inf_exprs + other._neg_inf_exprs
+                result._neg_inf_exprs = self._neg_inf_exprs + other._inf_exprs
+            elif op == operator.sub and reverse:
+                # other - self: self's positive infinity becomes negative, negative becomes positive
+                result._inf_exprs = other._inf_exprs + self._neg_inf_exprs
+                result._neg_inf_exprs = other._neg_inf_exprs + self._inf_exprs
+        else:
+            result._inf_exprs = self._inf_exprs.copy()
+            result._neg_inf_exprs = self._neg_inf_exprs.copy()
+
+        return result
+
+    def _extract_literal_value(self, expr: "AttrExpr") -> float | None:
+        """Extract the literal value from an expression if it's a simple literal."""
+        try:
+            if expr.expr.meta.is_literal():
+                # Try to evaluate it to get the value
+                import polars as pl
+
+                test_df = pl.DataFrame({"dummy": [1]})
+                result = test_df.select(expr.expr).to_series()
+                return result[0] if len(result) > 0 else None
+        except:
+            pass
+        return None
 
     def alias(self, name: str) -> "AttrExpr":
-        return AttrExpr(self.expr.alias(name))
+        result = AttrExpr(self.expr.alias(name))
+        result._inf_exprs = self._inf_exprs.copy()
+        result._neg_inf_exprs = self._neg_inf_exprs.copy()
+        return result
 
     def evaluate(self, df: DataFrame) -> Series:
         return df.select(self.expr).to_series()
@@ -57,140 +148,61 @@ class AttrExpr:
     def column_names(self) -> list[str]:
         return self.expr.meta.root_names()
 
+    @property
+    def inf_exprs(self) -> list["AttrExpr"]:
+        """Get the expressions multiplied by positive infinity."""
+        return self._inf_exprs.copy()
+
+    @property
+    def neg_inf_exprs(self) -> list["AttrExpr"]:
+        """Get the expressions multiplied by negative infinity."""
+        return self._neg_inf_exprs.copy()
+
+    @property
+    def inf_columns(self) -> list[str]:
+        """Get the names of columns multiplied by positive infinity."""
+        columns = []
+        for attr_expr in self._inf_exprs:
+            try:
+                if attr_expr.expr.meta.is_column():
+                    columns.extend(attr_expr.column_names())
+            except:
+                pass
+        return list(set(columns))
+
+    @property
+    def neg_inf_columns(self) -> list[str]:
+        """Get the names of columns multiplied by negative infinity."""
+        columns = []
+        for attr_expr in self._neg_inf_exprs:
+            try:
+                if attr_expr.expr.meta.is_column():
+                    columns.extend(attr_expr.column_names())
+            except:
+                pass
+        return list(set(columns))
+
     def has_infinity_multiplication(self) -> bool:
         """
         Check if any column in the expression is multiplied by infinity.
-
-        This method uses Polars' expression tree traversal via the pop() method
-        and is_infinite() to detect patterns where a column is multiplied by infinity.
 
         Returns
         -------
         bool
             True if any column is multiplied by infinity, False otherwise.
-
-        Examples
-        --------
-        >>> expr1 = AttrExpr("x") + math.inf * AttrExpr("y")
-        >>> expr1.has_infinity_multiplication()  # True
-        >>> expr2 = AttrExpr("x") + 2.5 * AttrExpr("y")
-        >>> expr2.has_infinity_multiplication()  # False
         """
-        return len(self.get_columns_multiplied_by_infinity()) > 0
+        return len(self._inf_exprs) > 0 or len(self._neg_inf_exprs) > 0
 
     def get_columns_multiplied_by_infinity(self) -> list[str]:
         """
-        Get the names of columns that are multiplied by infinity in the expression.
-
-        This method uses Polars' expression tree traversal via the pop() method
-        to recursively examine the expression structure and find columns that are
-        involved in multiplication operations with infinity values.
+        Get the names of columns that are multiplied by infinity.
 
         Returns
         -------
         list[str]
-            List of column names that are multiplied by infinity.
-
-        Examples
-        --------
-        >>> expr = AttrExpr("x") + math.inf * AttrExpr("y") + AttrExpr("z")
-        >>> expr.get_columns_multiplied_by_infinity()  # ["y"]
+            List of column names that are multiplied by any infinity (positive or negative).
         """
-        import polars as pl
-
-        columns_with_inf = []
-
-        # Create a test dataframe for evaluation
-        all_columns = self.column_names()
-        if not all_columns:
-            return columns_with_inf
-
-        test_df = pl.DataFrame({col: [1.0] for col in all_columns})
-
-        # Recursively traverse the expression tree
-        self._find_infinity_columns(self.expr, test_df, columns_with_inf)
-
-        # Remove duplicates and return
-        return list(set(columns_with_inf))
-
-    def _find_infinity_columns(self, expr, test_df, columns_with_inf):
-        """
-        Recursively traverse an expression tree to find columns multiplied by infinity.
-
-        Parameters
-        ----------
-        expr : pl.Expr
-            The expression to examine
-        test_df : pl.DataFrame
-            Test dataframe for evaluation
-        columns_with_inf : list
-            List to accumulate column names (modified in place)
-        """
-        try:
-            # Get sub-expressions
-            sub_expressions = expr.meta.pop()
-
-            # If this expression has exactly 2 sub-expressions, it might be a binary operation
-            if len(sub_expressions) == 2:
-                left_expr, right_expr = sub_expressions
-
-                # Check if one is infinite and the other is a column
-                left_is_inf = self._is_infinite_literal(left_expr, test_df)
-                right_is_inf = self._is_infinite_literal(right_expr, test_df)
-                left_is_col = left_expr.meta.is_column()
-                right_is_col = right_expr.meta.is_column()
-
-                # Pattern 1: infinity * column
-                if left_is_inf and right_is_col:
-                    column_names = right_expr.meta.root_names()
-                    columns_with_inf.extend(column_names)
-
-                # Pattern 2: column * infinity
-                elif left_is_col and right_is_inf:
-                    column_names = left_expr.meta.root_names()
-                    columns_with_inf.extend(column_names)
-
-                # Recursively check sub-expressions
-                self._find_infinity_columns(left_expr, test_df, columns_with_inf)
-                self._find_infinity_columns(right_expr, test_df, columns_with_inf)
-
-            # For expressions with other numbers of sub-expressions, recurse on all
-            elif len(sub_expressions) > 0:
-                for sub_expr in sub_expressions:
-                    self._find_infinity_columns(sub_expr, test_df, columns_with_inf)
-
-        except Exception:
-            # If pop fails, this is likely a leaf node (column or literal)
-            # No further traversal needed
-            pass
-
-    def _is_infinite_literal(self, expr, test_df):
-        """
-        Check if an expression is an infinite literal.
-
-        Parameters
-        ----------
-        expr : pl.Expr
-            Expression to check
-        test_df : pl.DataFrame
-            Test dataframe for evaluation
-
-        Returns
-        -------
-        bool
-            True if the expression is an infinite literal
-        """
-        try:
-            # Check if it's a literal first (for efficiency)
-            if not expr.meta.is_literal():
-                return False
-
-            # Test if it evaluates to infinity
-            result = test_df.select(expr.is_infinite())
-            return result.to_series().any()
-
-        except Exception:
-            return False
+        return list(set(self.inf_columns + self.neg_inf_columns))
 
     def __invert__(self) -> "AttrExpr":
         return AttrExpr(~self.expr)
@@ -205,6 +217,10 @@ class AttrExpr:
         return AttrExpr(abs(self.expr))
 
     def __getattr__(self, attr: str) -> Any:
+        # Don't delegate our internal attributes to the expr
+        if attr.startswith("_"):
+            raise AttributeError(f"'{type(self).__name__}' object has no attribute '{attr}'")
+
         # To auto generate operator methods such as `.log()``
         expr_attr = getattr(self.expr, attr)
         if callable(expr_attr):

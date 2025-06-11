@@ -1,3 +1,4 @@
+import math
 import operator
 from collections.abc import Callable
 
@@ -111,6 +112,23 @@ def test_attr_expr_complex_expression() -> None:
     result = expr.evaluate(df)
     expected = [(1 - iou) * dist for iou, dist in zip(df["iou"], df["distance"], strict=False)]
     assert result.to_list() == expected
+
+
+def test_attr_expr_with_infinite() -> None:
+    df = pl.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]})
+    expr = (AttrExpr("a") == 1) * math.inf - math.inf * (AttrExpr("b") > 4) + AttrExpr("c")
+
+    result = expr.evaluate(df)
+    assert result.to_list() == [7, 8, 9]
+    assert expr.column_names() == ["c"]
+
+    assert len(expr.inf_exprs) == 1
+    assert expr.inf_exprs[0].column_names() == ["a"]
+    assert expr.inf_exprs[0].evaluate(df).to_list() == [True, False, False]
+
+    assert len(expr.neg_inf_exprs) == 1
+    assert expr.neg_inf_exprs[0].column_names() == ["b"]
+    assert expr.neg_inf_exprs[0].evaluate(df).to_list() == [False, True, True]
 
 
 def test_attr_expr_scalar_operations() -> None:
