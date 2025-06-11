@@ -90,7 +90,7 @@ class ILPSolver(BaseSolver):
             return []
         mask = False
         for expr in inf_expr:
-            mask = mask | self._evaluate_expr(expr, df)
+            mask = mask | expr.evaluate(df)
         return df.select(node_key).filter(mask).to_series().to_list()
 
     def _add_objective_and_variables(

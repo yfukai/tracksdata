@@ -191,7 +191,8 @@ def test_attr_expr_complex_infinity_expressions() -> None:
 
     result = expr.evaluate(df)
     assert result.to_list() == [1, 2, 3]  # Only AttrExpr("a") remains
-    assert expr.columns == ["a"]
+    assert set(expr.columns) == {"a", "b", "c"}
+    assert expr.expr_columns == ["a"]
 
     assert len(expr.inf_exprs) == 1
     assert len(expr.neg_inf_exprs) == 1

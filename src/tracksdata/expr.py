@@ -7,8 +7,6 @@ from typing import Any, Union
 import polars as pl
 from polars import DataFrame, Expr, Series
 
-from tracksdata.utils._logging import LOG
-
 Scalar = int | float | str | bool
 ExprInput = Union[str, Scalar, "AttrExpr", Expr]
 
@@ -137,11 +135,7 @@ class AttrExpr:
         """Get the names of columns multiplied by positive infinity."""
         columns = []
         for attr_expr in self._inf_exprs:
-            try:
-                if attr_expr.expr.meta.is_column():
-                    columns.extend(attr_expr.columns)
-            except Exception as e:
-                LOG.warning(f"Error getting inf columns for {attr_expr}: {e}")
+            columns.extend(attr_expr.columns)
         return list(set(columns))
 
     @property
@@ -149,11 +143,7 @@ class AttrExpr:
         """Get the names of columns multiplied by negative infinity."""
         columns = []
         for attr_expr in self._neg_inf_exprs:
-            try:
-                if attr_expr.expr.meta.is_column():
-                    columns.extend(attr_expr.columns)
-            except Exception as e:
-                LOG.warning(f"Error getting neg inf columns for {attr_expr}: {e}")
+            columns.extend(attr_expr.columns)
         return list(set(columns))
 
     def has_inf(self) -> bool:

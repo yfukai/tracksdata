@@ -1,4 +1,5 @@
 import logging
+import math
 
 import pytest
 
@@ -495,3 +496,36 @@ def test_ilp_solver_division_constraint() -> None:
             assert child1_selected, "Edge to child1 selected but child1 not selected"
         if target_id == child2:
             assert child2_selected, "Edge to child2 selected but child2 not selected"
+
+
+def test_ilp_solver_solve_with_inf_expr() -> None:
+    """Test solving with infinity expressions."""
+    graph = RustWorkXGraph()
+
+    # Register feature keys
+    graph.add_node_feature_key("x", 0.0)
+    graph.add_node_feature_key("y", 0.0)
+    graph.add_edge_feature_key(DEFAULT_ATTR_KEYS.EDGE_WEIGHT, 0.0)
+
+    # Add nodes
+    node0 = graph.add_node({DEFAULT_ATTR_KEYS.T: 0, "x": 0.0, "y": 5.0})
+    node1 = graph.add_node({DEFAULT_ATTR_KEYS.T: 1, "x": 1.0, "y": 2.0})
+    node2 = graph.add_node({DEFAULT_ATTR_KEYS.T: 1, "x": 2.0, "y": 3.0})
+
+    # Add edges
+    graph.add_edge(node0, node1, {DEFAULT_ATTR_KEYS.EDGE_WEIGHT: -1.5})
+    graph.add_edge(node0, node2, {DEFAULT_ATTR_KEYS.EDGE_WEIGHT: -1.0})
+
+    solver = ILPSolver(
+        edge_weight=DEFAULT_ATTR_KEYS.EDGE_WEIGHT,
+        division_weight=100.0 * AttrExpr("y")
+        - math.inf * (AttrExpr("x") == 0.0),  # Despite the penalization it's selected because of inf
+    )
+    solver.solve(graph)
+
+    # Check that solution is found
+    node_features = graph.node_features()
+    edge_features = graph.edge_features()
+
+    assert edge_features[DEFAULT_ATTR_KEYS.SOLUTION].to_list() == [True, True]
+    assert node_features[DEFAULT_ATTR_KEYS.SOLUTION].to_list() == [True, True, True]
