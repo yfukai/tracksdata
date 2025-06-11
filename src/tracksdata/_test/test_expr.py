@@ -45,7 +45,7 @@ def test_attr_expr_evaluate() -> None:
 
 def test_attr_expr_column_names() -> None:
     expr = AttrExpr("test")
-    assert expr.column_names() == ["test"]
+    assert expr.columns() == ["test"]
 
 
 @pytest.mark.parametrize(
@@ -95,7 +95,7 @@ def test_attr_expr_alias() -> None:
     expr = AttrExpr("test").alias("new_name")
     assert isinstance(expr, AttrExpr)
     # Note: alias doesn't change root names
-    assert expr.column_names() == ["test"]
+    assert expr.columns() == ["test"]
 
 
 def test_attr_expr_method_delegation() -> None:
@@ -138,7 +138,7 @@ def test_attr_expr_multiple_positive_infinity() -> None:
 
     result = expr.evaluate(df)
     assert result.to_list() == [7, 8, 9]  # Only finite term remains
-    assert expr.column_names() == ["c"]
+    assert expr.expr_columns == ["c"]
 
     assert len(expr.inf_exprs) == 2
     assert len(expr.neg_inf_exprs) == 0
@@ -146,7 +146,7 @@ def test_attr_expr_multiple_positive_infinity() -> None:
     # Check both expressions are tracked
     inf_columns = set()
     for inf_expr in expr.inf_exprs:
-        inf_columns.update(inf_expr.column_names())
+        inf_columns.update(inf_expr.columns)
     assert inf_columns == {"a", "b"}
 
 
@@ -157,7 +157,7 @@ def test_attr_expr_multiple_negative_infinity() -> None:
 
     result = expr.evaluate(df)
     assert result.to_list() == [7, 8, 9]  # Only finite term remains
-    assert expr.column_names() == ["c"]
+    assert expr.expr_columns == ["c"]
 
     assert len(expr.inf_exprs) == 0
     assert len(expr.neg_inf_exprs) == 2
@@ -165,7 +165,7 @@ def test_attr_expr_multiple_negative_infinity() -> None:
     # Check both expressions are tracked
     neg_inf_columns = set()
     for neg_inf_expr in expr.neg_inf_exprs:
-        neg_inf_columns.update(neg_inf_expr.column_names())
+        neg_inf_columns.update(neg_inf_expr.columns)
     assert neg_inf_columns == {"a", "b"}
 
 
@@ -176,12 +176,12 @@ def test_attr_expr_only_infinity_terms() -> None:
 
     result = expr.evaluate(df)
     assert result.to_list() == [0]  # All infinity terms become literal zero
-    assert expr.column_names() == []  # No finite columns
+    assert expr.expr_columns == []  # No finite columns
 
     assert len(expr.inf_exprs) == 1
     assert len(expr.neg_inf_exprs) == 1
-    assert expr.inf_exprs[0].column_names() == ["a"]
-    assert expr.neg_inf_exprs[0].column_names() == ["b"]
+    assert expr.inf_exprs[0].columns == ["a"]
+    assert expr.neg_inf_exprs[0].columns == ["b"]
 
 
 def test_attr_expr_complex_infinity_expressions() -> None:
@@ -191,7 +191,7 @@ def test_attr_expr_complex_infinity_expressions() -> None:
 
     result = expr.evaluate(df)
     assert result.to_list() == [1, 2, 3]  # Only AttrExpr("a") remains
-    assert expr.column_names() == ["a"]
+    assert expr.columns == ["a"]
 
     assert len(expr.inf_exprs) == 1
     assert len(expr.neg_inf_exprs) == 1
@@ -199,11 +199,11 @@ def test_attr_expr_complex_infinity_expressions() -> None:
     # Test that complex expressions are properly tracked
     inf_expr_result = expr.inf_exprs[0].evaluate(df)
     assert inf_expr_result.to_list() == [5, 7, 9]  # a + b
-    assert set(expr.inf_exprs[0].column_names()) == {"a", "b"}
+    assert set(expr.inf_exprs[0].columns) == {"a", "b"}
 
     neg_inf_expr_result = expr.neg_inf_exprs[0].evaluate(df)
     assert neg_inf_expr_result.to_list() == [3.5, 4.0, 4.5]  # c / 2
-    assert expr.neg_inf_exprs[0].column_names() == ["c"]
+    assert expr.neg_inf_exprs[0].columns == ["c"]
 
 
 def test_attr_expr_nested_infinity_operations() -> None:
@@ -219,11 +219,12 @@ def test_attr_expr_nested_infinity_operations() -> None:
 
     result = combined.evaluate(df)
     assert result.to_list() == [5, 6, 7]  # Only (b + 1) remains
-    assert combined.column_names() == ["b"]
+    assert combined.expr_columns == ["b"]
+    assert set(combined.columns) == {"a", "b"}
 
     assert len(combined.inf_exprs) == 1
     assert len(combined.neg_inf_exprs) == 0
-    assert combined.inf_exprs[0].column_names() == ["a"]
+    assert combined.inf_exprs[0].columns == ["a"]
 
 
 def test_attr_expr_infinity_column_name_tracking() -> None:
@@ -245,10 +246,7 @@ def test_attr_expr_infinity_column_name_tracking() -> None:
     assert set(expr.inf_columns) == {"x", "y"}  # x and y in positive infinity
     assert set(expr.neg_inf_columns) == {"z"}  # z in negative infinity
 
-    all_inf_columns = expr.get_columns_multiplied_by_infinity()
-    assert set(all_inf_columns) == {"x", "y", "z"}  # All columns that appear in any infinity term
-
-    assert expr.has_infinity_multiplication() is True
+    assert expr.has_inf() is True
 
     # Check individual expressions
     assert len(expr.inf_exprs) == 2  # x and y
@@ -268,8 +266,7 @@ def test_attr_expr_no_infinity_terms() -> None:
     assert len(expr.neg_inf_exprs) == 0
     assert expr.inf_columns == []
     assert expr.neg_inf_columns == []
-    assert expr.get_columns_multiplied_by_infinity() == []
-    assert expr.has_infinity_multiplication() is False
+    assert expr.has_inf() is False
 
 
 def test_attr_expr_scalar_operations() -> None:
@@ -300,4 +297,4 @@ def test_duplicated_columns() -> None:
     expr = (AttrExpr("a") == 1) * 10 - 5 * (AttrExpr("a") > 2)
     result = expr.evaluate(df)
     assert result.to_list() == [10, 0, -5]
-    assert expr.column_names() == ["a"]
+    assert expr.columns == ["a"]

@@ -58,7 +58,7 @@ class ILPSolver(BaseSolver):
         expr: AttrExpr,
         df: pl.DataFrame,
     ) -> list[float]:
-        if len(expr.column_names()) == 0:
+        if len(expr.expr_columns) == 0:
             return [expr.evaluate(df).item()] * len(df)
         else:
             return expr.evaluate(df).to_list()
@@ -190,14 +190,14 @@ class ILPSolver(BaseSolver):
         nodes_df = graph.node_features(
             feature_keys=[
                 DEFAULT_ATTR_KEYS.NODE_ID,
-                *self.node_weight_expr.column_names(),
-                *self.appearance_weight_expr.column_names(),
-                *self.disappearance_weight_expr.column_names(),
-                *self.division_weight_expr.column_names(),
+                *self.node_weight_expr.columns,
+                *self.appearance_weight_expr.columns,
+                *self.disappearance_weight_expr.columns,
+                *self.division_weight_expr.columns,
             ],
         )
         edges_df = graph.edge_features(
-            feature_keys=self.edge_weight_expr.column_names(),
+            feature_keys=self.edge_weight_expr.columns,
         )
 
         self._add_objective_and_variables(nodes_df, edges_df)

@@ -7,6 +7,8 @@ from typing import Any, Union
 import polars as pl
 from polars import DataFrame, Expr, Series
 
+from tracksdata.utils._logging import LOG
+
 Scalar = int | float | str | bool
 ExprInput = Union[str, Scalar, "AttrExpr", Expr]
 
@@ -111,8 +113,9 @@ class AttrExpr:
     def evaluate(self, df: DataFrame) -> Series:
         return df.select(self.expr).to_series()
 
-    def column_names(self) -> list[str]:
-        return list(set(self.expr.meta.root_names()))
+    @property
+    def columns(self) -> list[str]:
+        return list(set(self.expr_columns + self.inf_columns + self.neg_inf_columns))
 
     @property
     def inf_exprs(self) -> list["AttrExpr"]:
@@ -125,15 +128,20 @@ class AttrExpr:
         return self._neg_inf_exprs.copy()
 
     @property
+    def expr_columns(self) -> list[str]:
+        """Get the names of columns in the expression."""
+        return list(set(self.expr.meta.root_names()))
+
+    @property
     def inf_columns(self) -> list[str]:
         """Get the names of columns multiplied by positive infinity."""
         columns = []
         for attr_expr in self._inf_exprs:
             try:
                 if attr_expr.expr.meta.is_column():
-                    columns.extend(attr_expr.column_names())
-            except Exception:
-                pass
+                    columns.extend(attr_expr.columns)
+            except Exception as e:
+                LOG.warning(f"Error getting inf columns for {attr_expr}: {e}")
         return list(set(columns))
 
     @property
@@ -143,14 +151,14 @@ class AttrExpr:
         for attr_expr in self._neg_inf_exprs:
             try:
                 if attr_expr.expr.meta.is_column():
-                    columns.extend(attr_expr.column_names())
-            except Exception:
-                pass
+                    columns.extend(attr_expr.columns)
+            except Exception as e:
+                LOG.warning(f"Error getting neg inf columns for {attr_expr}: {e}")
         return list(set(columns))
 
-    def has_infinity_multiplication(self) -> bool:
+    def has_inf(self) -> bool:
         """
-        Check if any column in the expression is multiplied by infinity.
+        Check if any column in the expression is multiplied by infinity or negative infinity.
 
         Returns
         -------
@@ -158,17 +166,6 @@ class AttrExpr:
             True if any column is multiplied by infinity, False otherwise.
         """
         return len(self._inf_exprs) > 0 or len(self._neg_inf_exprs) > 0
-
-    def get_columns_multiplied_by_infinity(self) -> list[str]:
-        """
-        Get the names of columns that are multiplied by infinity.
-
-        Returns
-        -------
-        list[str]
-            List of column names that are multiplied by any infinity (positive or negative).
-        """
-        return list(set(self.inf_columns + self.neg_inf_columns))
 
     def __invert__(self) -> "AttrExpr":
         return AttrExpr(~self.expr)
