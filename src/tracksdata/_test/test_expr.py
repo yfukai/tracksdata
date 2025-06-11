@@ -45,7 +45,7 @@ def test_attr_expr_evaluate() -> None:
 
 def test_attr_expr_column_names() -> None:
     expr = AttrExpr("test")
-    assert expr.columns() == ["test"]
+    assert expr.columns == ["test"]
 
 
 @pytest.mark.parametrize(
@@ -95,7 +95,7 @@ def test_attr_expr_alias() -> None:
     expr = AttrExpr("test").alias("new_name")
     assert isinstance(expr, AttrExpr)
     # Note: alias doesn't change root names
-    assert expr.columns() == ["test"]
+    assert expr.columns == ["test"]
 
 
 def test_attr_expr_method_delegation() -> None:
@@ -114,20 +114,20 @@ def test_attr_expr_complex_expression() -> None:
     assert result.to_list() == expected
 
 
-def test_attr_expr_with_infinite() -> None:
+def test_attr_expr_with_infinity() -> None:
     df = pl.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]})
     expr = (AttrExpr("a") == 1) * math.inf - math.inf * (AttrExpr("b") > 4) + AttrExpr("c")
 
     result = expr.evaluate(df)
     assert result.to_list() == [7, 8, 9]
-    assert expr.column_names() == ["c"]
+    assert expr.expr_columns == ["c"]
 
     assert len(expr.inf_exprs) == 1
-    assert expr.inf_exprs[0].column_names() == ["a"]
+    assert expr.inf_exprs[0].expr_columns == ["a"]
     assert expr.inf_exprs[0].evaluate(df).to_list() == [True, False, False]
 
     assert len(expr.neg_inf_exprs) == 1
-    assert expr.neg_inf_exprs[0].column_names() == ["b"]
+    assert expr.neg_inf_exprs[0].expr_columns == ["b"]
     assert expr.neg_inf_exprs[0].evaluate(df).to_list() == [False, True, True]
 
 
