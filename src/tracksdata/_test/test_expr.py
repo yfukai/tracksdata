@@ -152,3 +152,11 @@ def test_attr_expr_boolean_operations() -> None:
     expr = AttrExpr("a") | AttrExpr("b")  # or
     result = expr.evaluate(df)
     assert result.to_list() == [True, True, True]
+
+
+def test_duplicated_columns() -> None:
+    df = pl.DataFrame({"a": [1, 2, 3]})
+    expr = (AttrExpr("a") == 1) * 10 - 5 * (AttrExpr("a") > 2)
+    result = expr.evaluate(df)
+    assert result.to_list() == [10, 0, -5]
+    assert expr.column_names() == ["a"]

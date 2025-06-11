@@ -1,4 +1,5 @@
 import functools
+import math
 import operator
 from collections.abc import Callable
 from typing import Any, Union
@@ -56,33 +57,12 @@ class AttrExpr:
     def _delegate_operator(
         self, other: ExprInput, op: Callable[[Expr, Expr], Expr], reverse: bool = False
     ) -> "AttrExpr":
-        import math
-
         # Special handling for multiplication with infinity
         if op == operator.mul:
-            # Check if we're multiplying with infinity
-            inf_value = None
-            expr_to_multiply = None
-
-            if not reverse:
-                # self * other
-                if isinstance(other, (int, float)) and math.isinf(other):
-                    inf_value = other
-                    expr_to_multiply = self
-                elif isinstance(other, AttrExpr):
-                    # Check if other is infinity literal
-                    other_val = self._extract_literal_value(other)
-                    if other_val is not None and math.isinf(other_val):
-                        inf_value = other_val
-                        expr_to_multiply = self
-            else:
-                # other * self
-                if isinstance(other, (int, float)) and math.isinf(other):
-                    inf_value = other
-                    expr_to_multiply = self
-
-            # If we detected infinity multiplication, track it and return zero expression
-            if inf_value is not None and expr_to_multiply is not None:
+            # Check if we're multiplying with infinity scalar
+            # In both reverse and non-reverse cases, 'other' is the infinity value
+            # and 'self' is the AttrExpr we want to track
+            if isinstance(other, int | float) and math.isinf(other):
                 result = AttrExpr(pl.lit(0))  # Clean expression is zero (infinity term removed)
 
                 # Copy existing infinity tracking
@@ -90,10 +70,10 @@ class AttrExpr:
                 result._neg_inf_exprs = self._neg_inf_exprs.copy()
 
                 # Add the expression to appropriate infinity list
-                if inf_value > 0:
-                    result._inf_exprs.append(expr_to_multiply)
+                if other > 0:
+                    result._inf_exprs.append(self)
                 else:
-                    result._neg_inf_exprs.append(expr_to_multiply)
+                    result._neg_inf_exprs.append(self)
 
                 return result
 
@@ -122,20 +102,6 @@ class AttrExpr:
 
         return result
 
-    def _extract_literal_value(self, expr: "AttrExpr") -> float | None:
-        """Extract the literal value from an expression if it's a simple literal."""
-        try:
-            if expr.expr.meta.is_literal():
-                # Try to evaluate it to get the value
-                import polars as pl
-
-                test_df = pl.DataFrame({"dummy": [1]})
-                result = test_df.select(expr.expr).to_series()
-                return result[0] if len(result) > 0 else None
-        except:
-            pass
-        return None
-
     def alias(self, name: str) -> "AttrExpr":
         result = AttrExpr(self.expr.alias(name))
         result._inf_exprs = self._inf_exprs.copy()
@@ -146,7 +112,7 @@ class AttrExpr:
         return df.select(self.expr).to_series()
 
     def column_names(self) -> list[str]:
-        return self.expr.meta.root_names()
+        return list(set(self.expr.meta.root_names()))
 
     @property
     def inf_exprs(self) -> list["AttrExpr"]:
@@ -166,7 +132,7 @@ class AttrExpr:
             try:
                 if attr_expr.expr.meta.is_column():
                     columns.extend(attr_expr.column_names())
-            except:
+            except Exception:
                 pass
         return list(set(columns))
 
@@ -178,7 +144,7 @@ class AttrExpr:
             try:
                 if attr_expr.expr.meta.is_column():
                     columns.extend(attr_expr.column_names())
-            except:
+            except Exception:
                 pass
         return list(set(columns))
 
