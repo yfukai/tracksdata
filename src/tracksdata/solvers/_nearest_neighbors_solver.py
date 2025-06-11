@@ -89,7 +89,7 @@ class NearestNeighborsSolver(BaseSolver):
             The graph to solve.
         """
         # get edges and sort them by weight
-        edges_df = graph.edge_features(feature_keys=self.edge_weight_expr.column_names())
+        edges_df = graph.edge_features(feature_keys=self.edge_weight_expr.columns)
         weights = self.edge_weight_expr.evaluate(edges_df).to_numpy()
         sorted_indices = np.argsort(weights)
 

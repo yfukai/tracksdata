@@ -58,10 +58,40 @@ class ILPSolver(BaseSolver):
         expr: AttrExpr,
         df: pl.DataFrame,
     ) -> list[float]:
-        if len(expr.column_names()) == 0:
+        if len(expr.expr_columns) == 0:
             return [expr.evaluate(df).item()] * len(df)
         else:
             return expr.evaluate(df).to_list()
+
+    def _evaluate_inf_expr(
+        self,
+        inf_expr: list[AttrExpr],
+        df: pl.DataFrame,
+        node_key: str,
+    ) -> list[int]:
+        """
+        Evaluate a list of infinity expressions and return the node ids that satisfy the expressions.
+
+        Parameters
+        ----------
+        inf_expr : list[AttrExpr]
+            The list of infinity expressions to evaluate.
+        df : pl.DataFrame
+            The dataframe to evaluate the expressions on.
+        node_key : str
+            The key of the node column to filter on.
+
+        Returns
+        -------
+        list[int]
+            The node ids that satisfy the expressions.
+        """
+        if len(inf_expr) == 0:
+            return []
+        mask = False
+        for expr in inf_expr:
+            mask = mask | expr.evaluate(df)
+        return df.select(node_key).filter(mask).to_series().to_list()
 
     def _add_objective_and_variables(
         self,
@@ -83,7 +113,7 @@ class ILPSolver(BaseSolver):
                 self.disappearance_weight_expr,
                 self.division_weight_expr,
             ],
-            strict=False,
+            strict=True,
         ):
             weights = self._evaluate_expr(expr, nodes_df)
 
@@ -96,12 +126,32 @@ class ILPSolver(BaseSolver):
                 self._objective.set_coefficient(self._count, weight)
                 self._count += 1
 
-        weights = self._evaluate_expr(self.edge_weight_expr, edges_df)
+            # positive inf, pin to 0
+            for node_id in self._evaluate_inf_expr(expr.inf_exprs, nodes_df, DEFAULT_ATTR_KEYS.NODE_ID):
+                self._constraints.add(variables[node_id] == 0)
 
-        for edge_id, weight in zip(edges_df[DEFAULT_ATTR_KEYS.EDGE_ID].to_list(), weights, strict=False):
+            # negative inf, pin to 1
+            for node_id in self._evaluate_inf_expr(expr.neg_inf_exprs, nodes_df, DEFAULT_ATTR_KEYS.NODE_ID):
+                self._constraints.add(variables[node_id] == 1)
+
+        # edge weights
+        weights = self._evaluate_expr(self.edge_weight_expr, edges_df)
+        edge_ids = edges_df[DEFAULT_ATTR_KEYS.EDGE_ID].to_list()
+
+        for edge_id, weight in zip(edge_ids, weights, strict=False):
             self._edge_vars[edge_id] = Variable(f"edge_{edge_id}", index=self._count)
             self._objective.set_coefficient(self._count, weight)
             self._count += 1
+
+        # positive inf, pin to 0
+        for edge_id in self._evaluate_inf_expr(self.edge_weight_expr.inf_exprs, edges_df, DEFAULT_ATTR_KEYS.EDGE_ID):
+            self._constraints.add(self._edge_vars[edge_id] == 0)
+
+        # negative inf, pin to 1
+        for edge_id in self._evaluate_inf_expr(
+            self.edge_weight_expr.neg_inf_exprs, edges_df, DEFAULT_ATTR_KEYS.EDGE_ID
+        ):
+            self._constraints.add(self._edge_vars[edge_id] == 1)
 
     def _add_constraints(
         self,
@@ -190,14 +240,14 @@ class ILPSolver(BaseSolver):
         nodes_df = graph.node_features(
             feature_keys=[
                 DEFAULT_ATTR_KEYS.NODE_ID,
-                *self.node_weight_expr.column_names(),
-                *self.appearance_weight_expr.column_names(),
-                *self.disappearance_weight_expr.column_names(),
-                *self.division_weight_expr.column_names(),
+                *self.node_weight_expr.columns,
+                *self.appearance_weight_expr.columns,
+                *self.disappearance_weight_expr.columns,
+                *self.division_weight_expr.columns,
             ],
         )
         edges_df = graph.edge_features(
-            feature_keys=self.edge_weight_expr.column_names(),
+            feature_keys=self.edge_weight_expr.columns,
         )
 
         self._add_objective_and_variables(nodes_df, edges_df)
