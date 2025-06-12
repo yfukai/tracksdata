@@ -254,6 +254,12 @@ class RustWorkXGraph(BaseGraph):
         """
         return [int(i) for i in self.rx_graph.node_indices()]
 
+    def edge_ids(self) -> list[int]:
+        """
+        Get the IDs of all edges in the graph.
+        """
+        return [int(i) for i in self.rx_graph.edge_indices()]
+
     def subgraph(
         self,
         *,

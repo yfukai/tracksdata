@@ -304,6 +304,10 @@ class SQLGraph(BaseGraph):
         with Session(self._engine) as session:
             return [i for (i,) in session.query(self.Node.node_id).all()]
 
+    def edge_ids(self) -> list[int]:
+        with Session(self._engine) as session:
+            return [i for (i,) in session.query(self.Edge.edge_id).all()]
+
     def subgraph(
         self,
         *,

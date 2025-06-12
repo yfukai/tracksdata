@@ -244,6 +244,12 @@ class BaseGraph(abc.ABC):
         """
 
     @abc.abstractmethod
+    def edge_ids(self) -> list[int]:
+        """
+        Get the IDs of all edges in the graph.
+        """
+
+    @abc.abstractmethod
     def subgraph(
         self,
         *,

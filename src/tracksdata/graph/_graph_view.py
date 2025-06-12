@@ -72,6 +72,10 @@ class GraphView(RustWorkXGraph):
         indices = self.rx_graph.node_indices()
         return map_ids(self._node_map_to_root, indices)
 
+    def edge_ids(self) -> list[int]:
+        indices = self.rx_graph.edge_indices()
+        return map_ids(self._edge_map_to_root, indices)
+
     def subgraph(
         self,
         *,
