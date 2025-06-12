@@ -378,6 +378,15 @@ def test_subgraph_with_unsorted_node_ids(graph_backend: BaseGraph) -> None:
         expected_node_ids = set(unsorted_nodes)
         assert subgraph_node_ids == expected_node_ids, f"Failed for node order: {unsorted_nodes}"
 
+        expected_edges = graph_with_data.edge_features()
+        expected_edge_ids = expected_edges.filter(
+            pl.col(DEFAULT_ATTR_KEYS.EDGE_SOURCE).is_in(unsorted_nodes)
+            & pl.col(DEFAULT_ATTR_KEYS.EDGE_TARGET).is_in(unsorted_nodes)
+        )[DEFAULT_ATTR_KEYS.EDGE_ID].to_list()
+
+        subgraph_edge_ids = set(subgraph.edge_ids())
+        assert subgraph_edge_ids == set(expected_edge_ids), f"Failed for edge order: {unsorted_nodes}"
+
         # Verify node features are preserved correctly
         for node in unsorted_nodes:
             original_features = graph_with_data.node_features(node_ids=[node])
