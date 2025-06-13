@@ -343,7 +343,7 @@ class GraphView(RustWorkXGraph):
             raise RuntimeError(
                 "Are you sure this graph is a valid lineage graph?\n"
                 "This function expects a solved graph.\n"
-                "Often used from `graph.filter_nodes_by_attribute({'solution': True})`"
+                "Often used from `graph.subgraph(edge_attr_filter={'solution': True})`"
             ) from e
 
         node_ids = map_ids(self._node_map_to_root, node_ids)

@@ -187,3 +187,6 @@ man_track.txt
 
 # uv
 uv.lock
+
+# benchmarks
+benchmarks/outputs/*.md
