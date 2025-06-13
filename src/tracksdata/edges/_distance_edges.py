@@ -22,8 +22,8 @@ class DistanceEdges(BaseEdgesOperator):
         This in respect from the current to the previous frame.
         That means, a node in frame t will have edges to the clostest
         n_neighbors nodes in frame t-1.
-    feature_keys : Sequence[str] | None
-        The feature keys to use for the distance calculation.
+    attr_keys : Sequence[str] | None
+        The attribute keys to use for the distance calculation.
         When None, "z", "y", "x" are used.
     show_progress : bool
         Whether to print progress of the edges addition.
@@ -34,14 +34,14 @@ class DistanceEdges(BaseEdgesOperator):
         distance_threshold: float,
         n_neighbors: int,
         output_key: str = DEFAULT_ATTR_KEYS.EDGE_WEIGHT,
-        feature_keys: Sequence[str] | None = None,
+        attr_keys: Sequence[str] | None = None,
         show_progress: bool = True,
     ):
         super().__init__(output_key=output_key, show_progress=show_progress)
         self.distance_threshold = distance_threshold
         self.n_neighbors = n_neighbors
         self.output_key = output_key
-        self.feature_keys = feature_keys
+        self.attr_keys = attr_keys
 
     def _add_edges_per_time(
         self,
@@ -59,20 +59,20 @@ class DistanceEdges(BaseEdgesOperator):
         t : int
             The time point to add edges for.
         """
-        if self.output_key not in graph.edge_features_keys:
+        if self.output_key not in graph.edge_attr_keys:
             # negative value to indicate that the edge is not valid
-            graph.add_edge_feature_key(self.output_key, -99999.0)
+            graph.add_edge_attr_key(self.output_key, -99999.0)
 
-        if self.feature_keys is None:
-            if "z" in graph.node_features_keys:
-                feature_keys = ["z", "y", "x"]
+        if self.attr_keys is None:
+            if "z" in graph.node_attr_keys:
+                attr_keys = ["z", "y", "x"]
             else:
-                feature_keys = ["y", "x"]
+                attr_keys = ["y", "x"]
         else:
-            feature_keys = self.feature_keys
+            attr_keys = self.attr_keys
 
-        prev_node_ids = np.asarray(graph.filter_nodes_by_attribute({DEFAULT_ATTR_KEYS.T: t - 1}))
-        cur_node_ids = np.asarray(graph.filter_nodes_by_attribute({DEFAULT_ATTR_KEYS.T: t}))
+        prev_node_ids = np.asarray(graph.filter_nodes_by_attrs({DEFAULT_ATTR_KEYS.T: t - 1}))
+        cur_node_ids = np.asarray(graph.filter_nodes_by_attrs({DEFAULT_ATTR_KEYS.T: t}))
 
         if len(prev_node_ids) == 0:
             LOG.warning(
@@ -88,13 +88,13 @@ class DistanceEdges(BaseEdgesOperator):
             )
             return
 
-        prev_features = graph.node_features(node_ids=prev_node_ids, feature_keys=feature_keys)
-        cur_features = graph.node_features(node_ids=cur_node_ids, feature_keys=feature_keys)
+        prev_attrs = graph.node_attrs(node_ids=prev_node_ids, attr_keys=attr_keys)
+        cur_attrs = graph.node_attrs(node_ids=cur_node_ids, attr_keys=attr_keys)
 
-        prev_kdtree = KDTree(prev_features.to_numpy())
+        prev_kdtree = KDTree(prev_attrs.to_numpy())
 
         distances, prev_neigh_ids = prev_kdtree.query(
-            cur_features.to_numpy(),
+            cur_attrs.to_numpy(),
             k=self.n_neighbors,
             distance_upper_bound=self.distance_threshold,
         )

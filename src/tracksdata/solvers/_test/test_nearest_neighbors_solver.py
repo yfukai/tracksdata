@@ -43,9 +43,9 @@ def test_nearest_neighbors_solver_solve_no_edges() -> None:
     """Test solving on a graph with nodes but no edges."""
     graph = RustWorkXGraph()
 
-    # Register feature keys
-    graph.add_node_feature_key("x", 0.0)
-    graph.add_node_feature_key("y", 0.0)
+    # Register attribute keys
+    graph.add_node_attr_key("x", 0.0)
+    graph.add_node_attr_key("y", 0.0)
 
     # Add some nodes
     graph.add_node({DEFAULT_ATTR_KEYS.T: 0, "x": 0.0, "y": 0.0})
@@ -61,10 +61,10 @@ def test_nearest_neighbors_solver_solve_simple_case() -> None:
     """Test solving with a simple graph."""
     graph = RustWorkXGraph()
 
-    # Register feature keys
-    graph.add_node_feature_key("x", 0.0)
-    graph.add_node_feature_key("y", 0.0)
-    graph.add_edge_feature_key(DEFAULT_ATTR_KEYS.EDGE_WEIGHT, 0.0)
+    # Register attribute keys
+    graph.add_node_attr_key("x", 0.0)
+    graph.add_node_attr_key("y", 0.0)
+    graph.add_edge_attr_key(DEFAULT_ATTR_KEYS.EDGE_WEIGHT, 0.0)
 
     # Add nodes
     node0 = graph.add_node({DEFAULT_ATTR_KEYS.T: 0, "x": 0.0, "y": 0.0})
@@ -79,14 +79,14 @@ def test_nearest_neighbors_solver_solve_simple_case() -> None:
     solver.solve(graph)
 
     # Check that solution keys are added
-    node_features = graph.node_features()
-    edge_features = graph.edge_features()
+    node_attrs = graph.node_attrs()
+    edge_attrs = graph.edge_attrs()
 
-    assert DEFAULT_ATTR_KEYS.SOLUTION in node_features.columns
-    assert DEFAULT_ATTR_KEYS.SOLUTION in edge_features.columns
+    assert DEFAULT_ATTR_KEYS.SOLUTION in node_attrs.columns
+    assert DEFAULT_ATTR_KEYS.SOLUTION in edge_attrs.columns
 
-    solutions = edge_features[DEFAULT_ATTR_KEYS.SOLUTION].to_list()
-    edge_ids = edge_features[DEFAULT_ATTR_KEYS.EDGE_ID].to_list()
+    solutions = edge_attrs[DEFAULT_ATTR_KEYS.SOLUTION].to_list()
+    edge_ids = edge_attrs[DEFAULT_ATTR_KEYS.EDGE_ID].to_list()
 
     # Check that the edges are selected
     assert [True, False] == solutions
@@ -97,10 +97,10 @@ def test_nearest_neighbors_solver_solve_max_children_constraint() -> None:
     """Test that max_children constraint is respected."""
     graph = RustWorkXGraph()
 
-    # Register feature keys
-    graph.add_node_feature_key("x", 0.0)
-    graph.add_node_feature_key("y", 0.0)
-    graph.add_edge_feature_key(DEFAULT_ATTR_KEYS.EDGE_WEIGHT, 0.0)
+    # Register attribute keys
+    graph.add_node_attr_key("x", 0.0)
+    graph.add_node_attr_key("y", 0.0)
+    graph.add_edge_attr_key(DEFAULT_ATTR_KEYS.EDGE_WEIGHT, 0.0)
 
     # Add nodes
     node0 = graph.add_node({DEFAULT_ATTR_KEYS.T: 0, "x": 0.0, "y": 0.0})  # Parent
@@ -117,8 +117,8 @@ def test_nearest_neighbors_solver_solve_max_children_constraint() -> None:
     solver.solve(graph)
 
     # Check that only 2 edges are selected (max_children constraint)
-    edge_features = graph.edge_features()
-    selected_edges = edge_features.filter(edge_features[DEFAULT_ATTR_KEYS.SOLUTION])
+    edge_attrs = graph.edge_attrs()
+    selected_edges = edge_attrs.filter(edge_attrs[DEFAULT_ATTR_KEYS.SOLUTION])
 
     assert len(selected_edges) == 2
 
@@ -137,10 +137,10 @@ def test_nearest_neighbors_solver_solve_one_parent_constraint() -> None:
     """Test that each node can have only one parent."""
     graph = RustWorkXGraph()
 
-    # Register feature keys
-    graph.add_node_feature_key("x", 0.0)
-    graph.add_node_feature_key("y", 0.0)
-    graph.add_edge_feature_key(DEFAULT_ATTR_KEYS.EDGE_WEIGHT, 0.0)
+    # Register attribute keys
+    graph.add_node_attr_key("x", 0.0)
+    graph.add_node_attr_key("y", 0.0)
+    graph.add_edge_attr_key(DEFAULT_ATTR_KEYS.EDGE_WEIGHT, 0.0)
 
     # Add nodes
     node0 = graph.add_node({DEFAULT_ATTR_KEYS.T: 0, "x": 0.0, "y": 0.0})  # Parent 1
@@ -155,8 +155,8 @@ def test_nearest_neighbors_solver_solve_one_parent_constraint() -> None:
     solver.solve(graph)
 
     # Check that only one edge to the child is selected
-    edge_features = graph.edge_features()
-    selected_edges = edge_features.filter(edge_features[DEFAULT_ATTR_KEYS.SOLUTION])
+    edge_attrs = graph.edge_attrs()
+    selected_edges = edge_attrs.filter(edge_attrs[DEFAULT_ATTR_KEYS.SOLUTION])
     child_edges = selected_edges.filter(selected_edges[DEFAULT_ATTR_KEYS.EDGE_TARGET] == node2)
 
     assert len(child_edges) == 1
@@ -169,10 +169,10 @@ def test_nearest_neighbors_solver_solve_custom_weight_expr() -> None:
     """Test solving with custom weight expression."""
     graph = RustWorkXGraph()
 
-    # Register feature keys
-    graph.add_node_feature_key("x", 0.0)
-    graph.add_node_feature_key("y", 0.0)
-    graph.add_edge_feature_key("custom_weight", 0.0)
+    # Register attribute keys
+    graph.add_node_attr_key("x", 0.0)
+    graph.add_node_attr_key("y", 0.0)
+    graph.add_edge_attr_key("custom_weight", 0.0)
 
     # Add nodes
     node0 = graph.add_node({DEFAULT_ATTR_KEYS.T: 0, "x": 0.0, "y": 0.0})
@@ -190,8 +190,8 @@ def test_nearest_neighbors_solver_solve_custom_weight_expr() -> None:
 
     # Check that the edge with higher custom_weight (2.0) is selected
     # because we're using negative weight
-    edge_features = graph.edge_features()
-    selected_edges = edge_features.filter(edge_features[DEFAULT_ATTR_KEYS.SOLUTION])
+    edge_attrs = graph.edge_attrs()
+    selected_edges = edge_attrs.filter(edge_attrs[DEFAULT_ATTR_KEYS.SOLUTION])
     selected_ids = selected_edges[DEFAULT_ATTR_KEYS.EDGE_ID].to_list()
 
     assert len(selected_edges) == 1
@@ -202,11 +202,11 @@ def test_nearest_neighbors_solver_solve_complex_expression() -> None:
     """Test solving with complex weight expression."""
     graph = RustWorkXGraph()
 
-    # Register feature keys
-    graph.add_node_feature_key("x", 0.0)
-    graph.add_node_feature_key("y", 0.0)
-    graph.add_edge_feature_key("distance", 0.0)
-    graph.add_edge_feature_key("confidence", 0.0)
+    # Register attribute keys
+    graph.add_node_attr_key("x", 0.0)
+    graph.add_node_attr_key("y", 0.0)
+    graph.add_edge_attr_key("distance", 0.0)
+    graph.add_edge_attr_key("confidence", 0.0)
 
     # Add nodes
     node0 = graph.add_node({DEFAULT_ATTR_KEYS.T: 0, "x": 0.0, "y": 0.0})
@@ -223,8 +223,8 @@ def test_nearest_neighbors_solver_solve_complex_expression() -> None:
     solver.solve(graph)
 
     # Check that the edge with better distance/confidence ratio is selected
-    edge_features = graph.edge_features()
-    selected_edges = edge_features.filter(edge_features[DEFAULT_ATTR_KEYS.SOLUTION])
+    edge_attrs = graph.edge_attrs()
+    selected_edges = edge_attrs.filter(edge_attrs[DEFAULT_ATTR_KEYS.SOLUTION])
 
     assert len(selected_edges) == 1
     # Edge 0->1: 1.0/0.8 = 1.25
@@ -237,10 +237,10 @@ def test_nearest_neighbors_solver_solve_custom_output_key() -> None:
     """Test solving with custom output key."""
     graph = RustWorkXGraph()
 
-    # Register feature keys
-    graph.add_node_feature_key("x", 0.0)
-    graph.add_node_feature_key("y", 0.0)
-    graph.add_edge_feature_key(DEFAULT_ATTR_KEYS.EDGE_WEIGHT, 0.0)
+    # Register attribute keys
+    graph.add_node_attr_key("x", 0.0)
+    graph.add_node_attr_key("y", 0.0)
+    graph.add_edge_attr_key(DEFAULT_ATTR_KEYS.EDGE_WEIGHT, 0.0)
 
     # Add nodes and edges
     node0 = graph.add_node({DEFAULT_ATTR_KEYS.T: 0, "x": 0.0, "y": 0.0})
@@ -252,23 +252,23 @@ def test_nearest_neighbors_solver_solve_custom_output_key() -> None:
     solver.solve(graph)
 
     # Check that custom key is used
-    node_features = graph.node_features()
-    edge_features = graph.edge_features()
+    node_attrs = graph.node_attrs()
+    edge_attrs = graph.edge_attrs()
 
-    assert custom_key in node_features.columns
-    assert custom_key in edge_features.columns
-    assert DEFAULT_ATTR_KEYS.SOLUTION not in node_features.columns
-    assert DEFAULT_ATTR_KEYS.SOLUTION not in edge_features.columns
+    assert custom_key in node_attrs.columns
+    assert custom_key in edge_attrs.columns
+    assert DEFAULT_ATTR_KEYS.SOLUTION not in node_attrs.columns
+    assert DEFAULT_ATTR_KEYS.SOLUTION not in edge_attrs.columns
 
 
 def test_nearest_neighbors_solver_solve_large_graph() -> None:
     """Test solving with a larger graph to verify algorithm correctness."""
     graph = RustWorkXGraph()
 
-    # Register feature keys
-    graph.add_node_feature_key("x", 0.0)
-    graph.add_node_feature_key("y", 0.0)
-    graph.add_edge_feature_key(DEFAULT_ATTR_KEYS.EDGE_WEIGHT, 0.0)
+    # Register attribute keys
+    graph.add_node_attr_key("x", 0.0)
+    graph.add_node_attr_key("y", 0.0)
+    graph.add_edge_attr_key(DEFAULT_ATTR_KEYS.EDGE_WEIGHT, 0.0)
 
     # Create a more complex graph structure
     # Time 0: nodes 0, 1
@@ -304,11 +304,11 @@ def test_nearest_neighbors_solver_solve_large_graph() -> None:
     solver.solve(graph)
 
     # Verify that solution is found
-    edge_features = graph.edge_features()
-    node_features = graph.node_features()
+    edge_attrs = graph.edge_attrs()
+    node_attrs = graph.node_attrs()
 
-    selected_edges = edge_features.filter(edge_features[DEFAULT_ATTR_KEYS.SOLUTION])
-    selected_nodes = node_features.filter(node_features[DEFAULT_ATTR_KEYS.SOLUTION])
+    selected_edges = edge_attrs.filter(edge_attrs[DEFAULT_ATTR_KEYS.SOLUTION])
+    selected_nodes = node_attrs.filter(node_attrs[DEFAULT_ATTR_KEYS.SOLUTION])
 
     # Should have some selected edges and nodes
     assert len(selected_edges) > 0

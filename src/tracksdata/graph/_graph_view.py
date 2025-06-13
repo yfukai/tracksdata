@@ -55,8 +55,8 @@ class GraphView(RustWorkXGraph):
 
         # making sure these are not used
         # they should be accessed through the root graph
-        self._node_features_keys = None
-        self._edge_features_keys = None
+        self._node_attr_keys = None
+        self._edge_attr_keys = None
 
     @property
     def sync(self) -> bool:
@@ -82,15 +82,15 @@ class GraphView(RustWorkXGraph):
         node_ids: Sequence[int] | None = None,
         node_attr_filter: dict[str, Any] | None = None,
         edge_attr_filter: dict[str, Any] | None = None,
-        node_feature_keys: Sequence[str] | str | None = None,
-        edge_feature_keys: Sequence[str] | str | None = None,
+        node_attr_keys: Sequence[str] | str | None = None,
+        edge_attr_keys: Sequence[str] | str | None = None,
     ) -> "GraphView":
         subgraph = super().subgraph(
             node_ids=map_ids(self._node_map_from_root, node_ids),
             node_attr_filter=node_attr_filter,
             edge_attr_filter=edge_attr_filter,
-            node_feature_keys=node_feature_keys,
-            edge_feature_keys=edge_feature_keys,
+            node_attr_keys=node_attr_keys,
+            edge_attr_keys=edge_attr_keys,
         )
 
         subgraph._root = self._root
@@ -104,15 +104,15 @@ class GraphView(RustWorkXGraph):
         return subgraph
 
     @property
-    def node_features_keys(self) -> list[str]:
-        return self._root.node_features_keys
+    def node_attr_keys(self) -> list[str]:
+        return self._root.node_attr_keys
 
     @property
-    def edge_features_keys(self) -> list[str]:
-        return self._root.edge_features_keys
+    def edge_attr_keys(self) -> list[str]:
+        return self._root.edge_attr_keys
 
-    def add_node_feature_key(self, key: str, default_value: Any) -> None:
-        self._root.add_node_feature_key(key, default_value)
+    def add_node_attr_key(self, key: str, default_value: Any) -> None:
+        self._root.add_node_attr_key(key, default_value)
         # because attributes are passed by reference, we need don't need if both are rustworkx graphs
         if not self._is_root_rx_graph:
             if self.sync:
@@ -122,8 +122,8 @@ class GraphView(RustWorkXGraph):
             else:
                 self._out_of_sync = True
 
-    def add_edge_feature_key(self, key: str, default_value: Any) -> None:
-        self._root.add_edge_feature_key(key, default_value)
+    def add_edge_attr_key(self, key: str, default_value: Any) -> None:
+        self._root.add_edge_attr_key(key, default_value)
         # because attributes are passed by reference, we need don't need if both are rustworkx graphs
         if not self._is_root_rx_graph:
             if self.sync:
@@ -134,17 +134,17 @@ class GraphView(RustWorkXGraph):
 
     def add_node(
         self,
-        attributes: dict[str, Any],
+        attrs: dict[str, Any],
         validate_keys: bool = True,
     ) -> int:
         parent_node_id = self._root.add_node(
-            attributes=attributes,
+            attrs=attrs,
             validate_keys=validate_keys,
         )
 
         if self.sync:
             node_id = super().add_node(
-                attributes=attributes,
+                attrs=attrs,
                 validate_keys=validate_keys,
             )
             self._node_map_to_root[node_id] = parent_node_id
@@ -158,23 +158,23 @@ class GraphView(RustWorkXGraph):
         self,
         source_id: int,
         target_id: int,
-        attributes: dict[str, Any],
+        attrs: dict[str, Any],
         validate_keys: bool = True,
     ) -> int:
         parent_edge_id = self._root.add_edge(
             source_id=source_id,
             target_id=target_id,
-            attributes=attributes,
+            attrs=attrs,
             validate_keys=validate_keys,
         )
-        attributes[DEFAULT_ATTR_KEYS.EDGE_ID] = parent_edge_id
+        attrs[DEFAULT_ATTR_KEYS.EDGE_ID] = parent_edge_id
 
         if self.sync:
             # it does not set the EDGE_ID as attribute as the super().add_edge
             edge_id = self.rx_graph.add_edge(
                 self._node_map_from_root[source_id],
                 self._node_map_from_root[target_id],
-                attributes,
+                attrs,
             )
             self._edge_map_to_root[edge_id] = parent_edge_id
             self._edge_map_from_root[parent_edge_id] = edge_id
@@ -187,7 +187,7 @@ class GraphView(RustWorkXGraph):
         self,
         neighbors_func: Callable[[rx.PyDiGraph, int], rx.NodeIndices],
         node_ids: list[int] | int,
-        feature_keys: Sequence[str] | str | None = None,
+        attr_keys: Sequence[str] | str | None = None,
     ) -> dict[int, pl.DataFrame] | pl.DataFrame:
         single_node = False
         if isinstance(node_ids, int):
@@ -195,7 +195,7 @@ class GraphView(RustWorkXGraph):
             single_node = True
 
         node_ids = map_ids(self._node_map_from_root, node_ids)
-        neighbors_data = super()._get_neighbors(neighbors_func, node_ids, feature_keys)
+        neighbors_data = super()._get_neighbors(neighbors_func, node_ids, attr_keys)
 
         out_data = {}
         for node_id in node_ids:
@@ -210,27 +210,27 @@ class GraphView(RustWorkXGraph):
     def sucessors(
         self,
         node_ids: list[int] | int,
-        feature_keys: Sequence[str] | str | None = None,
+        attr_keys: Sequence[str] | str | None = None,
     ) -> dict[int, pl.DataFrame] | pl.DataFrame:
         if self._out_of_sync:
             raise RuntimeError("Out of sync graph view cannot be used to get sucessors")
-        return super().sucessors(node_ids, feature_keys)
+        return super().sucessors(node_ids, attr_keys)
 
     def predecessors(
         self,
         node_ids: list[int] | int,
-        feature_keys: Sequence[str] | str | None = None,
+        attr_keys: Sequence[str] | str | None = None,
     ) -> dict[int, pl.DataFrame] | pl.DataFrame:
         if self._out_of_sync:
             raise RuntimeError("Out of sync graph view cannot be used to get predecessors")
-        return super().predecessors(node_ids, feature_keys)
+        return super().predecessors(node_ids, attr_keys)
 
-    def filter_nodes_by_attribute(
+    def filter_nodes_by_attrs(
         self,
-        attributes: dict[str, Any],
+        attrs: dict[str, Any],
     ) -> list[int]:
-        node_ids = super().filter_nodes_by_attribute(
-            attributes=attributes,
+        node_ids = super().filter_nodes_by_attrs(
+            attrs=attrs,
         )
         return map_ids(self._node_map_to_root, node_ids)
 
@@ -243,32 +243,32 @@ class GraphView(RustWorkXGraph):
             )
         return df
 
-    def node_features(
+    def node_attrs(
         self,
         *,
         node_ids: Sequence[int] | None = None,
-        feature_keys: Sequence[str] | str | None = None,
+        attr_keys: Sequence[str] | str | None = None,
         unpack: bool = False,
     ) -> pl.DataFrame:
-        node_dfs = super().node_features(
+        node_dfs = super().node_attrs(
             node_ids=map_ids(self._node_map_from_root, node_ids),
-            feature_keys=feature_keys,
+            attr_keys=attr_keys,
             unpack=unpack,
         )
         node_dfs = self._map_to_root_df_node_ids(node_dfs)
         return node_dfs
 
-    def edge_features(
+    def edge_attrs(
         self,
         *,
         node_ids: Sequence[int] | None = None,
-        feature_keys: Sequence[str] | str | None = None,
+        attr_keys: Sequence[str] | str | None = None,
         include_targets: bool = False,
         unpack: bool = False,
     ) -> pl.DataFrame:
-        edges_df = super().edge_features(
+        edges_df = super().edge_attrs(
             node_ids=map_ids(self._node_map_from_root, node_ids),
-            feature_keys=feature_keys,
+            attr_keys=attr_keys,
             include_targets=include_targets,
             unpack=unpack,
         )
@@ -282,40 +282,40 @@ class GraphView(RustWorkXGraph):
 
         return edges_df
 
-    def update_node_features(
+    def update_node_attrs(
         self,
         node_ids: Sequence[int],
-        attributes: dict[str, Any],
+        attrs: dict[str, Any],
     ) -> None:
-        self._root.update_node_features(
+        self._root.update_node_attrs(
             node_ids=node_ids,
-            attributes=attributes,
+            attrs=attrs,
         )
         # because attributes are passed by reference, we need don't need if both are rustworkx graphs
         if not self._is_root_rx_graph:
             if self.sync:
-                super().update_node_features(
+                super().update_node_attrs(
                     node_ids=map_ids(self._node_map_from_root, node_ids),
-                    attributes=attributes,
+                    attrs=attrs,
                 )
             else:
                 self._out_of_sync = True
 
-    def update_edge_features(
+    def update_edge_attrs(
         self,
         edge_ids: Sequence[int],
-        attributes: dict[str, Any],
+        attrs: dict[str, Any],
     ) -> None:
-        self._root.update_edge_features(
+        self._root.update_edge_attrs(
             edge_ids=edge_ids,
-            attributes=attributes,
+            attrs=attrs,
         )
         # because attributes are passed by reference, we need don't need if both are rustworkx graphs
         if not self._is_root_rx_graph:
             if self.sync:
-                super().update_edge_features(
+                super().update_edge_attrs(
                     edge_ids=map_ids(self._edge_map_from_root, edge_ids),
-                    attributes=attributes,
+                    attrs=attrs,
                 )
             else:
                 self._out_of_sync = True
@@ -348,12 +348,12 @@ class GraphView(RustWorkXGraph):
 
         node_ids = map_ids(self._node_map_to_root, node_ids)
 
-        if output_key not in self.node_features_keys:
-            self.add_node_feature_key(output_key, -1)
+        if output_key not in self.node_attr_keys:
+            self.add_node_attr_key(output_key, -1)
 
-        self.update_node_features(
+        self.update_node_attrs(
             node_ids=node_ids,
-            attributes={output_key: track_ids},
+            attrs={output_key: track_ids},
         )
 
         return tracks_graph

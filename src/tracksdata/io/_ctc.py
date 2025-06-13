@@ -34,8 +34,8 @@ def compressed_tracks_table(graph: BaseGraph) -> np.ndarray:
     tracks : np.ndarray
         The compressed tracks.
     """
-    nodes_df = graph.node_features(
-        feature_keys=[
+    nodes_df = graph.node_attrs(
+        attr_keys=[
             DEFAULT_ATTR_KEYS.NODE_ID,
             DEFAULT_ATTR_KEYS.T,
             DEFAULT_ATTR_KEYS.TRACK_ID,
@@ -53,7 +53,7 @@ def compressed_tracks_table(graph: BaseGraph) -> np.ndarray:
 
     parents = graph.predecessors(
         node_ids,
-        feature_keys=[DEFAULT_ATTR_KEYS.TRACK_ID],
+        attr_keys=[DEFAULT_ATTR_KEYS.TRACK_ID],
     )
     for track_id, node_id in zip(tracks_data, node_ids, strict=True):
         df = parents[node_id]
@@ -91,6 +91,7 @@ def _load_tracks_file(tracks_file: Path) -> dict[int, int]:
         tracks_file,
         separator=" ",
         has_header=False,
+        use_pyarrow=True,
     ).rename(
         {
             "column_1": "track_id",
@@ -117,7 +118,7 @@ def load_ctc(
 ) -> None:
     """
     Load a CTC ground truth file into a graph.
-    The resulting graph will have region properties features from a CTC ground truth file.
+    The resulting graph will have region properties attributesfrom a CTC ground truth file.
 
     Parameters
     ----------
@@ -175,8 +176,8 @@ def load_ctc(
     region_props_nodes = RegionPropsNodes(**region_props_kwargs)
     region_props_nodes.add_nodes(graph, labels=labels)
 
-    nodes_df = graph.node_features(
-        feature_keys=[
+    nodes_df = graph.node_attrs(
+        attr_keys=[
             DEFAULT_ATTR_KEYS.NODE_ID,
             DEFAULT_ATTR_KEYS.T,
             "label",
@@ -205,10 +206,10 @@ def load_ctc(
             graph.add_edge(node_ids[i], node_ids[i + 1], {})
 
     # is duplicating an attribute that bad?
-    graph.add_node_feature_key(DEFAULT_ATTR_KEYS.TRACK_ID, -1)
-    graph.update_node_features(
+    graph.add_node_attr_key(DEFAULT_ATTR_KEYS.TRACK_ID, -1)
+    graph.update_node_attrs(
         node_ids=nodes_df[DEFAULT_ATTR_KEYS.NODE_ID].to_list(),
-        attributes={
+        attrs={
             DEFAULT_ATTR_KEYS.TRACK_ID: nodes_df["label"].to_list(),
         },
     )
