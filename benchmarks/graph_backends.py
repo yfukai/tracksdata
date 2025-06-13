@@ -116,7 +116,7 @@ def main() -> None:
     first_round = False
 
     for _ in range(n_repeats):
-        for n_nodes in [1_000, 10_000]:  # , 100_000]:
+        for n_nodes in [1_000, 10_000, 100_000]:
             n_nodes_per_tp = int(n_nodes / n_time_points)
             pipeline = [
                 (
@@ -136,7 +136,7 @@ def main() -> None:
                 ("subgraph", lambda graph: graph.subgraph(edge_attr_filter={DEFAULT_ATTR_KEYS.SOLUTION: True})),
                 ("assing_tracks", lambda graph: graph.assign_track_ids()),
             ]
-            for backend in [RustWorkXGraph, SQLGraphWithMemory]:  # , SQLGraphDisk]:
+            for backend in [RustWorkXGraph, SQLGraphWithMemory, SQLGraphDisk]:
                 df = _run_benchmark(backend, pipeline)
 
                 if first_round:

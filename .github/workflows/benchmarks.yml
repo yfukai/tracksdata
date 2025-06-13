@@ -39,13 +39,14 @@ jobs:
         cat outputs/graph_backends.md >> $GITHUB_OUTPUT
         echo "EOF" >> $GITHUB_OUTPUT
 
-    - name: Comment PR with benchmark results
-      uses: peter-evans/create-or-update-comment@v4
-      with:
-        issue-number: ${{ github.event.pull_request.number }}
-        body: |
-          ### Benchmark Results
-
-          ```
-          ${{ steps.benchmark_output.outputs.benchmark-results }}
-          ```
+# Currently not working because PRs comes from forks
+#     - name: Comment PR with benchmark results
+#       uses: peter-evans/create-or-update-comment@v4
+#       with:
+#         issue-number: ${{ github.event.pull_request.number }}
+#         body: |
+#           ### Benchmark Results
+#
+#           ```
+#           ${{ steps.benchmark_output.outputs.benchmark-results }}
+#           ```
