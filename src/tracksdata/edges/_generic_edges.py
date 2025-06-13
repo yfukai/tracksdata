@@ -4,12 +4,12 @@ from typing import Any
 import numpy as np
 
 from tracksdata.constants import DEFAULT_ATTR_KEYS
-from tracksdata.edges._base_weights import BaseWeightsOperator
+from tracksdata.edges._base_edge_attrs import BaseEdgeAttrsOperator
 from tracksdata.graph._base_graph import BaseGraph
 from tracksdata.utils._logging import LOG
 
 
-class GenericFunctionEdgeWeights(BaseWeightsOperator):
+class GenericNodeFunctionEdgeAttrs(BaseEdgeAttrsOperator):
     """
     Add weights to the edges of the graph based on the output of a function.
 
@@ -30,7 +30,7 @@ class GenericFunctionEdgeWeights(BaseWeightsOperator):
     ----------
     func : Callable[[dict[str, Any] | Any, dict[str, Any] | Any], Any]
         The function to apply to the source and target attributes.
-    attribute_keys : Sequence[str] | str
+    attr_keys : Sequence[str] | str
         The keys of the attributes to pass to the function.
     output_key : str
         The key to store the output of the function.
@@ -41,15 +41,15 @@ class GenericFunctionEdgeWeights(BaseWeightsOperator):
     def __init__(
         self,
         func: Callable[[dict[str, Any] | Any, dict[str, Any] | Any], Any],
-        attribute_keys: Sequence[str] | str,
+        attr_keys: Sequence[str] | str,
         output_key: str,
         show_progress: bool = True,
     ) -> None:
         super().__init__(output_key=output_key, show_progress=show_progress)
-        self.attr_keys = attribute_keys
+        self.attr_keys = attr_keys
         self.func = func
 
-    def _add_weights_per_time(
+    def _add_edge_attrs_per_time(
         self,
         graph: BaseGraph,
         *,
@@ -66,7 +66,7 @@ class GenericFunctionEdgeWeights(BaseWeightsOperator):
         t : int
             The time point to add weights for.
         """
-        source_ids = graph.filter_nodes_by_attribute({DEFAULT_ATTR_KEYS.T: t})
+        source_ids = graph.filter_nodes_by_attrs({DEFAULT_ATTR_KEYS.T: t})
         edges_df = graph.edge_attrs(node_ids=source_ids, include_targets=True)
 
         if len(edges_df) == 0:
@@ -75,11 +75,11 @@ class GenericFunctionEdgeWeights(BaseWeightsOperator):
 
         source_df = graph.node_attrs(
             node_ids=edges_df[DEFAULT_ATTR_KEYS.EDGE_SOURCE].to_numpy(),
-            attribute_keys=self.attr_keys,
+            attr_keys=self.attr_keys,
         )
         target_df = graph.node_attrs(
             node_ids=edges_df[DEFAULT_ATTR_KEYS.EDGE_TARGET].to_numpy(),
-            attribute_keys=self.attr_keys,
+            attr_keys=self.attr_keys,
         )
 
         weights = np.zeros(len(edges_df), dtype=np.float32)
@@ -106,9 +106,9 @@ class GenericFunctionEdgeWeights(BaseWeightsOperator):
                 weights[i] = self.func(source_attr, target_attr)
 
         if self.output_key not in graph.edge_attrs_keys:
-            graph.add_edge_attribute_key(self.output_key, -99999.0)
+            graph.add_edge_attr_key(self.output_key, -99999.0)
 
         graph.update_edge_attrs(
             edge_ids=edges_df[DEFAULT_ATTR_KEYS.EDGE_ID].to_numpy(),
-            attributes={self.output_key: weights},
+            attrs={self.output_key: weights},
         )

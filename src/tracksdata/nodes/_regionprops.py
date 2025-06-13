@@ -31,7 +31,7 @@ class RegionPropsNodes(BaseNodesOperator):
 
     def attrs_keys(self) -> list[str]:
         """
-        Get the keys of the attributesof the nodes.
+        Get the keys of the attributes of the nodes.
         """
         return [prop.__name__ if callable(prop) else prop for prop in self._extra_properties]
 
@@ -114,12 +114,12 @@ class RegionPropsNodes(BaseNodesOperator):
             raise ValueError(f"`labels` must be 2D or 3D, got {labels.ndim} dimensions.")
 
         if DEFAULT_ATTR_KEYS.MASK not in graph.node_attrs_keys:
-            graph.add_node_attribute_key(DEFAULT_ATTR_KEYS.MASK, None)
+            graph.add_node_attr_key(DEFAULT_ATTR_KEYS.MASK, None)
 
         # initialize the attribute keys
         for attr_key in axis_names + [p.__name__ if callable(p) else p for p in self._extra_properties]:
             if attr_key not in graph.node_attrs_keys:
-                graph.add_node_attribute_key(attr_key, -1.0)
+                graph.add_node_attr_key(attr_key, -1.0)
 
         labels = np.asarray(labels)
 
@@ -130,18 +130,18 @@ class RegionPropsNodes(BaseNodesOperator):
             intensity_image=intensity_image,
             spacing=self._spacing,
         ):
-            attributes = dict(zip(axis_names, obj.centroid, strict=False))
+            attrs = dict(zip(axis_names, obj.centroid, strict=False))
 
             for prop in self._extra_properties:
                 if callable(prop):
-                    attributes[prop.__name__] = prop(obj)
+                    attrs[prop.__name__] = prop(obj)
                 else:
-                    attributes[prop] = getattr(obj, prop)
+                    attrs[prop] = getattr(obj, prop)
 
-            attributes[DEFAULT_ATTR_KEYS.MASK] = Mask(obj.image, obj.bbox)
-            attributes[DEFAULT_ATTR_KEYS.T] = t
+            attrs[DEFAULT_ATTR_KEYS.MASK] = Mask(obj.image, obj.bbox)
+            attrs[DEFAULT_ATTR_KEYS.T] = t
 
-            nodes_data.append(attributes)
+            nodes_data.append(attrs)
             obj._cache.clear()  # clearing to reduce memory footprint
 
         if len(nodes_data) > 0:

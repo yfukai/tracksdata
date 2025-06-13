@@ -81,7 +81,7 @@ class RandomNodes(BaseNodesOperator):
         # Register each spatial column individually
         for col in self.spatial_cols:
             if col not in graph.node_attrs_keys:
-                graph.add_node_attribute_key(col, None)
+                graph.add_node_attr_key(col, None)
 
         n_nodes_at_t = self.rng.integers(
             self.n_nodes[0],

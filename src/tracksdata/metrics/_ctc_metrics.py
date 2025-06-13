@@ -58,7 +58,7 @@ def _matching_data(
         ("ref", reference_graph, reference_graph_key),
         ("comp", input_graph, input_graph_key),
     ]:
-        nodes_df = graph.node_attrs(attribute_keys=[DEFAULT_ATTR_KEYS.T, track_id_key, DEFAULT_ATTR_KEYS.MASK])
+        nodes_df = graph.node_attrs(attr_keys=[DEFAULT_ATTR_KEYS.T, track_id_key, DEFAULT_ATTR_KEYS.MASK])
         labels = {}
 
         for (t,), group in nodes_df.group_by(DEFAULT_ATTR_KEYS.T):

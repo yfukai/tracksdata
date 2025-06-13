@@ -35,7 +35,7 @@ def compressed_tracks_table(graph: BaseGraph) -> np.ndarray:
         The compressed tracks.
     """
     nodes_df = graph.node_attrs(
-        attribute_keys=[
+        attr_keys=[
             DEFAULT_ATTR_KEYS.NODE_ID,
             DEFAULT_ATTR_KEYS.T,
             DEFAULT_ATTR_KEYS.TRACK_ID,
@@ -53,7 +53,7 @@ def compressed_tracks_table(graph: BaseGraph) -> np.ndarray:
 
     parents = graph.predecessors(
         node_ids,
-        attribute_keys=[DEFAULT_ATTR_KEYS.TRACK_ID],
+        attr_keys=[DEFAULT_ATTR_KEYS.TRACK_ID],
     )
     for track_id, node_id in zip(tracks_data, node_ids, strict=True):
         df = parents[node_id]
@@ -176,7 +176,7 @@ def load_ctc(
     region_props_nodes.add_nodes(graph, labels=labels)
 
     nodes_df = graph.node_attrs(
-        attribute_keys=[
+        attr_keys=[
             DEFAULT_ATTR_KEYS.NODE_ID,
             DEFAULT_ATTR_KEYS.T,
             "label",
@@ -205,10 +205,10 @@ def load_ctc(
             graph.add_edge(node_ids[i], node_ids[i + 1], {})
 
     # is duplicating an attribute that bad?
-    graph.add_node_attribute_key(DEFAULT_ATTR_KEYS.TRACK_ID, -1)
+    graph.add_node_attr_key(DEFAULT_ATTR_KEYS.TRACK_ID, -1)
     graph.update_node_attrs(
         node_ids=nodes_df[DEFAULT_ATTR_KEYS.NODE_ID].to_list(),
-        attributes={
+        attrs={
             DEFAULT_ATTR_KEYS.TRACK_ID: nodes_df["label"].to_list(),
         },
     )

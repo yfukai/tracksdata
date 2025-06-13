@@ -30,7 +30,7 @@ def test_regionprops_init_custom() -> None:
 
 
 def test_regionprops_attrs_keys() -> None:
-    """Test attributes_keys method."""
+    """Test attrs_keys method."""
     # Test with string properties
     operator = RegionPropsNodes(extra_properties=["area", "perimeter"])
     assert operator.attrs_keys() == ["area", "perimeter"]

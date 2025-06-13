@@ -12,19 +12,19 @@ from tracksdata.nodes._mask import Mask
 
 def test_already_existing_keys(graph_backend: BaseGraph) -> None:
     """Test that adding already existing keys raises an error."""
-    graph_backend.add_node_attribute_key("x", None)
+    graph_backend.add_node_attr_key("x", None)
 
     with pytest.raises(ValueError):
-        graph_backend.add_node_attribute_key("x", None)
+        graph_backend.add_node_attr_key("x", None)
 
-    graph_backend.add_edge_attribute_key("w", None)
+    graph_backend.add_edge_attr_key("w", None)
 
     with pytest.raises(ValueError):
-        graph_backend.add_edge_attribute_key("w", None)
+        graph_backend.add_edge_attr_key("w", None)
 
     with pytest.raises(ValueError):
         # missing x
-        graph_backend.add_node(attributes={"t": 0})
+        graph_backend.add_node(attrs={"t": 0})
 
 
 def testing_empty_graph(graph_backend: BaseGraph) -> None:
@@ -55,7 +55,7 @@ def test_add_node(graph_backend: BaseGraph) -> None:
     """Test adding nodes with various attributes."""
 
     for key in ["x", "y"]:
-        graph_backend.add_node_attribute_key(key, None)
+        graph_backend.add_node_attr_key(key, None)
 
     node_id = graph_backend.add_node({"t": 0, "x": 1.0, "y": 2.0})
     assert isinstance(node_id, int)
@@ -70,7 +70,7 @@ def test_add_node(graph_backend: BaseGraph) -> None:
 def test_add_edge(graph_backend: BaseGraph) -> None:
     """Test adding edges with attributes."""
     # Add node attribute key
-    graph_backend.add_node_attribute_key("x", None)
+    graph_backend.add_node_attr_key("x", None)
 
     # Add two nodes first
     node1 = graph_backend.add_node({"t": 0, "x": 1.0})
@@ -78,10 +78,10 @@ def test_add_edge(graph_backend: BaseGraph) -> None:
     node3 = graph_backend.add_node({"t": 2, "x": 1.0})
 
     # Add edge attribute key
-    graph_backend.add_edge_attribute_key("weight", 0.0)
+    graph_backend.add_edge_attr_key("weight", 0.0)
 
     # Add edge
-    edge_id = graph_backend.add_edge(node1, node2, attributes={"weight": 0.5})
+    edge_id = graph_backend.add_edge(node1, node2, attrs={"weight": 0.5})
     assert isinstance(edge_id, int)
 
     # Check edge attributes
@@ -91,8 +91,8 @@ def test_add_edge(graph_backend: BaseGraph) -> None:
     assert df["weight"].to_list() == [0.5]
 
     # testing adding new add attribute
-    graph_backend.add_edge_attribute_key("new_attribute", 0.0)
-    edge_id = graph_backend.add_edge(node2, node3, attributes={"new_attribute": 1.0, "weight": 0.1})
+    graph_backend.add_edge_attr_key("new_attribute", 0.0)
+    edge_id = graph_backend.add_edge(node2, node3, attrs={"new_attribute": 1.0, "weight": 0.1})
     assert isinstance(edge_id, int)
 
     # testing default value was assigned correctly
@@ -113,22 +113,22 @@ def test_node_ids(graph_backend: BaseGraph) -> None:
 
 def test_filter_nodes_by_attribute(graph_backend: BaseGraph) -> None:
     """Test filtering nodes by attributes."""
-    graph_backend.add_node_attribute_key("label", None)
+    graph_backend.add_node_attr_key("label", None)
 
     node1 = graph_backend.add_node({"t": 0, "label": "A"})
     node2 = graph_backend.add_node({"t": 0, "label": "B"})
     node3 = graph_backend.add_node({"t": 1, "label": "A"})
 
     # Filter by time
-    nodes = graph_backend.filter_nodes_by_attribute({"t": 0})
+    nodes = graph_backend.filter_nodes_by_attrs({"t": 0})
     assert set(nodes) == {node1, node2}
 
     # Filter by label
-    nodes = graph_backend.filter_nodes_by_attribute({"label": "A"})
+    nodes = graph_backend.filter_nodes_by_attrs({"label": "A"})
     assert set(nodes) == {node1, node3}
 
     # Filter by t and label
-    nodes = graph_backend.filter_nodes_by_attribute({"t": 1, "label": "A"})
+    nodes = graph_backend.filter_nodes_by_attrs({"t": 1, "label": "A"})
     assert set(nodes) == {node3}
 
 
@@ -143,18 +143,18 @@ def test_time_points(graph_backend: BaseGraph) -> None:
 
 def test_node_attrs(graph_backend: BaseGraph) -> None:
     """Test retrieving node attributes."""
-    graph_backend.add_node_attribute_key("x", None)
-    graph_backend.add_node_attribute_key("coordinates", np.array([0.0, 0.0]))
+    graph_backend.add_node_attr_key("x", None)
+    graph_backend.add_node_attr_key("coordinates", np.array([0.0, 0.0]))
 
     node1 = graph_backend.add_node({"t": 0, "x": 1.0, "coordinates": np.array([10.0, 20.0])})
     node2 = graph_backend.add_node({"t": 1, "x": 2.0, "coordinates": np.array([30.0, 40.0])})
 
-    df = graph_backend.node_attrs(node_ids=[node1, node2], attribute_keys=["x"])
+    df = graph_backend.node_attrs(node_ids=[node1, node2], attr_keys=["x"])
     assert isinstance(df, pl.DataFrame)
     assert df["x"].to_list() == [1.0, 2.0]
 
     # Test unpack functionality
-    df_unpacked = graph_backend.node_attrs(node_ids=[node1, node2], attribute_keys=["coordinates"], unpack=True)
+    df_unpacked = graph_backend.node_attrs(node_ids=[node1, node2], attr_keys=["coordinates"], unpack=True)
     if "coordinates_0" in df_unpacked.columns:
         assert df_unpacked["coordinates_0"].to_list() == [10.0, 30.0]
         assert df_unpacked["coordinates_1"].to_list() == [20.0, 40.0]
@@ -165,17 +165,17 @@ def test_edge_attrs(graph_backend: BaseGraph) -> None:
     node1 = graph_backend.add_node({"t": 0})
     node2 = graph_backend.add_node({"t": 1})
 
-    graph_backend.add_edge_attribute_key("weight", 0.0)
-    graph_backend.add_edge_attribute_key("vector", np.array([0.0, 0.0]))
+    graph_backend.add_edge_attr_key("weight", 0.0)
+    graph_backend.add_edge_attr_key("vector", np.array([0.0, 0.0]))
 
-    graph_backend.add_edge(node1, node2, attributes={"weight": 0.5, "vector": np.array([1.0, 2.0])})
+    graph_backend.add_edge(node1, node2, attrs={"weight": 0.5, "vector": np.array([1.0, 2.0])})
 
-    df = graph_backend.edge_attrs(attribute_keys=["weight"])
+    df = graph_backend.edge_attrs(attr_keys=["weight"])
     assert isinstance(df, pl.DataFrame)
     assert df["weight"].to_list() == [0.5]
 
     # Test unpack functionality
-    df_unpacked = graph_backend.edge_attrs(attribute_keys=["vector"], unpack=True)
+    df_unpacked = graph_backend.edge_attrs(attr_keys=["vector"], unpack=True)
     if "vector_0" in df_unpacked.columns:
         assert df_unpacked["vector_0"].to_list() == [1.0]
         assert df_unpacked["vector_1"].to_list() == [2.0]
@@ -184,7 +184,7 @@ def test_edge_attrs(graph_backend: BaseGraph) -> None:
 def test_edge_attrs_subgraph_edge_ids(graph_backend: BaseGraph) -> None:
     """Test that edge_attrs preserves original edge IDs when using node_ids parameter."""
     # Add edge attribute key
-    graph_backend.add_edge_attribute_key("weight", 0.0)
+    graph_backend.add_edge_attr_key("weight", 0.0)
 
     # Create nodes
     node1 = graph_backend.add_node({"t": 0})
@@ -195,10 +195,10 @@ def test_edge_attrs_subgraph_edge_ids(graph_backend: BaseGraph) -> None:
     print(f"Created nodes: {node1=}, {node2=}, {node3=}, {node4=}")
 
     # Create edges
-    edge1 = graph_backend.add_edge(node1, node2, attributes={"weight": 0.1})
-    edge2 = graph_backend.add_edge(node2, node3, attributes={"weight": 0.2})
-    edge3 = graph_backend.add_edge(node3, node4, attributes={"weight": 0.3})
-    edge4 = graph_backend.add_edge(node1, node3, attributes={"weight": 0.4})
+    edge1 = graph_backend.add_edge(node1, node2, attrs={"weight": 0.1})
+    edge2 = graph_backend.add_edge(node2, node3, attrs={"weight": 0.2})
+    edge3 = graph_backend.add_edge(node3, node4, attrs={"weight": 0.3})
+    edge4 = graph_backend.add_edge(node1, node3, attrs={"weight": 0.4})
 
     print(f"Created edges: {edge1=}, {edge2=}, {edge3=}, {edge4=}")
 
@@ -241,48 +241,48 @@ def test_edge_attrs_subgraph_edge_ids(graph_backend: BaseGraph) -> None:
     assert actual_subset_edge_ids == expected_subset_edge_ids, msg
 
 
-def test_add_node_attribute_key(graph_backend: BaseGraph) -> None:
+def test_add_node_attr_key(graph_backend: BaseGraph) -> None:
     """Test adding new node attribute keys."""
     node = graph_backend.add_node({"t": 0})
-    graph_backend.add_node_attribute_key("new_attribute", 42)
+    graph_backend.add_node_attr_key("new_attribute", 42)
 
-    df = graph_backend.node_attrs(node_ids=[node], attribute_keys=["new_attribute"])
+    df = graph_backend.node_attrs(node_ids=[node], attr_keys=["new_attribute"])
     assert df["new_attribute"].to_list() == [42]
 
 
-def test_add_edge_attribute_key(graph_backend: BaseGraph) -> None:
+def test_add_edge_attr_key(graph_backend: BaseGraph) -> None:
     """Test adding new edge attribute keys."""
     node1 = graph_backend.add_node({"t": 0})
     node2 = graph_backend.add_node({"t": 1})
 
-    graph_backend.add_edge_attribute_key("new_attribute", 42)
-    graph_backend.add_edge(node1, node2, attributes={"new_attribute": 42})
+    graph_backend.add_edge_attr_key("new_attribute", 42)
+    graph_backend.add_edge(node1, node2, attrs={"new_attribute": 42})
 
-    df = graph_backend.edge_attrs(attribute_keys=["new_attribute"])
+    df = graph_backend.edge_attrs(attr_keys=["new_attribute"])
     assert df["new_attribute"].to_list() == [42]
 
 
 def test_update_node_attrs(graph_backend: BaseGraph) -> None:
     """Test updating node attributes."""
-    graph_backend.add_node_attribute_key("x", None)
+    graph_backend.add_node_attr_key("x", None)
 
     node_1 = graph_backend.add_node({"t": 0, "x": 1.0})
     node_2 = graph_backend.add_node({"t": 0, "x": 2.0})
 
-    graph_backend.update_node_attrs(node_ids=[node_1], attributes={"x": 3.0})
+    graph_backend.update_node_attrs(node_ids=[node_1], attrs={"x": 3.0})
 
-    df = graph_backend.node_attrs(node_ids=[node_1, node_2], attribute_keys="x")
+    df = graph_backend.node_attrs(node_ids=[node_1, node_2], attr_keys="x")
     assert df["x"].to_list() == [3.0, 2.0]
 
     # inverted access on purpose
-    graph_backend.update_node_attrs(node_ids=[node_2, node_1], attributes={"x": [5.0, 6.0]})
+    graph_backend.update_node_attrs(node_ids=[node_2, node_1], attrs={"x": [5.0, 6.0]})
 
-    df = graph_backend.node_attrs(node_ids=[node_1, node_2], attribute_keys="x")
+    df = graph_backend.node_attrs(node_ids=[node_1, node_2], attr_keys="x")
     assert df["x"].to_list() == [6.0, 5.0]
 
     # wrong length
     with pytest.raises(ValueError):
-        graph_backend.update_node_attrs(node_ids=[node_1, node_2], attributes={"x": [1.0]})
+        graph_backend.update_node_attrs(node_ids=[node_1, node_2], attrs={"x": [1.0]})
 
 
 def test_update_edge_attrs(graph_backend: BaseGraph) -> None:
@@ -290,16 +290,16 @@ def test_update_edge_attrs(graph_backend: BaseGraph) -> None:
     node1 = graph_backend.add_node({"t": 0})
     node2 = graph_backend.add_node({"t": 1})
 
-    graph_backend.add_edge_attribute_key("weight", 0.0)
-    edge_id = graph_backend.add_edge(node1, node2, attributes={"weight": 0.5})
+    graph_backend.add_edge_attr_key("weight", 0.0)
+    edge_id = graph_backend.add_edge(node1, node2, attrs={"weight": 0.5})
 
-    graph_backend.update_edge_attrs(edge_ids=[edge_id], attributes={"weight": 1.0})
-    df = graph_backend.edge_attrs(node_ids=[node1, node2], attribute_keys=["weight"])
+    graph_backend.update_edge_attrs(edge_ids=[edge_id], attrs={"weight": 1.0})
+    df = graph_backend.edge_attrs(node_ids=[node1, node2], attr_keys=["weight"])
     assert df["weight"].to_list() == [1.0]
 
     # wrong length
     with pytest.raises(ValueError):
-        graph_backend.update_edge_attrs(edge_ids=[edge_id], attributes={"weight": [1.0, 2.0]})
+        graph_backend.update_edge_attrs(edge_ids=[edge_id], attrs={"weight": [1.0, 2.0]})
 
 
 def test_num_edges(graph_backend: BaseGraph) -> None:
@@ -307,8 +307,8 @@ def test_num_edges(graph_backend: BaseGraph) -> None:
     node1 = graph_backend.add_node({"t": 0})
     node2 = graph_backend.add_node({"t": 1})
 
-    graph_backend.add_edge_attribute_key("weight", 0.0)
-    graph_backend.add_edge(node1, node2, attributes={"weight": 0.5})
+    graph_backend.add_edge_attr_key("weight", 0.0)
+    graph_backend.add_edge(node1, node2, attrs={"weight": 0.5})
 
     assert graph_backend.num_edges == 1
 
@@ -324,7 +324,7 @@ def test_num_nodes(graph_backend: BaseGraph) -> None:
 def test_edge_attrs_include_targets(graph_backend: BaseGraph) -> None:
     """Test the inclusive flag behavior in edge_attrs method."""
     # Add edge attribute key
-    graph_backend.add_edge_attribute_key("weight", 0.0)
+    graph_backend.add_edge_attr_key("weight", 0.0)
 
     # Create a graph with 4 nodes
     # Graph structure:
@@ -339,10 +339,10 @@ def test_edge_attrs_include_targets(graph_backend: BaseGraph) -> None:
     print(f"Created nodes: {node0=}, {node1=}, {node2=}, {node3=}")
 
     # Create edges with different weights for easy identification
-    edge0 = graph_backend.add_edge(node0, node1, attributes={"weight": 0.1})  # node0 -> node1
-    edge1 = graph_backend.add_edge(node1, node2, attributes={"weight": 0.2})  # node1 -> node2
-    edge2 = graph_backend.add_edge(node2, node3, attributes={"weight": 0.3})  # node2 -> node3
-    edge3 = graph_backend.add_edge(node3, node0, attributes={"weight": 0.4})  # node3 -> node0
+    edge0 = graph_backend.add_edge(node0, node1, attrs={"weight": 0.1})  # node0 -> node1
+    edge1 = graph_backend.add_edge(node1, node2, attrs={"weight": 0.2})  # node1 -> node2
+    edge2 = graph_backend.add_edge(node2, node3, attrs={"weight": 0.3})  # node2 -> node3
+    edge3 = graph_backend.add_edge(node3, node0, attrs={"weight": 0.4})  # node3 -> node0
 
     print(f"Created edges: {edge0=}, {edge1=}, {edge2=}, {edge3=}")
 
@@ -441,9 +441,9 @@ def test_from_ctc(
 def test_sucessors_and_degree(graph_backend: BaseGraph) -> None:
     """Test getting successors of nodes."""
     # Add attribute keys
-    graph_backend.add_node_attribute_key("x", 0.0)
-    graph_backend.add_node_attribute_key("y", 0.0)
-    graph_backend.add_edge_attribute_key("weight", 0.0)
+    graph_backend.add_node_attr_key("x", 0.0)
+    graph_backend.add_node_attr_key("y", 0.0)
+    graph_backend.add_edge_attr_key("weight", 0.0)
 
     # Create a simple graph structure: node0 -> node1 -> node2
     #                                      \-> node3
@@ -503,9 +503,9 @@ def test_sucessors_and_degree(graph_backend: BaseGraph) -> None:
 def test_predecessors_and_degree(graph_backend: BaseGraph) -> None:
     """Test getting predecessors of nodes."""
     # Add attribute keys
-    graph_backend.add_node_attribute_key("x", 0.0)
-    graph_backend.add_node_attribute_key("y", 0.0)
-    graph_backend.add_edge_attribute_key("weight", 0.0)
+    graph_backend.add_node_attr_key("x", 0.0)
+    graph_backend.add_node_attr_key("y", 0.0)
+    graph_backend.add_edge_attr_key("weight", 0.0)
 
     # Create a simple graph structure: node0 -> node1 -> node2
     #                                      \-> node3
@@ -564,13 +564,13 @@ def test_predecessors_and_degree(graph_backend: BaseGraph) -> None:
     assert len(predecessors_dict[node3]) == 1  # node3 has 1 predecessor
 
 
-def test_sucessors_with_attribute_keys(graph_backend: BaseGraph) -> None:
+def test_sucessors_with_attr_keys(graph_backend: BaseGraph) -> None:
     """Test getting successors with specific attribute keys."""
     # Add attribute keys
-    graph_backend.add_node_attribute_key("x", 0.0)
-    graph_backend.add_node_attribute_key("y", 0.0)
-    graph_backend.add_node_attribute_key("label", "X")
-    graph_backend.add_edge_attribute_key("weight", 0.0)
+    graph_backend.add_node_attr_key("x", 0.0)
+    graph_backend.add_node_attr_key("y", 0.0)
+    graph_backend.add_node_attr_key("label", "X")
+    graph_backend.add_edge_attr_key("weight", 0.0)
 
     # Create nodes
     node0 = graph_backend.add_node({"t": 0, "x": 0.0, "y": 0.0, "label": "A"})
@@ -582,7 +582,7 @@ def test_sucessors_with_attribute_keys(graph_backend: BaseGraph) -> None:
     graph_backend.add_edge(node0, node2, {"weight": 0.7})
 
     # Test with single attribute key as string
-    successors_df = graph_backend.sucessors(node0, attribute_keys="x")
+    successors_df = graph_backend.sucessors(node0, attr_keys="x")
     assert isinstance(successors_df, pl.DataFrame)
     assert "x" in successors_df.columns
     assert "y" not in successors_df.columns
@@ -593,7 +593,7 @@ def test_sucessors_with_attribute_keys(graph_backend: BaseGraph) -> None:
     assert "x" in available_cols
 
     # Test with multiple attribute keys as list
-    successors_df = graph_backend.sucessors(node0, attribute_keys=["x", "label"])
+    successors_df = graph_backend.sucessors(node0, attr_keys=["x", "label"])
     assert isinstance(successors_df, pl.DataFrame)
     assert "x" in successors_df.columns
     assert "label" in successors_df.columns
@@ -608,13 +608,13 @@ def test_sucessors_with_attribute_keys(graph_backend: BaseGraph) -> None:
         assert set(label_values) == {"B", "C"}
 
 
-def test_predecessors_with_attribute_keys(graph_backend: BaseGraph) -> None:
+def test_predecessors_with_attr_keys(graph_backend: BaseGraph) -> None:
     """Test getting predecessors with specific attribute keys."""
     # Add attribute keys
-    graph_backend.add_node_attribute_key("x", 0.0)
-    graph_backend.add_node_attribute_key("y", 0.0)
-    graph_backend.add_node_attribute_key("label", "X")
-    graph_backend.add_edge_attribute_key("weight", 0.0)
+    graph_backend.add_node_attr_key("x", 0.0)
+    graph_backend.add_node_attr_key("y", 0.0)
+    graph_backend.add_node_attr_key("label", "X")
+    graph_backend.add_edge_attr_key("weight", 0.0)
 
     # Create nodes
     node0 = graph_backend.add_node({"t": 0, "x": 0.0, "y": 0.0, "label": "A"})
@@ -626,14 +626,14 @@ def test_predecessors_with_attribute_keys(graph_backend: BaseGraph) -> None:
     graph_backend.add_edge(node1, node2, {"weight": 0.7})
 
     # Test with single attribute key as string
-    predecessors_df = graph_backend.predecessors(node2, attribute_keys="label")
+    predecessors_df = graph_backend.predecessors(node2, attr_keys="label")
     assert isinstance(predecessors_df, pl.DataFrame)
     assert "label" in predecessors_df.columns
     assert "y" not in predecessors_df.columns
     assert "x" not in predecessors_df.columns
 
     # Test with multiple attribute keys as list
-    predecessors_df = graph_backend.predecessors(node2, attribute_keys=["x", "label"])
+    predecessors_df = graph_backend.predecessors(node2, attr_keys=["x", "label"])
     assert isinstance(predecessors_df, pl.DataFrame)
     assert "x" in predecessors_df.columns
     assert "label" in predecessors_df.columns
@@ -651,8 +651,8 @@ def test_predecessors_with_attribute_keys(graph_backend: BaseGraph) -> None:
 def test_sucessors_predecessors_edge_cases(graph_backend: BaseGraph) -> None:
     """Test edge cases for successors and predecessors methods."""
     # Add attribute keys
-    graph_backend.add_node_attribute_key("x", 0.0)
-    graph_backend.add_edge_attribute_key("weight", 0.0)
+    graph_backend.add_node_attr_key("x", 0.0)
+    graph_backend.add_edge_attr_key("weight", 0.0)
 
     # Create isolated nodes (no edges)
     node0 = graph_backend.add_node({"t": 0, "x": 0.0})
@@ -679,7 +679,7 @@ def test_sucessors_predecessors_edge_cases(graph_backend: BaseGraph) -> None:
     # Test with non-existent attribute keys (should work but return limited columns)
     # This depends on implementation - some might raise errors, others might ignore
     try:
-        successors_df = graph_backend.sucessors(node0, attribute_keys=["nonexistent"])
+        successors_df = graph_backend.sucessors(node0, attr_keys=["nonexistent"])
         # If it doesn't raise an error, it should return empty or handle gracefully
         assert isinstance(successors_df, pl.DataFrame)
     except (KeyError, AttributeError):
@@ -690,9 +690,9 @@ def test_sucessors_predecessors_edge_cases(graph_backend: BaseGraph) -> None:
 def test_match_method(graph_backend: BaseGraph) -> None:
     """Test the match method for matching nodes between two graphs."""
     # Create first graph (self) with masks
-    graph_backend.add_node_attribute_key("x", 0.0)
-    graph_backend.add_node_attribute_key("y", 0.0)
-    graph_backend.add_node_attribute_key(DEFAULT_ATTR_KEYS.MASK, None)
+    graph_backend.add_node_attr_key("x", 0.0)
+    graph_backend.add_node_attr_key("y", 0.0)
+    graph_backend.add_node_attr_key(DEFAULT_ATTR_KEYS.MASK, None)
 
     # Create masks for first graph
     mask1_data = np.array([[True, True], [True, True]], dtype=bool)
@@ -710,7 +710,7 @@ def test_match_method(graph_backend: BaseGraph) -> None:
     node3 = graph_backend.add_node({"t": 2, "x": 3.0, "y": 3.0, DEFAULT_ATTR_KEYS.MASK: mask3})
 
     # Add edges to first graph
-    graph_backend.add_edge_attribute_key("weight", 0.0)
+    graph_backend.add_edge_attr_key("weight", 0.0)
     graph_backend.add_edge(node1, node2, {"weight": 0.5})
     graph_backend.add_edge(node2, node3, {"weight": 0.3})
 
@@ -724,9 +724,9 @@ def test_match_method(graph_backend: BaseGraph) -> None:
         kwargs = {}
 
     other_graph = graph_backend.__class__(**kwargs)
-    other_graph.add_node_attribute_key("x", 0.0)
-    other_graph.add_node_attribute_key("y", 0.0)
-    other_graph.add_node_attribute_key(DEFAULT_ATTR_KEYS.MASK, None)
+    other_graph.add_node_attr_key("x", 0.0)
+    other_graph.add_node_attr_key("y", 0.0)
+    other_graph.add_node_attr_key(DEFAULT_ATTR_KEYS.MASK, None)
 
     # Create overlapping masks for second graph
     # This mask overlaps significantly with mask1 (IoU > 0.5)
@@ -753,7 +753,7 @@ def test_match_method(graph_backend: BaseGraph) -> None:
     ref_node4 = other_graph.add_node({"t": 2, "x": 3.1, "y": 3.1, DEFAULT_ATTR_KEYS.MASK: ref_mask4})
 
     # Add edges to reference graph - matching structure with first graph
-    other_graph.add_edge_attribute_key("weight", 0.0)
+    other_graph.add_edge_attr_key("weight", 0.0)
     other_graph.add_edge(ref_node1, ref_node2, {"weight": 0.6})  # ref_node1 -> ref_node2
     other_graph.add_edge(ref_node2, ref_node3, {"weight": 0.7})  # ref_node2 -> ref_node3
     other_graph.add_edge(ref_node2, ref_node4, {"weight": 0.5})  # ref_node3 -> ref_node4
@@ -776,7 +776,7 @@ def test_match_method(graph_backend: BaseGraph) -> None:
     assert edge_match_key in graph_backend.edge_attrs_keys
 
     # Get node attributesto check matching results
-    nodes_df = graph_backend.node_attrs(attribute_keys=[DEFAULT_ATTR_KEYS.NODE_ID, match_node_id_key, match_score_key])
+    nodes_df = graph_backend.node_attrs(attr_keys=[DEFAULT_ATTR_KEYS.NODE_ID, match_node_id_key, match_score_key])
     print(nodes_df)
 
     # Verify specific expected matches based on IoU
@@ -815,7 +815,7 @@ def test_match_method(graph_backend: BaseGraph) -> None:
         assert 0.0 <= score <= 1.0, f"Score {score} for node {node_id} should be between 0 and 1"
 
     # Check edge matching
-    edges_df = graph_backend.edge_attrs(attribute_keys=[edge_match_key])
+    edges_df = graph_backend.edge_attrs(attr_keys=[edge_match_key])
     assert len(edges_df) > 0
 
     # After your bug fixes, both edges are matching
@@ -825,28 +825,28 @@ def test_match_method(graph_backend: BaseGraph) -> None:
     np.testing.assert_array_equal(edge_matches, expected_matches)
 
 
-def test_attrs_with_duplicated_attribute_keys(graph_backend: BaseGraph) -> None:
+def test_attrs_with_duplicated_attr_keys(graph_backend: BaseGraph) -> None:
     """Test that node attributeswith duplicated attribute keys are handled correctly."""
     # Add attribute keys
-    graph_backend.add_node_attribute_key("x", 0.0)
-    graph_backend.add_node_attribute_key("y", 0.0)
+    graph_backend.add_node_attr_key("x", 0.0)
+    graph_backend.add_node_attr_key("y", 0.0)
 
     # Add nodes
     graph_backend.add_node({"t": 0, "x": 1.0, "y": 1.0})
     graph_backend.add_node({"t": 1, "x": 2.0, "y": 2.0})
 
     # Add edges
-    graph_backend.add_edge_attribute_key("weight", 0.0)
+    graph_backend.add_edge_attr_key("weight", 0.0)
     graph_backend.add_edge(0, 1, {"weight": 0.5})
 
     # Test with duplicated attribute keys
     # This would crash before
-    nodes_df = graph_backend.node_attrs(attribute_keys=["x", "y", "x"])
+    nodes_df = graph_backend.node_attrs(attr_keys=["x", "y", "x"])
     assert "x" in nodes_df.columns
     assert "y" in nodes_df.columns
     assert nodes_df["x"].to_list() == [1.0, 2.0]
     assert nodes_df["y"].to_list() == [1.0, 2.0]
 
-    edges_df = graph_backend.edge_attrs(attribute_keys=["weight", "weight", "weight"])
+    edges_df = graph_backend.edge_attrs(attr_keys=["weight", "weight", "weight"])
     assert "weight" in edges_df.columns
     assert edges_df["weight"].to_list() == [0.5]

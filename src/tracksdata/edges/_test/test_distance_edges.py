@@ -19,7 +19,7 @@ def test_distance_edges_init_custom_params() -> None:
     operator = DistanceEdges(
         distance_threshold=5.0,
         n_neighbors=2,
-        attribute_keys=["x", "y"],
+        attr_keys=["x", "y"],
         show_progress=False,
         output_key="custom_distance",
     )
@@ -45,8 +45,8 @@ def test_distance_edges_add_edges_single_timepoint_no_previous() -> None:
     graph = RustWorkXGraph()
 
     # Register attribute keys
-    graph.add_node_attribute_key("x", 0.0)
-    graph.add_node_attribute_key("y", 0.0)
+    graph.add_node_attr_key("x", 0.0)
+    graph.add_node_attr_key("y", 0.0)
 
     # Add nodes only at t=1 (no t=0)
     graph.add_node({DEFAULT_ATTR_KEYS.T: 1, "x": 0.0, "y": 0.0})
@@ -64,8 +64,8 @@ def test_distance_edges_add_edges_single_timepoint_no_current() -> None:
     graph = RustWorkXGraph()
 
     # Register attribute keys
-    graph.add_node_attribute_key("x", 0.0)
-    graph.add_node_attribute_key("y", 0.0)
+    graph.add_node_attr_key("x", 0.0)
+    graph.add_node_attr_key("y", 0.0)
 
     # Add nodes only at t=0 (no t=1)
     graph.add_node({DEFAULT_ATTR_KEYS.T: 0, "x": 0.0, "y": 0.0})
@@ -83,8 +83,8 @@ def test_distance_edges_add_edges_2d_coordinates() -> None:
     graph = RustWorkXGraph()
 
     # Register attribute keys
-    graph.add_node_attribute_key("x", 0.0)
-    graph.add_node_attribute_key("y", 0.0)
+    graph.add_node_attr_key("x", 0.0)
+    graph.add_node_attr_key("y", 0.0)
 
     # Add nodes at t=0
     _ = graph.add_node({DEFAULT_ATTR_KEYS.T: 0, "x": 0.0, "y": 0.0})
@@ -111,9 +111,9 @@ def test_distance_edges_add_edges_3d_coordinates() -> None:
     graph = RustWorkXGraph()
 
     # Register attribute keys
-    graph.add_node_attribute_key("x", 0.0)
-    graph.add_node_attribute_key("y", 0.0)
-    graph.add_node_attribute_key("z", 0.0)
+    graph.add_node_attr_key("x", 0.0)
+    graph.add_node_attr_key("y", 0.0)
+    graph.add_node_attr_key("z", 0.0)
 
     # Add nodes at t=0
     _ = graph.add_node({DEFAULT_ATTR_KEYS.T: 0, "x": 0.0, "y": 0.0, "z": 0.0})
@@ -131,13 +131,13 @@ def test_distance_edges_add_edges_3d_coordinates() -> None:
     assert graph.num_edges == 2  # other edges are outside distance threshold
 
 
-def test_distance_edges_add_edges_custom_attribute_keys() -> None:
+def test_distance_edges_add_edges_custom_attr_keys() -> None:
     """Test adding edges with custom attribute keys."""
     graph = RustWorkXGraph()
 
     # Register attribute keys
-    graph.add_node_attribute_key("pos_x", 0.0)
-    graph.add_node_attribute_key("pos_y", 0.0)
+    graph.add_node_attr_key("pos_x", 0.0)
+    graph.add_node_attr_key("pos_y", 0.0)
 
     # Add nodes at t=0
     _ = graph.add_node({DEFAULT_ATTR_KEYS.T: 0, "pos_x": 0.0, "pos_y": 0.0})
@@ -147,9 +147,7 @@ def test_distance_edges_add_edges_custom_attribute_keys() -> None:
     _ = graph.add_node({DEFAULT_ATTR_KEYS.T: 1, "pos_x": 1.0, "pos_y": 1.0})
     _ = graph.add_node({DEFAULT_ATTR_KEYS.T: 1, "pos_x": 6.0, "pos_y": 1.0})
 
-    operator = DistanceEdges(
-        distance_threshold=3.0, n_neighbors=2, attribute_keys=["pos_x", "pos_y"], show_progress=False
-    )
+    operator = DistanceEdges(distance_threshold=3.0, n_neighbors=2, attr_keys=["pos_x", "pos_y"], show_progress=False)
 
     operator.add_edges(graph)
 
@@ -162,8 +160,8 @@ def test_distance_edges_add_edges_distance_threshold() -> None:
     graph = RustWorkXGraph()
 
     # Register attribute keys
-    graph.add_node_attribute_key("x", 0.0)
-    graph.add_node_attribute_key("y", 0.0)
+    graph.add_node_attr_key("x", 0.0)
+    graph.add_node_attr_key("y", 0.0)
 
     # Add nodes at t=0
     _ = graph.add_node({DEFAULT_ATTR_KEYS.T: 0, "x": 0.0, "y": 0.0})
@@ -184,8 +182,8 @@ def test_distance_edges_add_edges_multiple_timepoints() -> None:
     graph = RustWorkXGraph()
 
     # Register attribute keys
-    graph.add_node_attribute_key("x", 0.0)
-    graph.add_node_attribute_key("y", 0.0)
+    graph.add_node_attr_key("x", 0.0)
+    graph.add_node_attr_key("y", 0.0)
 
     # Add nodes at multiple timepoints
     for t in range(3):
@@ -206,8 +204,8 @@ def test_distance_edges_add_edges_custom_weight_key() -> None:
     graph = RustWorkXGraph()
 
     # Register attribute keys
-    graph.add_node_attribute_key("x", 0.0)
-    graph.add_node_attribute_key("y", 0.0)
+    graph.add_node_attr_key("x", 0.0)
+    graph.add_node_attr_key("y", 0.0)
 
     # Add nodes at t=0
     _ = graph.add_node({DEFAULT_ATTR_KEYS.T: 0, "x": 0.0, "y": 0.0})
@@ -234,8 +232,8 @@ def test_distance_edges_n_neighbors_limit() -> None:
     graph = RustWorkXGraph()
 
     # Register attribute keys
-    graph.add_node_attribute_key("x", 0.0)
-    graph.add_node_attribute_key("y", 0.0)
+    graph.add_node_attr_key("x", 0.0)
+    graph.add_node_attr_key("y", 0.0)
 
     # Add many nodes at t=0
     for i in range(5):

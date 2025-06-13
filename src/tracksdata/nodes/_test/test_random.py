@@ -227,7 +227,7 @@ def test_random_nodes_different_with_different_seed() -> None:
     assert not np.allclose(coords1, coords2)
 
 
-def test_random_nodes_attribute_keys_registration() -> None:
+def test_random_nodes_attr_keys_registration() -> None:
     """Test that spatial attribute keys are properly registered."""
     graph = RustWorkXGraph()
 

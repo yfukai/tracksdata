@@ -51,13 +51,16 @@ def to_napari_format(
     spatial_cols = ["z", "y", "x"][-len(shape) + 1 :]
 
     tracks_data = solution_graph.node_attrs(
-        attribute_keys=[output_track_id_key, DEFAULT_ATTR_KEYS.T, *spatial_cols],
+        attr_keys=[output_track_id_key, DEFAULT_ATTR_KEYS.T, *spatial_cols],
     )
 
     array_view = GraphArrayView(
         solution_graph,
         shape,
-        attribute_key=output_track_id_key,
+        attr_key=output_track_id_key,
     )
+
+    # sorting columns
+    tracks_data = tracks_data.select([output_track_id_key, DEFAULT_ATTR_KEYS.T, *spatial_cols])
 
     return array_view, tracks_data, dict_graph

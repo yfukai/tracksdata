@@ -25,7 +25,7 @@ class BaseGraph(abc.ABC):
 
     @staticmethod
     def _validate_attributes(
-        attributes: dict[str, Any],
+        attrs: dict[str, Any],
         reference_keys: list[str],
         mode: str,
     ) -> None:
@@ -34,32 +34,31 @@ class BaseGraph(abc.ABC):
 
         Parameters
         ----------
-        attributes : dict[str, Any]
+        attrs : dict[str, Any]
             The attributes to validate.
         reference_keys : list[str]
             The keys to validate against.
         mode : str
             The mode to validate against, for example "node" or "edge".
         """
-        for key in attributes.keys():
+        for key in attrs.keys():
             if key not in reference_keys:
                 raise ValueError(
                     f"{mode} attribute key '{key}' not found in existing keys: "
                     f"'{reference_keys}'\nInitialize with "
-                    f"`graph.add_{mode}_attribute_key(key, default_value)`"
+                    f"`graph.add_{mode}_attr_key(key, default_value)`"
                 )
 
         for ref_key in reference_keys:
-            if ref_key not in attributes.keys():
+            if ref_key not in attrs.keys():
                 raise ValueError(
-                    f"Attribute '{ref_key}' not found in attributes: "
-                    f"'{attributes.keys()}'\nRequested keys: '{reference_keys}'"
+                    f"Attribute '{ref_key}' not found in attrs: '{attrs.keys()}'\nRequested keys: '{reference_keys}'"
                 )
 
     @abc.abstractmethod
     def add_node(
         self,
-        attributes: dict[str, Any],
+        attrs: dict[str, Any],
         validate_keys: bool = True,
     ) -> int:
         """
@@ -67,7 +66,7 @@ class BaseGraph(abc.ABC):
 
         Parameters
         ----------
-        attributes : Any
+        attrs : Any
             The attributes of the node to be added, must have a "t" key.
             The keys of the attributes will be used as the attributes of the node.
             For example:
@@ -106,7 +105,7 @@ class BaseGraph(abc.ABC):
         self,
         source_id: int,
         target_id: int,
-        attributes: dict[str, Any],
+        attrs: dict[str, Any],
         validate_keys: bool = True,
     ) -> int:
         """
@@ -118,7 +117,7 @@ class BaseGraph(abc.ABC):
             The ID of the source node.
         target_id : int
             The ID of the target node.
-        attributes : dict[str, Any]
+        attrs : dict[str, Any]
             Additional attributes for the edge.
         validate_keys : bool
             Whether to check if the attributes keys are valid.
@@ -160,7 +159,7 @@ class BaseGraph(abc.ABC):
     def sucessors(
         self,
         node_ids: list[int] | int,
-        attribute_keys: Sequence[str] | str | None = None,
+        attr_keys: Sequence[str] | str | None = None,
     ) -> dict[int, pl.DataFrame] | pl.DataFrame:
         """
         Get the sucessors of a list of nodes.
@@ -169,7 +168,7 @@ class BaseGraph(abc.ABC):
         ----------
         node_ids : list[int] | int
             The IDs of the nodes to get the sucessors for.
-        attribute_keys : Sequence[str] | str | None
+        attr_keys : Sequence[str] | str | None
             The attribute keys to get.
             If None, all attributesare used.
 
@@ -183,7 +182,7 @@ class BaseGraph(abc.ABC):
     def predecessors(
         self,
         node_ids: list[int] | int,
-        attribute_keys: Sequence[str] | str | None = None,
+        attr_keys: Sequence[str] | str | None = None,
     ) -> dict[int, pl.DataFrame] | pl.DataFrame:
         """
         Get the predecessors of a list of nodes.
@@ -192,7 +191,7 @@ class BaseGraph(abc.ABC):
         ----------
         node_ids : list[int] | int
             The IDs of the nodes to get the predecessors for.
-        attribute_keys : Sequence[str] | str | None
+        attr_keys : Sequence[str] | str | None
             The attribute keys to get.
             If None, all attributesare used.
 
@@ -203,18 +202,18 @@ class BaseGraph(abc.ABC):
         """
 
     @abc.abstractmethod
-    def filter_nodes_by_attribute(
+    def filter_nodes_by_attrs(
         self,
-        attributes: dict[str, Any],
+        attrs: dict[str, Any],
     ) -> list[int]:
         """
         Filter nodes by attributes.
 
         Parameters
         ----------
-        attributes : dict[str, Any]
+        attrs : dict[str, Any]
             Attributes to filter by, for example:
-            >>> `graph.filter_nodes_by_attribute(dict(t=0, label='A'))`
+            >>> `graph.filter_nodes_by_attrs(dict(t=0, label='A'))`
 
         Returns
         -------
@@ -256,8 +255,8 @@ class BaseGraph(abc.ABC):
         node_ids: Sequence[int] | None = None,
         node_attr_filter: dict[str, Any] | None = None,
         edge_attr_filter: dict[str, Any] | None = None,
-        node_attribute_keys: Sequence[str] | str | None = None,
-        edge_attribute_keys: Sequence[str] | str | None = None,
+        node_attr_keys: Sequence[str] | str | None = None,
+        edge_attr_keys: Sequence[str] | str | None = None,
     ) -> "GraphView":
         """
         Create a subgraph from the graph from the given node IDs
@@ -273,10 +272,10 @@ class BaseGraph(abc.ABC):
             The attributes to filter the nodes by.
         edge_attr_filter : dict[str, Any] | None
             The attributes to filter the edges by.
-        node_attribute_keys : Sequence[str] | str | None
+        node_attr_keys : Sequence[str] | str | None
             The attribute keys to get.
             If None, all attributesare used.
-        edge_attribute_keys : Sequence[str] | str | None
+        edge_attr_keys : Sequence[str] | str | None
             The attribute keys to get.
             If None, all attributesare used.
 
@@ -297,27 +296,27 @@ class BaseGraph(abc.ABC):
         self,
         *,
         node_ids: Sequence[int] | None = None,
-        attribute_keys: Sequence[str] | str | None = None,
+        attr_keys: Sequence[str] | str | None = None,
         unpack: bool = False,
     ) -> pl.DataFrame:
         """
-        Get the attributesof the nodes as a pandas DataFrame.
+        Get the attributes of the nodes as a pandas DataFrame.
 
         Parameters
         ----------
         node_ids : list[int] | None
             The IDs of the nodes to get the attributesfor.
             If None, all nodes are used.
-        attribute_keys : Sequence[str] | str | None
+        attr_keys : Sequence[str] | str | None
             The attribute keys to get.
             If None, all attributesare used.
         unpack : bool
-            Whether to unpack array attributesinto multiple scalar attributes.
+            Whether to unpack array attributes into multiple scalar attributes.
 
         Returns
         -------
         pl.DataFrame
-            A polars DataFrame with the attributesof the nodes.
+            A polars DataFrame with the attributes of the nodes.
         """
 
     @abc.abstractmethod
@@ -325,19 +324,19 @@ class BaseGraph(abc.ABC):
         self,
         *,
         node_ids: list[int] | None = None,
-        attribute_keys: Sequence[str] | None = None,
+        attr_keys: Sequence[str] | None = None,
         include_targets: bool = False,
         unpack: bool = False,
     ) -> pl.DataFrame:
         """
-        Get the attributesof the edges as a polars DataFrame.
+        Get the attributes of the edges as a polars DataFrame.
 
         Parameters
         ----------
         node_ids : list[int] | None
             The IDs of the subgraph to get the edge attributesfor.
             If None, all edges of the graph are used.
-        attribute_keys : Sequence[str] | None
+        attr_keys : Sequence[str] | None
             The attribute keys to get.
             If None, all attributesare used.
         include_targets : bool
@@ -351,25 +350,25 @@ class BaseGraph(abc.ABC):
     @abc.abstractmethod
     def node_attrs_keys(self) -> list[str]:
         """
-        Get the keys of the attributesof the nodes.
+        Get the keys of the attributes of the nodes.
         """
 
     @property
     @abc.abstractmethod
     def edge_attrs_keys(self) -> list[str]:
         """
-        Get the keys of the attributesof the edges.
+        Get the keys of the attributes of the edges.
         """
 
     @abc.abstractmethod
-    def add_node_attribute_key(self, key: str, default_value: Any) -> None:
+    def add_node_attr_key(self, key: str, default_value: Any) -> None:
         """
         Add a new attribute key to the graph.
         All existing nodes will have the default value for the new attribute key.
         """
 
     @abc.abstractmethod
-    def add_edge_attribute_key(self, key: str, default_value: Any) -> None:
+    def add_edge_attr_key(self, key: str, default_value: Any) -> None:
         """
         Add a new attribute key to the graph.
         All existing edges will have the default value for the new attribute key.
@@ -394,16 +393,16 @@ class BaseGraph(abc.ABC):
         self,
         *,
         node_ids: Sequence[int],
-        attributes: dict[str, Any],
+        attrs: dict[str, Any],
     ) -> None:
         """
-        Update the attributesof the nodes.
+        Update the attributes of the nodes.
 
         Parameters
         ----------
         node_ids : Sequence[int]
             The IDs of the nodes to update.
-        attributes : dict[str, Any]
+        attrs : dict[str, Any]
             The attributes to update.
         """
 
@@ -412,16 +411,16 @@ class BaseGraph(abc.ABC):
         self,
         *,
         edge_ids: ArrayLike,
-        attributes: dict[str, Any],
+        attrs: dict[str, Any],
     ) -> None:
         """
-        Update the attributesof the edges.
+        Update the attributes of the edges.
 
         Parameters
         ----------
         edge_ids : Sequence[int]
             The IDs of the edges to update.
-        attributes : dict[str, Any]
+        attrs : dict[str, Any]
             Attributes to be updated.
         """
 
@@ -513,13 +512,13 @@ class BaseGraph(abc.ABC):
         )
 
         if matched_node_id_key not in self.node_attrs_keys:
-            self.add_node_attribute_key(matched_node_id_key, -1)
+            self.add_node_attr_key(matched_node_id_key, -1)
 
         if match_score_key not in self.node_attrs_keys:
-            self.add_node_attribute_key(match_score_key, 0.0)
+            self.add_node_attr_key(match_score_key, 0.0)
 
         if matched_edge_mask_key not in self.edge_attrs_keys:
-            self.add_edge_attribute_key(matched_edge_mask_key, False)
+            self.add_edge_attr_key(matched_edge_mask_key, False)
 
         node_ids = functools.reduce(operator.iadd, matching_data["mapped_comp"])
         other_ids = functools.reduce(operator.iadd, matching_data["mapped_ref"])
@@ -531,13 +530,13 @@ class BaseGraph(abc.ABC):
 
         self.update_node_attrs(
             node_ids=node_ids,
-            attributes={matched_node_id_key: other_ids, match_score_key: ious},
+            attrs={matched_node_id_key: other_ids, match_score_key: ious},
         )
 
         other_to_node_ids = dict(zip(other_ids, node_ids, strict=False))
 
-        self_edges_df = self.edge_attrs(attribute_keys=[])
-        other_edges_df = other.edge_attrs(attribute_keys=[])
+        self_edges_df = self.edge_attrs(attr_keys=[])
+        other_edges_df = other.edge_attrs(attr_keys=[])
 
         other_edges_df = other_edges_df.with_columns(
             {
@@ -558,5 +557,5 @@ class BaseGraph(abc.ABC):
 
         self.update_edge_attrs(
             edge_ids=edge_ids,
-            attributes={matched_edge_mask_key: True},
+            attrs={matched_edge_mask_key: True},
         )

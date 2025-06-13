@@ -89,7 +89,7 @@ class NearestNeighborsSolver(BaseSolver):
             The graph to solve.
         """
         # get edges and sort them by weight
-        edges_df = graph.edge_attrs(attribute_keys=self.edge_weight_expr.columns)
+        edges_df = graph.edge_attrs(attr_keys=self.edge_weight_expr.columns)
         weights = self.edge_weight_expr.evaluate(edges_df).to_numpy()
         sorted_indices = np.argsort(weights)
 
@@ -112,10 +112,10 @@ class NearestNeighborsSolver(BaseSolver):
 
         solution_edges_df = edges_df.filter(solution)
 
-        graph.add_edge_attribute_key(self.solution_key, False)
+        graph.add_edge_attr_key(self.solution_key, False)
         graph.update_edge_attrs(
             edge_ids=solution_edges_df[DEFAULT_ATTR_KEYS.EDGE_ID].to_numpy(),
-            attributes={self.solution_key: True},
+            attrs={self.solution_key: True},
         )
 
         node_ids = np.unique(
@@ -127,8 +127,8 @@ class NearestNeighborsSolver(BaseSolver):
             )
         )
 
-        graph.add_node_attribute_key(self.solution_key, False)
+        graph.add_node_attr_key(self.solution_key, False)
         graph.update_node_attrs(
             node_ids=node_ids,
-            attributes={self.solution_key: True},
+            attrs={self.solution_key: True},
         )
