@@ -18,6 +18,7 @@ def graph_backend(request) -> BaseGraph:
         return graph_class(
             drivername="sqlite",
             database=":memory:",
+            engine_kwargs={"connect_args": {"check_same_thread": False}},
         )
     else:
         return graph_class()

@@ -429,7 +429,7 @@ class RustWorkXGraph(BaseGraph):
             return pl.DataFrame({key: [] for key in attr_keys})
 
         # making them unique
-        attr_keys = list(set(attr_keys))
+        attr_keys = list(dict.fromkeys(attr_keys))
 
         # Create columns directly instead of building intermediate dictionaries
         columns = {key: [] for key in attr_keys}
@@ -484,7 +484,7 @@ class RustWorkXGraph(BaseGraph):
             attr_keys = self.edge_attr_keys
 
         attr_keys = [DEFAULT_ATTR_KEYS.EDGE_ID, *attr_keys]
-        attr_keys = list(set(attr_keys))
+        attr_keys = list(dict.fromkeys(attr_keys))
 
         if node_ids is None:
             rx_graph = self.rx_graph
