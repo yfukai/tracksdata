@@ -112,11 +112,11 @@ def _format_markdown_table(df: pl.DataFrame, output_file: Path | None = None) ->
 
 def main() -> None:
     data = []
-    n_repeats = 2
+    n_repeats = 3
     n_time_points = 50
 
     for _ in range(n_repeats):
-        for n_nodes in [1_000, 10_000]:  # , 100_000]:
+        for n_nodes in [1_000, 10_000, 100_000]:
             n_nodes_per_tp = int(n_nodes / n_time_points)
             pipeline = [
                 (
@@ -135,7 +135,7 @@ def main() -> None:
                 ),
                 ("assing_tracks", _assing_tracks),
             ]
-            for backend in [RustWorkXGraph, SQLGraphWithMemory]:  # , SQLGraphDisk]:
+            for backend in [RustWorkXGraph, SQLGraphWithMemory, SQLGraphDisk]:
                 df = _run_benchmark(backend, pipeline)
                 df = df.with_columns(
                     backend=pl.lit(backend.__name__),
