@@ -113,7 +113,7 @@ class AttrExpr:
 
     @property
     def columns(self) -> list[str]:
-        return list(set(self.expr_columns + self.inf_columns + self.neg_inf_columns))
+        return list(dict.fromkeys(self.expr_columns + self.inf_columns + self.neg_inf_columns))
 
     @property
     def inf_exprs(self) -> list["AttrExpr"]:
@@ -128,7 +128,7 @@ class AttrExpr:
     @property
     def expr_columns(self) -> list[str]:
         """Get the names of columns in the expression."""
-        return list(set(self.expr.meta.root_names()))
+        return list(dict.fromkeys(self.expr.meta.root_names()))
 
     @property
     def inf_columns(self) -> list[str]:
@@ -136,7 +136,7 @@ class AttrExpr:
         columns = []
         for attr_expr in self._inf_exprs:
             columns.extend(attr_expr.columns)
-        return list(set(columns))
+        return list(dict.fromkeys(columns))
 
     @property
     def neg_inf_columns(self) -> list[str]:
@@ -144,7 +144,7 @@ class AttrExpr:
         columns = []
         for attr_expr in self._neg_inf_exprs:
             columns.extend(attr_expr.columns)
-        return list(set(columns))
+        return list(dict.fromkeys(columns))
 
     def has_inf(self) -> bool:
         """

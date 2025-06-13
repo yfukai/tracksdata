@@ -727,6 +727,8 @@ def test_sucessors_with_data(graph_backend: BaseGraph, use_subgraph: bool) -> No
     # test out of sync
     if isinstance(graph_with_data, GraphView):
         graph_with_data.sync = False
+        # sanity check, CI were failing because of some cleanup
+        assert graph_with_data._root is not None
         graph_with_data.add_node({"t": 0, "x": 0.0, "y": 0.0, "label": "test"})
         with pytest.raises(RuntimeError, match="Out of sync graph view cannot be used to get sucessors"):
             graph_with_data.sucessors(node_ids)
