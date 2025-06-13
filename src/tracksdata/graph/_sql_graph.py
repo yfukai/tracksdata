@@ -51,6 +51,7 @@ class SQLGraph(BaseGraph):
         password: str | None = None,
         host: str | None = None,
         port: int | None = None,
+        engine_kwargs: dict[str, Any] | None = None,
         overwrite: bool = False,
     ):
         # Create unique classes for this instance
@@ -64,7 +65,10 @@ class SQLGraph(BaseGraph):
             port=port,
             database=database,
         )
-        self._engine = sa.create_engine(self._url)
+        if engine_kwargs is None:
+            self._engine = sa.create_engine(self._url)
+        else:
+            self._engine = sa.create_engine(self._url, **engine_kwargs)
 
         if overwrite:
             self.Base.metadata.drop_all(self._engine)
