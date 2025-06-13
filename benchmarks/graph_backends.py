@@ -113,6 +113,7 @@ def main() -> None:
     data = []
     n_repeats = 3
     n_time_points = 50
+    first_round = False
 
     for _ in range(n_repeats):
         for n_nodes in [1_000, 10_000, 100_000]:
@@ -133,10 +134,16 @@ def main() -> None:
                     NearestNeighborsSolver(edge_weight=-AttrExpr(DEFAULT_ATTR_KEYS.EDGE_WEIGHT), max_children=2).solve,
                 ),
                 ("subgraph", lambda graph: graph.subgraph(edge_attr_filter={DEFAULT_ATTR_KEYS.SOLUTION: True})),
-                ("assing_tracks_ids", lambda graph: graph.assign_track_ids()),
+                ("assing_tracks", lambda graph: graph.assign_track_ids()),
             ]
             for backend in [RustWorkXGraph, SQLGraphWithMemory, SQLGraphDisk]:
                 df = _run_benchmark(backend, pipeline)
+
+                if first_round:
+                    # first round is re-executed because it required compiling numba code
+                    df = _run_benchmark(backend, pipeline)
+                    first_round = False
+
                 df = df.with_columns(
                     backend=pl.lit(backend.__name__),
                     n_nodes=pl.lit(n_nodes),
