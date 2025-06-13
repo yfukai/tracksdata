@@ -48,7 +48,11 @@ def _run_benchmark(
 
     for name, func in pipeline:
         start = time.perf_counter()
-        func(graph)
+        output = func(graph)
+        # replace graph with output if it is not None
+        # it's used for the subgraph operation
+        if output is not None:
+            graph = output
         end = time.perf_counter()
         data.append(
             {
@@ -71,11 +75,6 @@ def _run_benchmark(
         pl.col("time").cast(pl.Float64),
     )
     return df
-
-
-def _assing_tracks(graph: BaseGraph) -> None:
-    solution_graph = graph.subgraph(edge_attr_filter={DEFAULT_ATTR_KEYS.SOLUTION: True})
-    solution_graph.assign_track_ids()
 
 
 def _format_markdown_table(df: pl.DataFrame, output_file: Path | None = None) -> str:
@@ -133,7 +132,8 @@ def main() -> None:
                     "nearest_neighbors_solver",
                     NearestNeighborsSolver(edge_weight=-AttrExpr(DEFAULT_ATTR_KEYS.EDGE_WEIGHT), max_children=2).solve,
                 ),
-                ("assing_tracks", _assing_tracks),
+                ("subgraph", lambda graph: graph.subgraph(edge_attr_filter={DEFAULT_ATTR_KEYS.SOLUTION: True})),
+                ("assing_tracks_ids", lambda graph: graph.assign_track_ids()),
             ]
             for backend in [RustWorkXGraph, SQLGraphWithMemory, SQLGraphDisk]:
                 df = _run_benchmark(backend, pipeline)
