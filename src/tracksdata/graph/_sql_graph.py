@@ -448,7 +448,7 @@ class SQLGraph(BaseGraph):
 
             if feature_keys is not None:
                 # making them unique
-                feature_keys = list(set(feature_keys))
+                feature_keys = list(dict.fromkeys(feature_keys))
 
                 query = query.options(
                     load_only(
