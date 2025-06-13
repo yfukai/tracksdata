@@ -67,9 +67,9 @@ def test_add_node(graph_backend: BaseGraph) -> None:
     assert df["y"].to_list() == [2.0]
 
     # checking if it's sorted
-    assert graph_backend.node_features(feature_keys=["t", "x", "y"]).columns == ["t", "x", "y"]
-    assert graph_backend.node_features(feature_keys=["x", "y", "t"]).columns == ["x", "y", "t"]
-    assert graph_backend.node_features(feature_keys=["y", "t", "x"]).columns == ["y", "t", "x"]
+    assert graph_backend.node_attrs(attr_keys=["t", "x", "y"]).columns == ["t", "x", "y"]
+    assert graph_backend.node_attrs(attr_keys=["x", "y", "t"]).columns == ["x", "y", "t"]
+    assert graph_backend.node_attrs(attr_keys=["y", "t", "x"]).columns == ["y", "t", "x"]
 
 
 def test_add_edge(graph_backend: BaseGraph) -> None:
