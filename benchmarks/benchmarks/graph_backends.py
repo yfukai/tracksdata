@@ -1,16 +1,23 @@
-from tracksdata.edges._distance_edges import DistanceEdges
+import time
+from collections.abc import Callable
+
+import polars as pl
+
+from tracksdata.constants import DEFAULT_ATTR_KEYS
+from tracksdata.edges import DistanceEdges
+from tracksdata.expr import AttrExpr
+from tracksdata.graph import RustWorkXGraph, SQLGraph
 from tracksdata.graph._base_graph import BaseGraph
-from tracksdata.graph._rustworkx_graph import RustWorkXGraph
-from tracksdata.graph._sql_graph import SQLGraph as _SQLGraph
-from tracksdata.nodes._random import RandomNodes
+from tracksdata.nodes import RandomNodes
+from tracksdata.solvers import NearestNeighborsSolver
 
 
-class SQLGraphWithMemory(_SQLGraph):
+class SQLGraphWithMemory(SQLGraph):
     def __init__(self):
         super().__init__(drivername="sqlite", database=":memory:")
 
 
-class SQLGraphDisk(_SQLGraph):
+class SQLGraphDisk(SQLGraph):
     def __init__(self):
         import datetime
 
@@ -18,44 +25,142 @@ class SQLGraphDisk(_SQLGraph):
         super().__init__(drivername="sqlite", database=path)
 
 
-class GraphSuite:
-    """
-    Benchmark suite for graph backend operations.
-    """
+# class GraphSuite:
+#     """
+#     Benchmark suite for graph backend operations.
+#     """
+#
+#     params = (
+#         (
+#             RustWorkXGraph,
+#             SQLGraphWithMemory,
+#             SQLGraphDisk,
+#         ),
+#         (1_000, 10_000, 100_000),
+#     )
+#     timeout = 300  # 5 minutes
+#     param_names = ("backend", "n_nodes")
+#
+#     def setup(
+#         self,
+#         backend: BaseGraph,
+#         n_nodes: int,
+#     ) -> None:
+#         self.graph = backend()
+#         n_time_points = 50
+#         n_nodes /= 50
+#         self.nodes_operator = RandomNodes(
+#             n_time_points=n_time_points,
+#             n_nodes_per_tp=(int(n_nodes * 0.95), int(n_nodes * 1.05)),
+#             n_dim=3,
+#             show_progress=False,
+#         )
+#         self.edges_operator = DistanceEdges(
+#             distance_threshold=10,
+#             n_neighbors=3,
+#             show_progress=False,
+#         )
+#
+#     def time_simple_workflow(self, *args, **kwargs) -> None:
+#         # add nodes
+#         self.nodes_operator.add_nodes(self.graph)
+#         # add edges
+#         self.edges_operator.add_edges(self.graph)
+#
 
-    params = (
-        (
-            RustWorkXGraph,
-            SQLGraphWithMemory,
-            SQLGraphDisk,
-        ),
-        (1_000, 10_000, 100_000),
+
+def _run_benchmark(
+    backend: type[BaseGraph],
+    pipeline: list[tuple[str, Callable[[BaseGraph], None]]],
+) -> pl.DataFrame:
+    data = []
+    total_time = 0
+
+    start = time.perf_counter()
+    graph = backend()
+    end = time.perf_counter()
+
+    data.append(
+        {
+            "operation": "init",
+            "time": end - start,
+        }
     )
-    timeout = 300  # 5 minutes
-    param_names = ("backend", "n_nodes")
+    total_time += end - start
 
-    def setup(
-        self,
-        backend: BaseGraph,
-        n_nodes: int,
-    ) -> None:
-        self.graph = backend()
-        n_time_points = 50
-        n_nodes /= 50
-        self.nodes_operator = RandomNodes(
-            n_time_points=n_time_points,
-            n_nodes_per_tp=(int(n_nodes * 0.95), int(n_nodes * 1.05)),
-            n_dim=3,
-            show_progress=False,
+    for name, func in pipeline:
+        start = time.perf_counter()
+        func(graph)
+        end = time.perf_counter()
+        data.append(
+            {
+                "operation": name,
+                "time": end - start,
+            }
         )
-        self.edges_operator = DistanceEdges(
-            distance_threshold=10,
-            n_neighbors=3,
-            show_progress=False,
-        )
+        total_time += end - start
 
-    def time_simple_workflow(self, *args, **kwargs) -> None:
-        # add nodes
-        self.nodes_operator.add_nodes(self.graph)
-        # add edges
-        self.edges_operator.add_edges(self.graph)
+    data.append(
+        {
+            "operation": "total",
+            "time": total_time,
+        }
+    )
+
+    df = pl.DataFrame(data)
+    df = df.with_columns(
+        pl.col("operation").cast(pl.Categorical),
+        pl.col("time").cast(pl.Float64),
+    )
+    return df
+
+
+def _assing_tracks(graph: BaseGraph) -> None:
+    solution_graph = graph.subgraph(edge_attr_filter={DEFAULT_ATTR_KEYS.SOLUTION: True})
+    solution_graph.assign_track_ids()
+
+
+def main() -> None:
+    data = []
+    n_repeats = 5
+    n_time_points = 50
+
+    for _ in range(n_repeats):
+        for n_nodes in [1_000, 10_000, 100_000]:
+            n_nodes_per_tp = int(n_nodes / n_time_points)
+            pipeline = [
+                (
+                    "random_nodes",
+                    RandomNodes(
+                        n_time_points=n_time_points,
+                        n_nodes_per_tp=(n_nodes_per_tp * 0.95, n_nodes_per_tp * 1.05),
+                        n_dim=3,
+                        show_progress=False,
+                    ).add_nodes,
+                ),
+                ("distance_edges", DistanceEdges(distance_threshold=10, n_neighbors=5, show_progress=False).add_edges),
+                (
+                    "nearest_neighbors_solver",
+                    NearestNeighborsSolver(edge_weight=-AttrExpr(DEFAULT_ATTR_KEYS.EDGE_WEIGHT), max_children=2).solve,
+                ),
+                ("assing_tracks", _assing_tracks),
+            ]
+            for backend in [RustWorkXGraph]:  # , SQLGraphWithMemory, SQLGraphDisk]:
+                df = _run_benchmark(backend, pipeline)
+                df = df.with_columns(
+                    backend=pl.lit(backend.__name__),
+                    n_nodes=pl.lit(n_nodes),
+                )
+                data.append(df)
+
+    df = pl.concat(data)
+    df = df.group_by(["operation", "backend", "n_nodes"]).agg(
+        pl.col("time").std().alias("time_std"),
+        pl.col("time").mean().alias("time_avg"),
+    )
+
+    print(df)
+
+
+if __name__ == "__main__":
+    main()
