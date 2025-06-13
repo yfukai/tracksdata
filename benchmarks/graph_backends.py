@@ -113,7 +113,7 @@ def main() -> None:
     data = []
     n_repeats = 3
     n_time_points = 50
-    first_round = False
+    first_round = True
 
     for _ in range(n_repeats):
         for n_nodes in [1_000, 10_000, 100_000]:
