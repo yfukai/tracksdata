@@ -121,12 +121,12 @@ def _assing_tracks(graph: BaseGraph) -> None:
     solution_graph.assign_track_ids()
 
 
-def _format_markdown_table(df: pl.DataFrame) -> str:
+def _format_markdown_table(df: pl.DataFrame, output_file: str | None = None) -> str:
     # Create time string column
     df = df.with_columns(time_str=pl.format("{} ± {}", pl.col("time_avg").round(3), pl.col("time_std").round(3)))
 
     # Pivot the table to get n_nodes as columns
-    pivoted = df.pivot(values="time_str", index=["backend", "operation"], columns="n_nodes", aggregate_function="first")
+    pivoted = df.pivot(values="time_str", index=["backend", "operation"], on="n_nodes", aggregate_function="first")
 
     # Format the results for markdown table
     prev_backend = pivoted["backend"][0]
@@ -141,7 +141,16 @@ def _format_markdown_table(df: pl.DataFrame) -> str:
     node_counts = sorted(df["n_nodes"].unique())
     headers = ["Backend", "Operation"] + [f"{n:,} nodes" for n in node_counts]
     print("\nBenchmark Results:")
-    print(tabulate(table_data, headers=headers, tablefmt="pipe", numalign="right"))
+
+    mk_table = tabulate(table_data, headers=headers, tablefmt="pipe", numalign="right")
+    print(mk_table)
+
+    if output_file is not None:
+        with open(output_file, "w") as f:
+            f.write("# Benchmark Results\n\n")
+            f.write(mk_table)
+
+    return mk_table
 
 
 def main() -> None:
@@ -182,7 +191,7 @@ def main() -> None:
         pl.col("time").std().alias("time_std"),
         pl.col("time").mean().alias("time_avg"),
     )
-    _format_markdown_table(df)
+    _format_markdown_table(df, output_file="graph_backends.md")
 
 
 if __name__ == "__main__":
