@@ -1,5 +1,6 @@
 import time
 from collections.abc import Callable
+from pathlib import Path
 
 import polars as pl
 from tabulate import tabulate
@@ -22,52 +23,8 @@ class SQLGraphDisk(SQLGraph):
     def __init__(self):
         import datetime
 
-        path = f"/tmp/_asv_tracksdata_db_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        path = f"/tmp/_benchmarks_tracksdata_db_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}"
         super().__init__(drivername="sqlite", database=path)
-
-
-# class GraphSuite:
-#     """
-#     Benchmark suite for graph backend operations.
-#     """
-#
-#     params = (
-#         (
-#             RustWorkXGraph,
-#             SQLGraphWithMemory,
-#             SQLGraphDisk,
-#         ),
-#         (1_000, 10_000, 100_000),
-#     )
-#     timeout = 300  # 5 minutes
-#     param_names = ("backend", "n_nodes")
-#
-#     def setup(
-#         self,
-#         backend: BaseGraph,
-#         n_nodes: int,
-#     ) -> None:
-#         self.graph = backend()
-#         n_time_points = 50
-#         n_nodes /= 50
-#         self.nodes_operator = RandomNodes(
-#             n_time_points=n_time_points,
-#             n_nodes_per_tp=(int(n_nodes * 0.95), int(n_nodes * 1.05)),
-#             n_dim=3,
-#             show_progress=False,
-#         )
-#         self.edges_operator = DistanceEdges(
-#             distance_threshold=10,
-#             n_neighbors=3,
-#             show_progress=False,
-#         )
-#
-#     def time_simple_workflow(self, *args, **kwargs) -> None:
-#         # add nodes
-#         self.nodes_operator.add_nodes(self.graph)
-#         # add edges
-#         self.edges_operator.add_edges(self.graph)
-#
 
 
 def _run_benchmark(
@@ -121,7 +78,7 @@ def _assing_tracks(graph: BaseGraph) -> None:
     solution_graph.assign_track_ids()
 
 
-def _format_markdown_table(df: pl.DataFrame, output_file: str | None = None) -> str:
+def _format_markdown_table(df: pl.DataFrame, output_file: Path | None = None) -> str:
     # Create time string column
     df = df.with_columns(time_str=pl.format("{} ± {}", pl.col("time_avg").round(3), pl.col("time_std").round(3)))
 
@@ -191,7 +148,12 @@ def main() -> None:
         pl.col("time").std().alias("time_std"),
         pl.col("time").mean().alias("time_avg"),
     )
-    _format_markdown_table(df, output_file="graph_backends.md")
+
+    file_path = Path(__file__)
+    _format_markdown_table(
+        df,
+        output_file=file_path.parent / f"outputs/{file_path.stem}.md",
+    )
 
 
 if __name__ == "__main__":
