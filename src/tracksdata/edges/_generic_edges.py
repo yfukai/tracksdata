@@ -105,7 +105,7 @@ class GenericNodeFunctionEdgeAttrs(BaseEdgeAttrsOperator):
             ):
                 weights[i] = self.func(source_attr, target_attr)
 
-        if self.output_key not in graph.edge_attrs_keys:
+        if self.output_key not in graph.edge_attr_keys:
             graph.add_edge_attr_key(self.output_key, -99999.0)
 
         graph.update_edge_attrs(

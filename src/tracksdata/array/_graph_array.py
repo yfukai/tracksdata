@@ -16,8 +16,8 @@ class GraphArrayView(BaseReadOnlyArray):
         attr_key: str,
         offset: int | np.ndarray = 0,
     ):
-        if attr_key not in graph.node_attrs_keys:
-            raise ValueError(f"Attribute key '{attr_key}' not found in graph. Expected '{graph.node_attrs_keys}'")
+        if attr_key not in graph.node_attr_keys:
+            raise ValueError(f"Attribute key '{attr_key}' not found in graph. Expected '{graph.node_attr_keys}'")
 
         self.graph = graph
         self._shape = shape

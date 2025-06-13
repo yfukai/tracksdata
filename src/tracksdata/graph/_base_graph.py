@@ -348,14 +348,14 @@ class BaseGraph(abc.ABC):
 
     @property
     @abc.abstractmethod
-    def node_attrs_keys(self) -> list[str]:
+    def node_attr_keys(self) -> list[str]:
         """
         Get the keys of the attributes of the nodes.
         """
 
     @property
     @abc.abstractmethod
-    def edge_attrs_keys(self) -> list[str]:
+    def edge_attr_keys(self) -> list[str]:
         """
         Get the keys of the attributes of the edges.
         """
@@ -511,13 +511,13 @@ class BaseGraph(abc.ABC):
             optimal_matching=True,
         )
 
-        if matched_node_id_key not in self.node_attrs_keys:
+        if matched_node_id_key not in self.node_attr_keys:
             self.add_node_attr_key(matched_node_id_key, -1)
 
-        if match_score_key not in self.node_attrs_keys:
+        if match_score_key not in self.node_attr_keys:
             self.add_node_attr_key(match_score_key, 0.0)
 
-        if matched_edge_mask_key not in self.edge_attrs_keys:
+        if matched_edge_mask_key not in self.edge_attr_keys:
             self.add_edge_attr_key(matched_edge_mask_key, False)
 
         node_ids = functools.reduce(operator.iadd, matching_data["mapped_comp"])

@@ -123,7 +123,7 @@ class SQLGraph(BaseGraph):
         validate_keys: bool = True,
     ) -> int:
         if validate_keys:
-            self._validate_attributes(attrs, self.node_attrs_keys, "node")
+            self._validate_attributes(attrs, self.node_attr_keys, "node")
 
             if "t" not in attrs:
                 raise ValueError(f"Node attributes must have a 't' key. Got {attrs.keys()}")
@@ -178,7 +178,7 @@ class SQLGraph(BaseGraph):
         validate_keys: bool = True,
     ) -> int:
         if validate_keys:
-            self._validate_attributes(attrs, self.edge_attrs_keys, "edge")
+            self._validate_attributes(attrs, self.edge_attr_keys, "edge")
 
         if hasattr(source_id, "item"):
             source_id = source_id.item()
@@ -532,13 +532,13 @@ class SQLGraph(BaseGraph):
         return edges_df
 
     @property
-    def node_attrs_keys(self) -> list[str]:
+    def node_attr_keys(self) -> list[str]:
         keys = list(self.Node.__table__.columns.keys())
         keys.remove(DEFAULT_ATTR_KEYS.NODE_ID)
         return keys
 
     @property
-    def edge_attrs_keys(self) -> list[str]:
+    def edge_attr_keys(self) -> list[str]:
         keys = list(self.Edge.__table__.columns.keys())
         for k in [DEFAULT_ATTR_KEYS.EDGE_ID, DEFAULT_ATTR_KEYS.EDGE_SOURCE, DEFAULT_ATTR_KEYS.EDGE_TARGET]:
             keys.remove(k)
@@ -602,13 +602,13 @@ class SQLGraph(BaseGraph):
         table_class.__table__.append_column(sa_column)
 
     def add_node_attr_key(self, key: str, default_value: Any) -> None:
-        if key in self.node_attrs_keys:
+        if key in self.node_attr_keys:
             raise ValueError(f"Node attribute key {key} already exists")
 
         self._add_new_column(self.Node, key, default_value)
 
     def add_edge_attr_key(self, key: str, default_value: Any) -> None:
-        if key in self.edge_attrs_keys:
+        if key in self.edge_attr_keys:
             raise ValueError(f"Edge attribute key {key} already exists")
 
         self._add_new_column(self.Edge, key, default_value)

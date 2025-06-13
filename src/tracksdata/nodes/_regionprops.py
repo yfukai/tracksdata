@@ -113,12 +113,12 @@ class RegionPropsNodes(BaseNodesOperator):
         else:
             raise ValueError(f"`labels` must be 2D or 3D, got {labels.ndim} dimensions.")
 
-        if DEFAULT_ATTR_KEYS.MASK not in graph.node_attrs_keys:
+        if DEFAULT_ATTR_KEYS.MASK not in graph.node_attr_keys:
             graph.add_node_attr_key(DEFAULT_ATTR_KEYS.MASK, None)
 
         # initialize the attribute keys
         for attr_key in axis_names + [p.__name__ if callable(p) else p for p in self._extra_properties]:
-            if attr_key not in graph.node_attrs_keys:
+            if attr_key not in graph.node_attr_keys:
                 graph.add_node_attr_key(attr_key, -1.0)
 
         labels = np.asarray(labels)

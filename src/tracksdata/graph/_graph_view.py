@@ -55,8 +55,8 @@ class GraphView(RustWorkXGraph):
 
         # making sure these are not used
         # they should be accessed through the root graph
-        self._node_attrs_keys = None
-        self._edge_attrs_keys = None
+        self._node_attr_keys = None
+        self._edge_attr_keys = None
 
     @property
     def sync(self) -> bool:
@@ -104,12 +104,12 @@ class GraphView(RustWorkXGraph):
         return subgraph
 
     @property
-    def node_attrs_keys(self) -> list[str]:
-        return self._root.node_attrs_keys
+    def node_attr_keys(self) -> list[str]:
+        return self._root.node_attr_keys
 
     @property
-    def edge_attrs_keys(self) -> list[str]:
-        return self._root.edge_attrs_keys
+    def edge_attr_keys(self) -> list[str]:
+        return self._root.edge_attr_keys
 
     def add_node_attr_key(self, key: str, default_value: Any) -> None:
         self._root.add_node_attr_key(key, default_value)
@@ -348,7 +348,7 @@ class GraphView(RustWorkXGraph):
 
         node_ids = map_ids(self._node_map_to_root, node_ids)
 
-        if output_key not in self.node_attrs_keys:
+        if output_key not in self.node_attr_keys:
             self.add_node_attr_key(output_key, -1)
 
         self.update_node_attrs(

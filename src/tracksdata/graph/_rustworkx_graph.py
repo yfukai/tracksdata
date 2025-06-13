@@ -29,8 +29,8 @@ class RustWorkXGraph(BaseGraph):
             self._graph = rx_graph
 
         self._time_to_nodes: dict[int, list[int]] = {}
-        self._node_attrs_keys: list[str] = [DEFAULT_ATTR_KEYS.T]
-        self._edge_attrs_keys: list[str] = []
+        self._node_attr_keys: list[str] = [DEFAULT_ATTR_KEYS.T]
+        self._edge_attr_keys: list[str] = []
 
     @property
     def rx_graph(self) -> rx.PyDiGraph:
@@ -58,7 +58,7 @@ class RustWorkXGraph(BaseGraph):
         """
         # avoiding copying attributes on purpose, it could be a problem in the future
         if validate_keys:
-            self._validate_attributes(attrs, self.node_attrs_keys, "node")
+            self._validate_attributes(attrs, self.node_attr_keys, "node")
 
             if "t" not in attrs:
                 raise ValueError(f"Node attributes must have a 't' key. Got {attrs.keys()}")
@@ -92,7 +92,7 @@ class RustWorkXGraph(BaseGraph):
             useful to speed up the operation when doing bulk insertions.
         """
         if validate_keys:
-            self._validate_attributes(attrs, self.edge_attrs_keys, "edge")
+            self._validate_attributes(attrs, self.edge_attr_keys, "edge")
         edge_id = self.rx_graph.add_edge(source_id, target_id, attrs)
         attrs[DEFAULT_ATTR_KEYS.EDGE_ID] = edge_id
         return edge_id
@@ -336,18 +336,18 @@ class RustWorkXGraph(BaseGraph):
         return list(self._time_to_nodes.keys())
 
     @property
-    def node_attrs_keys(self) -> list[str]:
+    def node_attr_keys(self) -> list[str]:
         """
         Get the keys of the attributes of the nodes.
         """
-        return self._node_attrs_keys
+        return self._node_attr_keys
 
     @property
-    def edge_attrs_keys(self) -> list[str]:
+    def edge_attr_keys(self) -> list[str]:
         """
         Get the keys of the attributes of the edges.
         """
-        return self._edge_attrs_keys
+        return self._edge_attr_keys
 
     def add_node_attr_key(self, key: str, default_value: Any) -> None:
         """
@@ -361,10 +361,10 @@ class RustWorkXGraph(BaseGraph):
         default_value : Any
             The default value for existing nodes for the new attribute key.
         """
-        if key in self.node_attrs_keys:
+        if key in self.node_attr_keys:
             raise ValueError(f"Attribute key {key} already exists")
 
-        self._node_attrs_keys.append(key)
+        self._node_attr_keys.append(key)
         rx_graph = self.rx_graph
         for node_id in rx_graph.node_indices():
             rx_graph[node_id][key] = default_value
@@ -381,10 +381,10 @@ class RustWorkXGraph(BaseGraph):
         default_value : Any
             The default value for existing edges for the new attribute key.
         """
-        if key in self.edge_attrs_keys:
+        if key in self.edge_attr_keys:
             raise ValueError(f"Attribute key {key} already exists")
 
-        self._edge_attrs_keys.append(key)
+        self._edge_attr_keys.append(key)
         for _, _, edge_attr in self.rx_graph.weighted_edge_list():
             edge_attr[key] = default_value
 
@@ -420,7 +420,7 @@ class RustWorkXGraph(BaseGraph):
             node_ids = list(rx_graph.node_indices())
 
         if attr_keys is None:
-            attr_keys = [DEFAULT_ATTR_KEYS.NODE_ID, *self.node_attrs_keys]
+            attr_keys = [DEFAULT_ATTR_KEYS.NODE_ID, *self.node_attr_keys]
 
         if isinstance(attr_keys, str):
             attr_keys = [attr_keys]
@@ -481,7 +481,7 @@ class RustWorkXGraph(BaseGraph):
             Whether to unpack array attributesinto multiple scalar attributes.
         """
         if attr_keys is None:
-            attr_keys = self.edge_attrs_keys
+            attr_keys = self.edge_attr_keys
 
         attr_keys = [DEFAULT_ATTR_KEYS.EDGE_ID, *attr_keys]
         attr_keys = list(set(attr_keys))
@@ -565,8 +565,8 @@ class RustWorkXGraph(BaseGraph):
             The attributes to update.
         """
         for key, value in attrs.items():
-            if key not in self.node_attrs_keys:
-                raise ValueError(f"Node attribute key '{key}' not found in graph. Expected '{self.node_attrs_keys}'")
+            if key not in self.node_attr_keys:
+                raise ValueError(f"Node attribute key '{key}' not found in graph. Expected '{self.node_attr_keys}'")
 
             if not np.isscalar(value) and len(attrs[key]) != len(node_ids):
                 raise ValueError(f"Attribute '{key}' has wrong size. Expected {len(node_ids)}, got {len(attrs[key])}")
@@ -596,8 +596,8 @@ class RustWorkXGraph(BaseGraph):
         """
         size = len(edge_ids)
         for key, value in attrs.items():
-            if key not in self.edge_attrs_keys:
-                raise ValueError(f"Edge attribute key '{key}' not found in graph. Expected '{self.edge_attrs_keys}'")
+            if key not in self.edge_attr_keys:
+                raise ValueError(f"Edge attribute key '{key}' not found in graph. Expected '{self.edge_attr_keys}'")
 
             if np.isscalar(value):
                 attrs[key] = [value] * size
@@ -638,7 +638,7 @@ class RustWorkXGraph(BaseGraph):
                 "Often used from `graph.filter_nodes_by_attribute({'solution': True})`"
             ) from e
 
-        if output_key not in self.node_attrs_keys:
+        if output_key not in self.node_attr_keys:
             self.add_node_attr_key(output_key, -1)
 
         self.update_node_attrs(

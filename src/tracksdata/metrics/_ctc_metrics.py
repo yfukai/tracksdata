@@ -225,10 +225,10 @@ def evaluate_ctc_metrics(
             "`py-ctcmetrics` is required to evaluate CTC metrics.\nPlease install it with `pip install py-ctcmetrics`."
         ) from e
 
-    if input_track_id_key not in input_graph.node_attrs_keys:
+    if input_track_id_key not in input_graph.node_attr_keys:
         input_graph.assign_track_ids(input_track_id_key)
 
-    if reference_track_id_key not in reference_graph.node_attrs_keys:
+    if reference_track_id_key not in reference_graph.node_attr_keys:
         reference_graph.assign_track_ids(reference_track_id_key)
 
     input_tracks, reference_tracks, matching_data = compute_ctc_metrics_data(

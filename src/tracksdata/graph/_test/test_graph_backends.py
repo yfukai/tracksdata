@@ -771,9 +771,9 @@ def test_match_method(graph_backend: BaseGraph) -> None:
     )
 
     # Verify that attribute keys were added
-    assert match_node_id_key in graph_backend.node_attrs_keys
-    assert match_score_key in graph_backend.node_attrs_keys
-    assert edge_match_key in graph_backend.edge_attrs_keys
+    assert match_node_id_key in graph_backend.node_attr_keys
+    assert match_score_key in graph_backend.node_attr_keys
+    assert edge_match_key in graph_backend.edge_attr_keys
 
     # Get node attributesto check matching results
     nodes_df = graph_backend.node_attrs(attr_keys=[DEFAULT_ATTR_KEYS.NODE_ID, match_node_id_key, match_score_key])

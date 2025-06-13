@@ -240,17 +240,17 @@ def test_random_nodes_attr_keys_registration() -> None:
     )
 
     # Initially, spatial keys should not be registered
-    assert "x" not in graph.node_attrs_keys
-    assert "y" not in graph.node_attrs_keys
-    assert "z" not in graph.node_attrs_keys
+    assert "x" not in graph.node_attr_keys
+    assert "y" not in graph.node_attr_keys
+    assert "z" not in graph.node_attr_keys
 
     # Add nodes
     operator.add_nodes(graph)
 
     # Now spatial keys should be registered
-    assert "x" in graph.node_attrs_keys
-    assert "y" in graph.node_attrs_keys
-    assert "z" in graph.node_attrs_keys
+    assert "x" in graph.node_attr_keys
+    assert "y" in graph.node_attr_keys
+    assert "z" in graph.node_attr_keys
 
 
 def test_random_nodes_empty_time_points() -> None:

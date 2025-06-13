@@ -91,6 +91,7 @@ def _load_tracks_file(tracks_file: Path) -> dict[int, int]:
         tracks_file,
         separator=" ",
         has_header=False,
+        use_pyarrow=True,
     ).rename(
         {
             "column_1": "track_id",

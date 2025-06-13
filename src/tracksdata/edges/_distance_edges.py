@@ -59,12 +59,12 @@ class DistanceEdges(BaseEdgesOperator):
         t : int
             The time point to add edges for.
         """
-        if self.output_key not in graph.edge_attrs_keys:
+        if self.output_key not in graph.edge_attr_keys:
             # negative value to indicate that the edge is not valid
             graph.add_edge_attr_key(self.output_key, -99999.0)
 
         if self.attr_keys is None:
-            if "z" in graph.node_attrs_keys:
+            if "z" in graph.node_attr_keys:
                 attr_keys = ["z", "y", "x"]
             else:
                 attr_keys = ["y", "x"]
