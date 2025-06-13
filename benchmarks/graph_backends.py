@@ -103,8 +103,8 @@ def _format_markdown_table(df: pl.DataFrame, output_file: Path | None = None) ->
 
     if output_file is not None:
         with open(output_file, "w") as f:
-            f.write("# Benchmark Results\n\n")
-            f.write(f"```\n{mk_table}\n```\n")
+            f.write(mk_table)
+            f.write("\n")
 
     return mk_table
 
