@@ -44,9 +44,9 @@ class BaseGraph(abc.ABC):
         for key in attributes.keys():
             if key not in reference_keys:
                 raise ValueError(
-                    f"{mode} feature key '{key}' not found in existing keys: "
+                    f"{mode} attribute key '{key}' not found in existing keys: "
                     f"'{reference_keys}'\nInitialize with "
-                    f"`graph.add_{mode}_feature_key(key, default_value)`"
+                    f"`graph.add_{mode}_attribute_key(key, default_value)`"
                 )
 
         for ref_key in reference_keys:
@@ -160,7 +160,7 @@ class BaseGraph(abc.ABC):
     def sucessors(
         self,
         node_ids: list[int] | int,
-        feature_keys: Sequence[str] | str | None = None,
+        attribute_keys: Sequence[str] | str | None = None,
     ) -> dict[int, pl.DataFrame] | pl.DataFrame:
         """
         Get the sucessors of a list of nodes.
@@ -169,9 +169,9 @@ class BaseGraph(abc.ABC):
         ----------
         node_ids : list[int] | int
             The IDs of the nodes to get the sucessors for.
-        feature_keys : Sequence[str] | str | None
-            The feature keys to get.
-            If None, all features are used.
+        attribute_keys : Sequence[str] | str | None
+            The attribute keys to get.
+            If None, all attributesare used.
 
         Returns
         -------
@@ -183,7 +183,7 @@ class BaseGraph(abc.ABC):
     def predecessors(
         self,
         node_ids: list[int] | int,
-        feature_keys: Sequence[str] | str | None = None,
+        attribute_keys: Sequence[str] | str | None = None,
     ) -> dict[int, pl.DataFrame] | pl.DataFrame:
         """
         Get the predecessors of a list of nodes.
@@ -192,9 +192,9 @@ class BaseGraph(abc.ABC):
         ----------
         node_ids : list[int] | int
             The IDs of the nodes to get the predecessors for.
-        feature_keys : Sequence[str] | str | None
-            The feature keys to get.
-            If None, all features are used.
+        attribute_keys : Sequence[str] | str | None
+            The attribute keys to get.
+            If None, all attributesare used.
 
         Returns
         -------
@@ -256,8 +256,8 @@ class BaseGraph(abc.ABC):
         node_ids: Sequence[int] | None = None,
         node_attr_filter: dict[str, Any] | None = None,
         edge_attr_filter: dict[str, Any] | None = None,
-        node_feature_keys: Sequence[str] | str | None = None,
-        edge_feature_keys: Sequence[str] | str | None = None,
+        node_attribute_keys: Sequence[str] | str | None = None,
+        edge_attribute_keys: Sequence[str] | str | None = None,
     ) -> "GraphView":
         """
         Create a subgraph from the graph from the given node IDs
@@ -273,12 +273,12 @@ class BaseGraph(abc.ABC):
             The attributes to filter the nodes by.
         edge_attr_filter : dict[str, Any] | None
             The attributes to filter the edges by.
-        node_feature_keys : Sequence[str] | str | None
-            The feature keys to get.
-            If None, all features are used.
-        edge_feature_keys : Sequence[str] | str | None
-            The feature keys to get.
-            If None, all features are used.
+        node_attribute_keys : Sequence[str] | str | None
+            The attribute keys to get.
+            If None, all attributesare used.
+        edge_attribute_keys : Sequence[str] | str | None
+            The attribute keys to get.
+            If None, all attributesare used.
 
         Returns
         -------
@@ -293,86 +293,86 @@ class BaseGraph(abc.ABC):
         """
 
     @abc.abstractmethod
-    def node_features(
+    def node_attrs(
         self,
         *,
         node_ids: Sequence[int] | None = None,
-        feature_keys: Sequence[str] | str | None = None,
+        attribute_keys: Sequence[str] | str | None = None,
         unpack: bool = False,
     ) -> pl.DataFrame:
         """
-        Get the features of the nodes as a pandas DataFrame.
+        Get the attributesof the nodes as a pandas DataFrame.
 
         Parameters
         ----------
         node_ids : list[int] | None
-            The IDs of the nodes to get the features for.
+            The IDs of the nodes to get the attributesfor.
             If None, all nodes are used.
-        feature_keys : Sequence[str] | str | None
-            The feature keys to get.
-            If None, all features are used.
+        attribute_keys : Sequence[str] | str | None
+            The attribute keys to get.
+            If None, all attributesare used.
         unpack : bool
-            Whether to unpack array features into multiple scalar features.
+            Whether to unpack array attributesinto multiple scalar attributes.
 
         Returns
         -------
         pl.DataFrame
-            A polars DataFrame with the features of the nodes.
+            A polars DataFrame with the attributesof the nodes.
         """
 
     @abc.abstractmethod
-    def edge_features(
+    def edge_attrs(
         self,
         *,
         node_ids: list[int] | None = None,
-        feature_keys: Sequence[str] | None = None,
+        attribute_keys: Sequence[str] | None = None,
         include_targets: bool = False,
         unpack: bool = False,
     ) -> pl.DataFrame:
         """
-        Get the features of the edges as a polars DataFrame.
+        Get the attributesof the edges as a polars DataFrame.
 
         Parameters
         ----------
         node_ids : list[int] | None
-            The IDs of the subgraph to get the edge features for.
+            The IDs of the subgraph to get the edge attributesfor.
             If None, all edges of the graph are used.
-        feature_keys : Sequence[str] | None
-            The feature keys to get.
-            If None, all features are used.
+        attribute_keys : Sequence[str] | None
+            The attribute keys to get.
+            If None, all attributesare used.
         include_targets : bool
             Whether to include edges out-going from the given node_ids even
             if the target node is not in the given node_ids.
         unpack : bool
-            Whether to unpack array features into multiple scalar features.
+            Whether to unpack array attributesinto multiple scalar attributes.
         """
 
     @property
     @abc.abstractmethod
-    def node_features_keys(self) -> list[str]:
+    def node_attrs_keys(self) -> list[str]:
         """
-        Get the keys of the features of the nodes.
+        Get the keys of the attributesof the nodes.
         """
 
     @property
     @abc.abstractmethod
-    def edge_features_keys(self) -> list[str]:
+    def edge_attrs_keys(self) -> list[str]:
         """
-        Get the keys of the features of the edges.
-        """
-
-    @abc.abstractmethod
-    def add_node_feature_key(self, key: str, default_value: Any) -> None:
-        """
-        Add a new feature key to the graph.
-        All existing nodes will have the default value for the new feature key.
+        Get the keys of the attributesof the edges.
         """
 
     @abc.abstractmethod
-    def add_edge_feature_key(self, key: str, default_value: Any) -> None:
+    def add_node_attribute_key(self, key: str, default_value: Any) -> None:
         """
-        Add a new feature key to the graph.
-        All existing edges will have the default value for the new feature key.
+        Add a new attribute key to the graph.
+        All existing nodes will have the default value for the new attribute key.
+        """
+
+    @abc.abstractmethod
+    def add_edge_attribute_key(self, key: str, default_value: Any) -> None:
+        """
+        Add a new attribute key to the graph.
+        All existing edges will have the default value for the new attribute key.
         """
 
     @property
@@ -390,14 +390,14 @@ class BaseGraph(abc.ABC):
         """
 
     @abc.abstractmethod
-    def update_node_features(
+    def update_node_attrs(
         self,
         *,
         node_ids: Sequence[int],
         attributes: dict[str, Any],
     ) -> None:
         """
-        Update the features of the nodes.
+        Update the attributesof the nodes.
 
         Parameters
         ----------
@@ -408,14 +408,14 @@ class BaseGraph(abc.ABC):
         """
 
     @abc.abstractmethod
-    def update_edge_features(
+    def update_edge_attrs(
         self,
         *,
         edge_ids: ArrayLike,
         attributes: dict[str, Any],
     ) -> None:
         """
-        Update the features of the edges.
+        Update the attributesof the edges.
 
         Parameters
         ----------
@@ -512,14 +512,14 @@ class BaseGraph(abc.ABC):
             optimal_matching=True,
         )
 
-        if matched_node_id_key not in self.node_features_keys:
-            self.add_node_feature_key(matched_node_id_key, -1)
+        if matched_node_id_key not in self.node_attrs_keys:
+            self.add_node_attribute_key(matched_node_id_key, -1)
 
-        if match_score_key not in self.node_features_keys:
-            self.add_node_feature_key(match_score_key, 0.0)
+        if match_score_key not in self.node_attrs_keys:
+            self.add_node_attribute_key(match_score_key, 0.0)
 
-        if matched_edge_mask_key not in self.edge_features_keys:
-            self.add_edge_feature_key(matched_edge_mask_key, False)
+        if matched_edge_mask_key not in self.edge_attrs_keys:
+            self.add_edge_attribute_key(matched_edge_mask_key, False)
 
         node_ids = functools.reduce(operator.iadd, matching_data["mapped_comp"])
         other_ids = functools.reduce(operator.iadd, matching_data["mapped_ref"])
@@ -529,15 +529,15 @@ class BaseGraph(abc.ABC):
             LOG.warning("No matching nodes found.")
             return
 
-        self.update_node_features(
+        self.update_node_attrs(
             node_ids=node_ids,
             attributes={matched_node_id_key: other_ids, match_score_key: ious},
         )
 
         other_to_node_ids = dict(zip(other_ids, node_ids, strict=False))
 
-        self_edges_df = self.edge_features(feature_keys=[])
-        other_edges_df = other.edge_features(feature_keys=[])
+        self_edges_df = self.edge_attrs(attribute_keys=[])
+        other_edges_df = other.edge_attrs(attribute_keys=[])
 
         other_edges_df = other_edges_df.with_columns(
             {
@@ -556,7 +556,7 @@ class BaseGraph(abc.ABC):
             LOG.warning("No matching edges found.")
             return
 
-        self.update_edge_features(
+        self.update_edge_attrs(
             edge_ids=edge_ids,
             attributes={matched_edge_mask_key: True},
         )

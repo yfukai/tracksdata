@@ -12,7 +12,7 @@ from sqlalchemy.sql.type_api import TypeEngine
 
 from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.graph._base_graph import BaseGraph
-from tracksdata.utils._dataframe import unpack_array_features
+from tracksdata.utils._dataframe import unpack_array_attrs
 from tracksdata.utils._logging import LOG
 
 if TYPE_CHECKING:
@@ -123,7 +123,7 @@ class SQLGraph(BaseGraph):
         validate_keys: bool = True,
     ) -> int:
         if validate_keys:
-            self._validate_attributes(attributes, self.node_features_keys, "node")
+            self._validate_attributes(attributes, self.node_attrs_keys, "node")
 
             if "t" not in attributes:
                 raise ValueError(f"Node attributes must have a 't' key. Got {attributes.keys()}")
@@ -178,7 +178,7 @@ class SQLGraph(BaseGraph):
         validate_keys: bool = True,
     ) -> int:
         if validate_keys:
-            self._validate_attributes(attributes, self.edge_features_keys, "edge")
+            self._validate_attributes(attributes, self.edge_attrs_keys, "edge")
 
         if hasattr(source_id, "item"):
             source_id = source_id.item()
@@ -225,7 +225,7 @@ class SQLGraph(BaseGraph):
         node_key: str,
         neighbor_key: str,
         node_ids: list[int] | int,
-        feature_keys: Sequence[str] | str | None = None,
+        attribute_keys: Sequence[str] | str | None = None,
     ) -> dict[int, pl.DataFrame] | pl.DataFrame:
         """
         Get the predecessors or sucessors of a list of nodes.
@@ -236,15 +236,15 @@ class SQLGraph(BaseGraph):
             node_ids = [node_ids]
             single_node = True
 
-        if isinstance(feature_keys, str):
-            feature_keys = [feature_keys]
+        if isinstance(attribute_keys, str):
+            attribute_keys = [attribute_keys]
 
         with Session(self._engine) as session:
-            if feature_keys is None:
+            if attribute_keys is None:
                 # all columns
                 node_columns = [self.Node]
             else:
-                node_columns = [getattr(self.Node, key) for key in feature_keys]
+                node_columns = [getattr(self.Node, key) for key in attribute_keys]
 
             query = session.query(getattr(self.Edge, node_key), *node_columns)
             query = query.join(self.Edge, getattr(self.Edge, neighbor_key) == self.Node.node_id)
@@ -269,25 +269,25 @@ class SQLGraph(BaseGraph):
     def sucessors(
         self,
         node_ids: list[int] | int,
-        feature_keys: Sequence[str] | str | None = None,
+        attribute_keys: Sequence[str] | str | None = None,
     ) -> dict[int, pl.DataFrame] | pl.DataFrame:
         return self._get_neighbors(
             node_key=DEFAULT_ATTR_KEYS.EDGE_SOURCE,
             neighbor_key=DEFAULT_ATTR_KEYS.EDGE_TARGET,
             node_ids=node_ids,
-            feature_keys=feature_keys,
+            attribute_keys=attribute_keys,
         )
 
     def predecessors(
         self,
         node_ids: list[int] | int,
-        feature_keys: Sequence[str] | str | None = None,
+        attribute_keys: Sequence[str] | str | None = None,
     ) -> dict[int, pl.DataFrame] | pl.DataFrame:
         return self._get_neighbors(
             node_key=DEFAULT_ATTR_KEYS.EDGE_TARGET,
             neighbor_key=DEFAULT_ATTR_KEYS.EDGE_SOURCE,
             node_ids=node_ids,
-            feature_keys=feature_keys,
+            attribute_keys=attribute_keys,
         )
 
     def filter_nodes_by_attribute(
@@ -314,8 +314,8 @@ class SQLGraph(BaseGraph):
         node_ids: Sequence[int] | None = None,
         node_attr_filter: dict[str, Any] | None = None,
         edge_attr_filter: dict[str, Any] | None = None,
-        node_feature_keys: Sequence[str] | str | None = None,
-        edge_feature_keys: Sequence[str] | str | None = None,
+        node_attribute_keys: Sequence[str] | str | None = None,
+        edge_attribute_keys: Sequence[str] | str | None = None,
     ) -> "GraphView":
         from tracksdata.graph._graph_view import GraphView
 
@@ -358,27 +358,27 @@ class SQLGraph(BaseGraph):
                     self.Edge.target_id.in_(node_ids),
                 )
 
-            if node_feature_keys is not None:
-                if DEFAULT_ATTR_KEYS.NODE_ID not in node_feature_keys:
-                    node_feature_keys.append(DEFAULT_ATTR_KEYS.NODE_ID)
+            if node_attribute_keys is not None:
+                if DEFAULT_ATTR_KEYS.NODE_ID not in node_attribute_keys:
+                    node_attribute_keys.append(DEFAULT_ATTR_KEYS.NODE_ID)
 
                 node_query = node_query.options(
                     load_only(
-                        *[getattr(self.Node, key) for key in node_feature_keys],
+                        *[getattr(self.Node, key) for key in node_attribute_keys],
                     ),
                 )
 
-            if edge_feature_keys is not None:
-                edge_feature_keys = set(edge_feature_keys)
+            if edge_attribute_keys is not None:
+                edge_attribute_keys = set(edge_attribute_keys)
                 # we always return the source and target id by default
-                edge_feature_keys.add(DEFAULT_ATTR_KEYS.EDGE_ID)
-                edge_feature_keys.add(DEFAULT_ATTR_KEYS.EDGE_SOURCE)
-                edge_feature_keys.add(DEFAULT_ATTR_KEYS.EDGE_TARGET)
-                edge_feature_keys = list(edge_feature_keys)
+                edge_attribute_keys.add(DEFAULT_ATTR_KEYS.EDGE_ID)
+                edge_attribute_keys.add(DEFAULT_ATTR_KEYS.EDGE_SOURCE)
+                edge_attribute_keys.add(DEFAULT_ATTR_KEYS.EDGE_TARGET)
+                edge_attribute_keys = list(edge_attribute_keys)
 
                 edge_query = edge_query.options(
                     load_only(
-                        *[getattr(self.Edge, key) for key in edge_feature_keys],
+                        *[getattr(self.Edge, key) for key in edge_attribute_keys],
                     ),
                 )
 
@@ -427,15 +427,15 @@ class SQLGraph(BaseGraph):
         # for some reason, the query.statement is not working with polars
         return str(query.statement.compile(dialect=self._engine.dialect, compile_kwargs={"literal_binds": True}))
 
-    def node_features(
+    def node_attrs(
         self,
         *,
         node_ids: Sequence[int] | None = None,
-        feature_keys: Sequence[str] | str | None = None,
+        attribute_keys: Sequence[str] | str | None = None,
         unpack: bool = False,
     ) -> pl.DataFrame:
-        if isinstance(feature_keys, str):
-            feature_keys = [feature_keys]
+        if isinstance(attribute_keys, str):
+            attribute_keys = [attribute_keys]
 
         with Session(self._engine) as session:
             query = session.query(self.Node)
@@ -446,13 +446,13 @@ class SQLGraph(BaseGraph):
 
                 query = query.filter(self.Node.node_id.in_(node_ids))
 
-            if feature_keys is not None:
+            if attribute_keys is not None:
                 # making them unique
-                feature_keys = list(set(feature_keys))
+                attribute_keys = list(set(attribute_keys))
 
                 query = query.options(
                     load_only(
-                        *[getattr(self.Node, key) for key in feature_keys],
+                        *[getattr(self.Node, key) for key in attribute_keys],
                     ),
                 )
 
@@ -469,24 +469,24 @@ class SQLGraph(BaseGraph):
             nodes_df = self._reorder_by_indices(nodes_df, node_ids, "node_id")
 
         # indices are included by default and must be removed
-        if feature_keys is not None:
-            nodes_df = nodes_df.select([pl.col(c) for c in feature_keys])
+        if attribute_keys is not None:
+            nodes_df = nodes_df.select([pl.col(c) for c in attribute_keys])
 
         if unpack:
-            nodes_df = unpack_array_features(nodes_df)
+            nodes_df = unpack_array_attrs(nodes_df)
 
         return nodes_df
 
-    def edge_features(
+    def edge_attrs(
         self,
         *,
         node_ids: list[int] | None = None,
-        feature_keys: Sequence[str] | None = None,
+        attribute_keys: Sequence[str] | None = None,
         include_targets: bool = False,
         unpack: bool = False,
     ) -> pl.DataFrame:
-        if isinstance(feature_keys, str):
-            feature_keys = [feature_keys]
+        if isinstance(attribute_keys, str):
+            attribute_keys = [attribute_keys]
 
         with Session(self._engine) as session:
             query = session.query(self.Edge)
@@ -503,18 +503,18 @@ class SQLGraph(BaseGraph):
                         self.Edge.target_id.in_(node_ids),
                     )
 
-            if feature_keys is not None:
-                feature_keys = set(feature_keys)
+            if attribute_keys is not None:
+                attribute_keys = set(attribute_keys)
                 # we always return the source and target id by default
-                feature_keys.add(DEFAULT_ATTR_KEYS.EDGE_SOURCE)
-                feature_keys.add(DEFAULT_ATTR_KEYS.EDGE_TARGET)
-                feature_keys = list(feature_keys)
+                attribute_keys.add(DEFAULT_ATTR_KEYS.EDGE_SOURCE)
+                attribute_keys.add(DEFAULT_ATTR_KEYS.EDGE_TARGET)
+                attribute_keys = list(attribute_keys)
 
-                LOG.info("Edge feature keys: %s", feature_keys)
+                LOG.info("Edge attribute keys: %s", attribute_keys)
 
                 query = query.options(
                     load_only(
-                        *[getattr(self.Edge, key) for key in feature_keys],
+                        *[getattr(self.Edge, key) for key in attribute_keys],
                     ),
                 )
 
@@ -527,18 +527,18 @@ class SQLGraph(BaseGraph):
             edges_df = self._cast_boolean_columns(self.Edge, edges_df)
 
         if unpack:
-            edges_df = unpack_array_features(edges_df)
+            edges_df = unpack_array_attrs(edges_df)
 
         return edges_df
 
     @property
-    def node_features_keys(self) -> list[str]:
+    def node_attrs_keys(self) -> list[str]:
         keys = list(self.Node.__table__.columns.keys())
         keys.remove(DEFAULT_ATTR_KEYS.NODE_ID)
         return keys
 
     @property
-    def edge_features_keys(self) -> list[str]:
+    def edge_attrs_keys(self) -> list[str]:
         keys = list(self.Edge.__table__.columns.keys())
         for k in [DEFAULT_ATTR_KEYS.EDGE_ID, DEFAULT_ATTR_KEYS.EDGE_SOURCE, DEFAULT_ATTR_KEYS.EDGE_TARGET]:
             keys.remove(k)
@@ -601,15 +601,15 @@ class SQLGraph(BaseGraph):
         setattr(table_class, key, sa_column)
         table_class.__table__.append_column(sa_column)
 
-    def add_node_feature_key(self, key: str, default_value: Any) -> None:
-        if key in self.node_features_keys:
-            raise ValueError(f"Node feature key {key} already exists")
+    def add_node_attribute_key(self, key: str, default_value: Any) -> None:
+        if key in self.node_attrs_keys:
+            raise ValueError(f"Node attribute key {key} already exists")
 
         self._add_new_column(self.Node, key, default_value)
 
-    def add_edge_feature_key(self, key: str, default_value: Any) -> None:
-        if key in self.edge_features_keys:
-            raise ValueError(f"Edge feature key {key} already exists")
+    def add_edge_attribute_key(self, key: str, default_value: Any) -> None:
+        if key in self.edge_attrs_keys:
+            raise ValueError(f"Edge attribute key {key} already exists")
 
         self._add_new_column(self.Edge, key, default_value)
 
@@ -679,7 +679,7 @@ class SQLGraph(BaseGraph):
             session.bulk_update_mappings(table_class, update_data)
             session.commit()
 
-    def update_node_features(
+    def update_node_attrs(
         self,
         *,
         node_ids: Sequence[int],
@@ -690,7 +690,7 @@ class SQLGraph(BaseGraph):
 
         self._update_table(self.Node, node_ids, DEFAULT_ATTR_KEYS.NODE_ID, attributes)
 
-    def update_edge_features(
+    def update_edge_attrs(
         self,
         *,
         edge_ids: ArrayLike,

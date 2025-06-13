@@ -12,20 +12,20 @@ def _scalar_distance_func(source_val: float, target_val: float) -> float:
     return abs(source_val - target_val)
 
 
-def test_generic_edges_init_single_feature_key() -> None:
-    """Test initialization with single feature key."""
+def test_generic_edges_init_single_attribute_key() -> None:
+    """Test initialization with single attribute key."""
     operator = GenericFunctionEdgeWeights(
-        func=_scalar_distance_func, feature_keys="x", output_key="distance", show_progress=False
+        func=_scalar_distance_func, attribute_keys="x", output_key="distance", show_progress=False
     )
 
-    assert operator.feature_keys == "x"
+    assert operator.attr_keys == "x"
     assert operator.func == _scalar_distance_func
     assert operator.output_key == "distance"
     assert operator.show_progress is False
 
 
-def test_generic_edges_init_multiple_feature_keys() -> None:
-    """Test initialization with multiple feature keys."""
+def test_generic_edges_init_multiple_attribute_keys() -> None:
+    """Test initialization with multiple attribute keys."""
 
     def _euclidean_distance(source_attrs, target_attrs):
         dx = source_attrs["x"] - target_attrs["x"]
@@ -33,22 +33,22 @@ def test_generic_edges_init_multiple_feature_keys() -> None:
         return np.sqrt(dx**2 + dy**2)
 
     operator = GenericFunctionEdgeWeights(
-        func=_euclidean_distance, feature_keys=["x", "y"], output_key="euclidean_distance", show_progress=True
+        func=_euclidean_distance, attribute_keys=["x", "y"], output_key="euclidean_distance", show_progress=True
     )
 
-    assert operator.feature_keys == ["x", "y"]
+    assert operator.attr_keys == ["x", "y"]
     assert operator.func == _euclidean_distance
     assert operator.output_key == "euclidean_distance"
     assert operator.show_progress is True
 
 
-def test_generic_edges_add_weights_single_feature_key() -> None:
-    """Test adding weights with single feature key."""
+def test_generic_edges_add_weights_single_attribute_key() -> None:
+    """Test adding weights with single attribute key."""
     graph = RustWorkXGraph()
 
-    # Register feature keys
-    graph.add_node_feature_key("x", 0.0)
-    graph.add_edge_feature_key(DEFAULT_ATTR_KEYS.EDGE_WEIGHT, 0.0)
+    # Register attribute keys
+    graph.add_node_attribute_key("x", 0.0)
+    graph.add_edge_attribute_key(DEFAULT_ATTR_KEYS.EDGE_WEIGHT, 0.0)
 
     # Add nodes at time 0
     node0 = graph.add_node({DEFAULT_ATTR_KEYS.T: 0, "x": 1.0})
@@ -60,13 +60,13 @@ def test_generic_edges_add_weights_single_feature_key() -> None:
     edge2 = graph.add_edge(node1, node2, {DEFAULT_ATTR_KEYS.EDGE_WEIGHT: 0.0})
 
     operator = GenericFunctionEdgeWeights(
-        func=_scalar_distance_func, feature_keys="x", output_key="distance", show_progress=False
+        func=_scalar_distance_func, attribute_keys="x", output_key="distance", show_progress=False
     )
 
     operator.add_weights(graph)
 
     # Check that weights were added
-    edges_df = graph.edge_features()
+    edges_df = graph.edge_attrs()
 
     assert len(edges_df) == 2
     assert "distance" in edges_df.columns
@@ -81,14 +81,14 @@ def test_generic_edges_add_weights_single_feature_key() -> None:
     assert edge_distances[edge2] == 3.0  # |4.0 - 7.0|
 
 
-def test_generic_edges_add_weights_multiple_feature_keys() -> None:
-    """Test adding weights with multiple feature keys."""
+def test_generic_edges_add_weights_multiple_attribute_keys() -> None:
+    """Test adding weights with multiple attribute keys."""
     graph = RustWorkXGraph()
 
-    # Register feature keys
-    graph.add_node_feature_key("x", 0.0)
-    graph.add_node_feature_key("y", 0.0)
-    graph.add_edge_feature_key(DEFAULT_ATTR_KEYS.EDGE_WEIGHT, 0.0)
+    # Register attribute keys
+    graph.add_node_attribute_key("x", 0.0)
+    graph.add_node_attribute_key("y", 0.0)
+    graph.add_edge_attribute_key(DEFAULT_ATTR_KEYS.EDGE_WEIGHT, 0.0)
 
     # Add nodes at time 0
     node0 = graph.add_node({DEFAULT_ATTR_KEYS.T: 0, "x": 0.0, "y": 0.0})
@@ -103,13 +103,13 @@ def test_generic_edges_add_weights_multiple_feature_keys() -> None:
         return np.sqrt(dx**2 + dy**2)
 
     operator = GenericFunctionEdgeWeights(
-        func=euclidean_distance, feature_keys=["x", "y"], output_key="euclidean_distance", show_progress=False
+        func=euclidean_distance, attribute_keys=["x", "y"], output_key="euclidean_distance", show_progress=False
     )
 
     operator.add_weights(graph, t=0)
 
     # Check that weights were added
-    edges_df = graph.edge_features()
+    edges_df = graph.edge_attrs()
     assert "euclidean_distance" in edges_df.columns
 
     # Check specific distance (3-4-5 triangle)
@@ -121,9 +121,9 @@ def test_generic_edges_add_weights_all_time_points() -> None:
     """Test adding weights to all time points when t=None."""
     graph = RustWorkXGraph()
 
-    # Register feature keys
-    graph.add_node_feature_key("x", 0.0)
-    graph.add_edge_feature_key(DEFAULT_ATTR_KEYS.EDGE_WEIGHT, 0.0)
+    # Register attribute keys
+    graph.add_node_attribute_key("x", 0.0)
+    graph.add_edge_attribute_key(DEFAULT_ATTR_KEYS.EDGE_WEIGHT, 0.0)
 
     # Add nodes at different time points
     node0_t0 = graph.add_node({DEFAULT_ATTR_KEYS.T: 0, "x": 1.0})
@@ -136,14 +136,14 @@ def test_generic_edges_add_weights_all_time_points() -> None:
     edge_t0_to_t1_2 = graph.add_edge(node1_t0, node1_t1, {DEFAULT_ATTR_KEYS.EDGE_WEIGHT: 0.0})
 
     operator = GenericFunctionEdgeWeights(
-        func=_scalar_distance_func, feature_keys="x", output_key="distance", show_progress=False
+        func=_scalar_distance_func, attribute_keys="x", output_key="distance", show_progress=False
     )
 
     # Add weights to all time points
     operator.add_weights(graph)
 
     # Check that weights were added to both edges
-    edges_df = graph.edge_features()
+    edges_df = graph.edge_attrs()
     edge_distances = dict(zip(edges_df[DEFAULT_ATTR_KEYS.EDGE_ID], edges_df["distance"], strict=False))
     assert edge_distances[edge_t0_to_t1_1] == 2.0  # |1.0 - 3.0|
     assert edge_distances[edge_t0_to_t1_2] == 4.0  # |2.0 - 6.0|
@@ -153,22 +153,22 @@ def test_generic_edges_no_edges_at_time_point() -> None:
     """Test behavior when no edges exist at a time point."""
     graph = RustWorkXGraph()
 
-    # Register feature keys
-    graph.add_node_feature_key("x", 0.0)
+    # Register attribute keys
+    graph.add_node_attribute_key("x", 0.0)
 
     # Add nodes but no edges at time 0
     graph.add_node({DEFAULT_ATTR_KEYS.T: 0, "x": 1.0})
     graph.add_node({DEFAULT_ATTR_KEYS.T: 0, "x": 2.0})
 
     operator = GenericFunctionEdgeWeights(
-        func=_scalar_distance_func, feature_keys="x", output_key="distance", show_progress=False
+        func=_scalar_distance_func, attribute_keys="x", output_key="distance", show_progress=False
     )
 
     # This should not raise an error, just log a warning
     operator.add_weights(graph)
 
     # Verify no edges exist
-    edges_df = graph.edge_features()
+    edges_df = graph.edge_attrs()
     assert len(edges_df) == 0
 
 
@@ -176,9 +176,9 @@ def test_generic_edges_creates_output_key() -> None:
     """Test that the operator creates the output key if it doesn't exist."""
     graph = RustWorkXGraph()
 
-    # Register feature keys
-    graph.add_node_feature_key("x", 0.0)
-    graph.add_edge_feature_key(DEFAULT_ATTR_KEYS.EDGE_WEIGHT, 0.0)
+    # Register attribute keys
+    graph.add_node_attribute_key("x", 0.0)
+    graph.add_edge_attribute_key(DEFAULT_ATTR_KEYS.EDGE_WEIGHT, 0.0)
 
     # Add nodes and edge
     node0 = graph.add_node({DEFAULT_ATTR_KEYS.T: 0, "x": 1.0})
@@ -186,19 +186,19 @@ def test_generic_edges_creates_output_key() -> None:
     graph.add_edge(node0, node1, {DEFAULT_ATTR_KEYS.EDGE_WEIGHT: 0.0})
 
     operator = GenericFunctionEdgeWeights(
-        func=_scalar_distance_func, feature_keys="x", output_key="new_distance_key", show_progress=False
+        func=_scalar_distance_func, attribute_keys="x", output_key="new_distance_key", show_progress=False
     )
 
     # Verify the key doesn't exist initially
-    assert "new_distance_key" not in graph.edge_features_keys
+    assert "new_distance_key" not in graph.edge_attrs_keys
 
     operator.add_weights(graph)
 
     # Verify the key was created
-    assert "new_distance_key" in graph.edge_features_keys
+    assert "new_distance_key" in graph.edge_attrs_keys
 
     # Verify the weights were added
-    edges_df = graph.edge_features()
+    edges_df = graph.edge_attrs()
     assert "new_distance_key" in edges_df.columns
 
 
@@ -206,10 +206,10 @@ def test_generic_edges_dict_input_function() -> None:
     """Test with a more complex function that uses multiple operations."""
     graph = RustWorkXGraph()
 
-    # Register feature keys
-    graph.add_node_feature_key("value", 0.0)
-    graph.add_node_feature_key("weight", 0.0)
-    graph.add_edge_feature_key(DEFAULT_ATTR_KEYS.EDGE_WEIGHT, 0.0)
+    # Register attribute keys
+    graph.add_node_attribute_key("value", 0.0)
+    graph.add_node_attribute_key("weight", 0.0)
+    graph.add_edge_attribute_key(DEFAULT_ATTR_KEYS.EDGE_WEIGHT, 0.0)
 
     # Add nodes
     node0 = graph.add_node({DEFAULT_ATTR_KEYS.T: 0, "value": 10.0, "weight": 2.0})
@@ -224,13 +224,13 @@ def test_generic_edges_dict_input_function() -> None:
         return diff * avg_weight
 
     operator = GenericFunctionEdgeWeights(
-        func=weighted_difference, feature_keys=["value", "weight"], output_key="weighted_diff", show_progress=False
+        func=weighted_difference, attribute_keys=["value", "weight"], output_key="weighted_diff", show_progress=False
     )
 
     operator.add_weights(graph)
 
     # Check the computed weight
-    edges_df = graph.edge_features()
+    edges_df = graph.edge_attrs()
     expected_weight = abs(10.0 - 20.0) * ((2.0 + 3.0) / 2)  # 10 * 2.5 = 25.0
     assert abs(edges_df["weighted_diff"][0] - expected_weight) < 1e-6
 
@@ -240,7 +240,7 @@ def test_generic_edges_empty_graph() -> None:
     graph = RustWorkXGraph()
 
     operator = GenericFunctionEdgeWeights(
-        func=_scalar_distance_func, feature_keys="x", output_key="distance", show_progress=False
+        func=_scalar_distance_func, attribute_keys="x", output_key="distance", show_progress=False
     )
 
     # This should not raise an error

@@ -26,7 +26,7 @@ class IoUEdgeWeights(GenericFunctionEdgeWeights):
     ):
         super().__init__(
             func=Mask.iou,
-            feature_keys=mask_key,
+            attribute_keys=mask_key,
             output_key=output_key,
             show_progress=show_progress,
         )

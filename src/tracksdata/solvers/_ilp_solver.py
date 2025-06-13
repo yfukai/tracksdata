@@ -237,8 +237,8 @@ class ILPSolver(BaseSolver):
         self,
         graph: BaseGraph,
     ) -> None:
-        nodes_df = graph.node_features(
-            feature_keys=[
+        nodes_df = graph.node_attrs(
+            attribute_keys=[
                 DEFAULT_ATTR_KEYS.NODE_ID,
                 *self.node_weight_expr.columns,
                 *self.appearance_weight_expr.columns,
@@ -246,8 +246,8 @@ class ILPSolver(BaseSolver):
                 *self.division_weight_expr.columns,
             ],
         )
-        edges_df = graph.edge_features(
-            feature_keys=self.edge_weight_expr.columns,
+        edges_df = graph.edge_attrs(
+            attribute_keys=self.edge_weight_expr.columns,
         )
 
         self._add_objective_and_variables(nodes_df, edges_df)
@@ -257,20 +257,20 @@ class ILPSolver(BaseSolver):
 
         selected_nodes = [node_id for node_id, var in self._node_vars.items() if solution[var.index] > 0.5]
 
-        if self.output_key not in graph.node_features_keys:
-            graph.add_node_feature_key(self.output_key, False)
+        if self.output_key not in graph.node_attrs_keys:
+            graph.add_node_attribute_key(self.output_key, False)
 
-        graph.update_node_features(
+        graph.update_node_attrs(
             node_ids=selected_nodes,
             attributes={self.output_key: True},
         )
 
         selected_edges = [edge_id for edge_id, var in self._edge_vars.items() if solution[var.index] > 0.5]
 
-        if self.output_key not in graph.edge_features_keys:
-            graph.add_edge_feature_key(self.output_key, False)
+        if self.output_key not in graph.edge_attrs_keys:
+            graph.add_edge_attribute_key(self.output_key, False)
 
-        graph.update_edge_features(
+        graph.update_edge_attrs(
             edge_ids=selected_edges,
             attributes={self.output_key: True},
         )

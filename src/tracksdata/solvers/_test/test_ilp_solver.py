@@ -84,9 +84,9 @@ def test_ilp_solver_solve_no_edges(caplog: pytest.LogCaptureFixture) -> None:
     """Test solving on a graph with nodes but no edges."""
     graph = RustWorkXGraph()
 
-    # Register feature keys
-    graph.add_node_feature_key("x", 0.0)
-    graph.add_node_feature_key("y", 0.0)
+    # Register attribute keys
+    graph.add_node_attribute_key("x", 0.0)
+    graph.add_node_attribute_key("y", 0.0)
 
     # Add some nodes
     graph.add_node({DEFAULT_ATTR_KEYS.T: 0, "x": 0.0, "y": 0.0})
@@ -109,10 +109,10 @@ def test_ilp_solver_solve_simple_case() -> None:
     """Test solving with a simple graph."""
     graph = RustWorkXGraph()
 
-    # Register feature keys
-    graph.add_node_feature_key("x", 0.0)
-    graph.add_node_feature_key("y", 0.0)
-    graph.add_edge_feature_key(DEFAULT_ATTR_KEYS.EDGE_WEIGHT, 0.0)
+    # Register attribute keys
+    graph.add_node_attribute_key("x", 0.0)
+    graph.add_node_attribute_key("y", 0.0)
+    graph.add_edge_attribute_key(DEFAULT_ATTR_KEYS.EDGE_WEIGHT, 0.0)
 
     # Add nodes
     node0 = graph.add_node({DEFAULT_ATTR_KEYS.T: 0, "x": 0.0, "y": 0.0})
@@ -127,15 +127,15 @@ def test_ilp_solver_solve_simple_case() -> None:
     solver.solve(graph)
 
     # Check that solution keys are added
-    node_features = graph.node_features()
-    edge_features = graph.edge_features()
+    node_attrs = graph.node_attrs()
+    edge_attrs = graph.edge_attrs()
 
-    assert DEFAULT_ATTR_KEYS.SOLUTION in node_features.columns
-    assert DEFAULT_ATTR_KEYS.SOLUTION in edge_features.columns
+    assert DEFAULT_ATTR_KEYS.SOLUTION in node_attrs.columns
+    assert DEFAULT_ATTR_KEYS.SOLUTION in edge_attrs.columns
 
     # Check that some solution is found
-    selected_edges = edge_features.filter(edge_features[DEFAULT_ATTR_KEYS.SOLUTION])
-    selected_nodes = node_features.filter(node_features[DEFAULT_ATTR_KEYS.SOLUTION])
+    selected_edges = edge_attrs.filter(edge_attrs[DEFAULT_ATTR_KEYS.SOLUTION])
+    selected_nodes = node_attrs.filter(node_attrs[DEFAULT_ATTR_KEYS.SOLUTION])
 
     assert len(selected_edges) > 0
     assert len(selected_nodes) > 0
@@ -145,10 +145,10 @@ def test_ilp_solver_solve_with_appearance_weight() -> None:
     """Test solving with appearance weights."""
     graph = RustWorkXGraph()
 
-    # Register feature keys
-    graph.add_node_feature_key("x", 0.0)
-    graph.add_node_feature_key("y", 0.0)
-    graph.add_edge_feature_key(DEFAULT_ATTR_KEYS.EDGE_WEIGHT, 0.0)
+    # Register attribute keys
+    graph.add_node_attribute_key("x", 0.0)
+    graph.add_node_attribute_key("y", 0.0)
+    graph.add_edge_attribute_key(DEFAULT_ATTR_KEYS.EDGE_WEIGHT, 0.0)
 
     # Add nodes
     node0 = graph.add_node({DEFAULT_ATTR_KEYS.T: 0, "x": 0.0, "y": 0.0})
@@ -162,21 +162,21 @@ def test_ilp_solver_solve_with_appearance_weight() -> None:
     solver.solve(graph)
 
     # Check that solution is found
-    node_features = graph.node_features()
-    selected_nodes = node_features.filter(node_features[DEFAULT_ATTR_KEYS.SOLUTION])
+    node_attrs = graph.node_attrs()
+    selected_nodes = node_attrs.filter(node_attrs[DEFAULT_ATTR_KEYS.SOLUTION])
 
     assert len(selected_nodes) > 0
 
     # resetting the solution
-    graph.update_node_features(node_ids=[node0, node1], attributes={DEFAULT_ATTR_KEYS.SOLUTION: False})
-    graph.update_edge_features(edge_ids=[edge1], attributes={DEFAULT_ATTR_KEYS.SOLUTION: False})
+    graph.update_node_attrs(node_ids=[node0, node1], attributes={DEFAULT_ATTR_KEYS.SOLUTION: False})
+    graph.update_edge_attrs(edge_ids=[edge1], attributes={DEFAULT_ATTR_KEYS.SOLUTION: False})
 
     # penalization is too high, empty solution
     solver = ILPSolver(appearance_weight=2.0)
     solver.solve(graph)
 
-    node_features = graph.node_features()
-    selected_nodes = node_features.filter(node_features[DEFAULT_ATTR_KEYS.SOLUTION])
+    node_attrs = graph.node_attrs()
+    selected_nodes = node_attrs.filter(node_attrs[DEFAULT_ATTR_KEYS.SOLUTION])
 
     assert len(selected_nodes) == 0
 
@@ -185,10 +185,10 @@ def test_ilp_solver_solve_with_disappearance_weight() -> None:
     """Test solving with disappearance weights."""
     graph = RustWorkXGraph()
 
-    # Register feature keys
-    graph.add_node_feature_key("x", 0.0)
-    graph.add_node_feature_key("y", 0.0)
-    graph.add_edge_feature_key(DEFAULT_ATTR_KEYS.EDGE_WEIGHT, 0.0)
+    # Register attribute keys
+    graph.add_node_attribute_key("x", 0.0)
+    graph.add_node_attribute_key("y", 0.0)
+    graph.add_edge_attribute_key(DEFAULT_ATTR_KEYS.EDGE_WEIGHT, 0.0)
 
     # Add nodes
     node0 = graph.add_node({DEFAULT_ATTR_KEYS.T: 0, "x": 0.0, "y": 0.0})
@@ -202,21 +202,21 @@ def test_ilp_solver_solve_with_disappearance_weight() -> None:
     solver.solve(graph)
 
     # Check that solution is found
-    node_features = graph.node_features()
-    selected_nodes = node_features.filter(node_features[DEFAULT_ATTR_KEYS.SOLUTION])
+    node_attrs = graph.node_attrs()
+    selected_nodes = node_attrs.filter(node_attrs[DEFAULT_ATTR_KEYS.SOLUTION])
 
     assert len(selected_nodes) > 0
 
     # resetting the solution
-    graph.update_node_features(node_ids=[node0, node1], attributes={DEFAULT_ATTR_KEYS.SOLUTION: False})
-    graph.update_edge_features(edge_ids=[edge1], attributes={DEFAULT_ATTR_KEYS.SOLUTION: False})
+    graph.update_node_attrs(node_ids=[node0, node1], attributes={DEFAULT_ATTR_KEYS.SOLUTION: False})
+    graph.update_edge_attrs(edge_ids=[edge1], attributes={DEFAULT_ATTR_KEYS.SOLUTION: False})
 
     # penalization is too high, empty solution
     solver = ILPSolver(disappearance_weight=2.0)
     solver.solve(graph)
 
-    node_features = graph.node_features()
-    selected_nodes = node_features.filter(node_features[DEFAULT_ATTR_KEYS.SOLUTION])
+    node_attrs = graph.node_attrs()
+    selected_nodes = node_attrs.filter(node_attrs[DEFAULT_ATTR_KEYS.SOLUTION])
 
     assert len(selected_nodes) == 0
 
@@ -225,10 +225,10 @@ def test_ilp_solver_solve_with_division_weight() -> None:
     """Test solving with division weights."""
     graph = RustWorkXGraph()
 
-    # Register feature keys
-    graph.add_node_feature_key("x", 0.0)
-    graph.add_node_feature_key("y", 0.0)
-    graph.add_edge_feature_key(DEFAULT_ATTR_KEYS.EDGE_WEIGHT, 0.0)
+    # Register attribute keys
+    graph.add_node_attribute_key("x", 0.0)
+    graph.add_node_attribute_key("y", 0.0)
+    graph.add_edge_attribute_key(DEFAULT_ATTR_KEYS.EDGE_WEIGHT, 0.0)
 
     # Add nodes for division scenario
     node0 = graph.add_node({DEFAULT_ATTR_KEYS.T: 0, "x": 0.0, "y": 0.0})
@@ -247,18 +247,18 @@ def test_ilp_solver_solve_with_division_weight() -> None:
     solver.solve(graph)
 
     # Check that solution is found
-    node_features = graph.node_features()
-    edge_features = graph.edge_features()
+    node_attrs = graph.node_attrs()
+    edge_attrs = graph.edge_attrs()
 
-    selected_nodes = node_features.filter(node_features[DEFAULT_ATTR_KEYS.SOLUTION])
-    selected_edges = edge_features.filter(edge_features[DEFAULT_ATTR_KEYS.SOLUTION])
+    selected_nodes = node_attrs.filter(node_attrs[DEFAULT_ATTR_KEYS.SOLUTION])
+    selected_edges = edge_attrs.filter(edge_attrs[DEFAULT_ATTR_KEYS.SOLUTION])
 
     assert len(selected_nodes) > 0
     assert len(selected_edges) > 0
 
     # resetting the solution
-    graph.update_node_features(node_ids=[node0, node1, node2], attributes={DEFAULT_ATTR_KEYS.SOLUTION: False})
-    graph.update_edge_features(edge_ids=[edge1, edge2], attributes={DEFAULT_ATTR_KEYS.SOLUTION: False})
+    graph.update_node_attrs(node_ids=[node0, node1, node2], attributes={DEFAULT_ATTR_KEYS.SOLUTION: False})
+    graph.update_edge_attrs(edge_ids=[edge1, edge2], attributes={DEFAULT_ATTR_KEYS.SOLUTION: False})
 
     # penalization is too high, empty solution
     solver = ILPSolver(
@@ -267,8 +267,8 @@ def test_ilp_solver_solve_with_division_weight() -> None:
     )
     solver.solve(graph)
 
-    node_features = graph.node_features()
-    selected_nodes = node_features.filter(node_features[DEFAULT_ATTR_KEYS.SOLUTION])
+    node_attrs = graph.node_attrs()
+    selected_nodes = node_attrs.filter(node_attrs[DEFAULT_ATTR_KEYS.SOLUTION])
 
     assert len(selected_nodes) == 0
 
@@ -277,11 +277,11 @@ def test_ilp_solver_solve_custom_edge_weight_expr() -> None:
     """Test solving with custom edge weight expression."""
     graph = RustWorkXGraph()
 
-    # Register feature keys
-    graph.add_node_feature_key("x", 0.0)
-    graph.add_node_feature_key("y", 0.0)
-    graph.add_edge_feature_key("custom_weight", 0.0)
-    graph.add_edge_feature_key("confidence", 0.0)
+    # Register attribute keys
+    graph.add_node_attribute_key("x", 0.0)
+    graph.add_node_attribute_key("y", 0.0)
+    graph.add_edge_attribute_key("custom_weight", 0.0)
+    graph.add_edge_attribute_key("confidence", 0.0)
 
     # Add nodes
     node0 = graph.add_node({DEFAULT_ATTR_KEYS.T: 0, "x": 0.0, "y": 0.0})
@@ -296,21 +296,21 @@ def test_ilp_solver_solve_custom_edge_weight_expr() -> None:
     solver.solve(graph)
 
     # Check that solution keys are added
-    node_features = graph.node_features()
-    edge_features = graph.edge_features()
+    node_attrs = graph.node_attrs()
+    edge_attrs = graph.edge_attrs()
 
-    assert DEFAULT_ATTR_KEYS.SOLUTION in node_features.columns
-    assert DEFAULT_ATTR_KEYS.SOLUTION in edge_features.columns
+    assert DEFAULT_ATTR_KEYS.SOLUTION in node_attrs.columns
+    assert DEFAULT_ATTR_KEYS.SOLUTION in edge_attrs.columns
 
 
 def test_ilp_solver_solve_custom_node_weight_expr() -> None:
     """Test solving with custom node weight expression."""
     graph = RustWorkXGraph()
 
-    # Register feature keys
-    graph.add_node_feature_key("x", 0.0)
-    graph.add_node_feature_key("quality", 0.0)
-    graph.add_edge_feature_key(DEFAULT_ATTR_KEYS.EDGE_WEIGHT, 0.0)
+    # Register attribute keys
+    graph.add_node_attribute_key("x", 0.0)
+    graph.add_node_attribute_key("quality", 0.0)
+    graph.add_edge_attribute_key(DEFAULT_ATTR_KEYS.EDGE_WEIGHT, 0.0)
 
     # Add nodes with quality attribute
     node0 = graph.add_node({DEFAULT_ATTR_KEYS.T: 0, "x": 0.0, "quality": 0.9})
@@ -325,8 +325,8 @@ def test_ilp_solver_solve_custom_node_weight_expr() -> None:
     solver.solve(graph)
 
     # Check that solution is found
-    node_features = graph.node_features()
-    selected_nodes = node_features.filter(node_features[DEFAULT_ATTR_KEYS.SOLUTION])
+    node_attrs = graph.node_attrs()
+    selected_nodes = node_attrs.filter(node_attrs[DEFAULT_ATTR_KEYS.SOLUTION])
 
     assert len(selected_nodes) > 0
 
@@ -335,10 +335,10 @@ def test_ilp_solver_solve_custom_output_key() -> None:
     """Test solving with custom output key."""
     graph = RustWorkXGraph()
 
-    # Register feature keys
-    graph.add_node_feature_key("x", 0.0)
-    graph.add_node_feature_key("y", 0.0)
-    graph.add_edge_feature_key(DEFAULT_ATTR_KEYS.EDGE_WEIGHT, 0.0)
+    # Register attribute keys
+    graph.add_node_attribute_key("x", 0.0)
+    graph.add_node_attribute_key("y", 0.0)
+    graph.add_edge_attribute_key(DEFAULT_ATTR_KEYS.EDGE_WEIGHT, 0.0)
 
     # Add nodes and edges
     node0 = graph.add_node({DEFAULT_ATTR_KEYS.T: 0, "x": 0.0, "y": 0.0})
@@ -350,23 +350,23 @@ def test_ilp_solver_solve_custom_output_key() -> None:
     solver.solve(graph)
 
     # Check that custom key is used
-    node_features = graph.node_features()
-    edge_features = graph.edge_features()
+    node_attrs = graph.node_attrs()
+    edge_attrs = graph.edge_attrs()
 
-    assert custom_key in node_features.columns
-    assert custom_key in edge_features.columns
-    assert DEFAULT_ATTR_KEYS.SOLUTION not in node_features.columns
-    assert DEFAULT_ATTR_KEYS.SOLUTION not in edge_features.columns
+    assert custom_key in node_attrs.columns
+    assert custom_key in edge_attrs.columns
+    assert DEFAULT_ATTR_KEYS.SOLUTION not in node_attrs.columns
+    assert DEFAULT_ATTR_KEYS.SOLUTION not in edge_attrs.columns
 
 
 def test_ilp_solver_solve_with_all_weights() -> None:
     """Test solving with all weight types specified."""
     graph = RustWorkXGraph()
 
-    # Register feature keys
-    graph.add_node_feature_key("x", 0.0)
-    graph.add_node_feature_key("y", 0.0)
-    graph.add_edge_feature_key(DEFAULT_ATTR_KEYS.EDGE_WEIGHT, 0.0)
+    # Register attribute keys
+    graph.add_node_attribute_key("x", 0.0)
+    graph.add_node_attribute_key("y", 0.0)
+    graph.add_edge_attribute_key(DEFAULT_ATTR_KEYS.EDGE_WEIGHT, 0.0)
 
     # Add nodes
     node0 = graph.add_node({DEFAULT_ATTR_KEYS.T: 0, "x": 0.0, "y": 0.0})
@@ -387,11 +387,11 @@ def test_ilp_solver_solve_with_all_weights() -> None:
     solver.solve(graph)
 
     # Check that solution is found
-    node_features = graph.node_features()
-    edge_features = graph.edge_features()
+    node_attrs = graph.node_attrs()
+    edge_attrs = graph.edge_attrs()
 
-    assert DEFAULT_ATTR_KEYS.SOLUTION in node_features.columns
-    assert DEFAULT_ATTR_KEYS.SOLUTION in edge_features.columns
+    assert DEFAULT_ATTR_KEYS.SOLUTION in node_attrs.columns
+    assert DEFAULT_ATTR_KEYS.SOLUTION in edge_attrs.columns
 
 
 def test_ilp_solver_evaluate_expr_scalar() -> None:
@@ -428,10 +428,10 @@ def test_ilp_solver_division_constraint() -> None:
     """Test that division constraint is properly enforced: node_var >= division_var."""
     graph = RustWorkXGraph()
 
-    # Register feature keys
-    graph.add_node_feature_key("x", 0.0)
-    graph.add_node_feature_key("y", 0.0)
-    graph.add_edge_feature_key(DEFAULT_ATTR_KEYS.EDGE_WEIGHT, 0.0)
+    # Register attribute keys
+    graph.add_node_attribute_key("x", 0.0)
+    graph.add_node_attribute_key("y", 0.0)
+    graph.add_edge_attribute_key(DEFAULT_ATTR_KEYS.EDGE_WEIGHT, 0.0)
 
     # Create a scenario where division would be tempting but should be constrained
     # Time 0: 1 parent node
@@ -458,22 +458,22 @@ def test_ilp_solver_division_constraint() -> None:
     solver.solve(graph)
 
     # Check results
-    node_features = graph.node_features(
+    node_attrs = graph.node_attrs(
         node_ids=[parent_node, child1, child2],
-        feature_keys=[DEFAULT_ATTR_KEYS.NODE_ID, DEFAULT_ATTR_KEYS.SOLUTION],
+        attribute_keys=[DEFAULT_ATTR_KEYS.NODE_ID, DEFAULT_ATTR_KEYS.SOLUTION],
     )
-    edge_features = graph.edge_features()
+    edge_attrs = graph.edge_attrs()
 
-    assert node_features[DEFAULT_ATTR_KEYS.SOLUTION].all()
+    assert node_attrs[DEFAULT_ATTR_KEYS.SOLUTION].all()
 
     # Get solution status for each element
-    parent_selected, child1_selected, child2_selected = node_features[DEFAULT_ATTR_KEYS.SOLUTION].to_list()
+    parent_selected, child1_selected, child2_selected = node_attrs[DEFAULT_ATTR_KEYS.SOLUTION].to_list()
 
-    child2_selected = node_features.filter(node_features[DEFAULT_ATTR_KEYS.NODE_ID] == child2)[
+    child2_selected = node_attrs.filter(node_attrs[DEFAULT_ATTR_KEYS.NODE_ID] == child2)[
         DEFAULT_ATTR_KEYS.SOLUTION
     ].to_list()[0]
 
-    selected_edges = edge_features.filter(edge_features[DEFAULT_ATTR_KEYS.SOLUTION])
+    selected_edges = edge_attrs.filter(edge_attrs[DEFAULT_ATTR_KEYS.SOLUTION])
 
     # Key test of division constraint: node_var >= division_var
     # This means division can only happen if the node is selected
@@ -502,10 +502,10 @@ def test_ilp_solver_solve_with_inf_expr() -> None:
     """Test solving with infinity expressions."""
     graph = RustWorkXGraph()
 
-    # Register feature keys
-    graph.add_node_feature_key("x", 0.0)
-    graph.add_node_feature_key("y", 0.0)
-    graph.add_edge_feature_key(DEFAULT_ATTR_KEYS.EDGE_WEIGHT, 0.0)
+    # Register attribute keys
+    graph.add_node_attribute_key("x", 0.0)
+    graph.add_node_attribute_key("y", 0.0)
+    graph.add_edge_attribute_key(DEFAULT_ATTR_KEYS.EDGE_WEIGHT, 0.0)
 
     # Add nodes
     node0 = graph.add_node({DEFAULT_ATTR_KEYS.T: 0, "x": 0.0, "y": 5.0})
@@ -524,20 +524,20 @@ def test_ilp_solver_solve_with_inf_expr() -> None:
     solver.solve(graph)
 
     # Check that solution is found
-    node_features = graph.node_features()
-    edge_features = graph.edge_features()
+    node_attrs = graph.node_attrs()
+    edge_attrs = graph.edge_attrs()
 
-    assert edge_features[DEFAULT_ATTR_KEYS.SOLUTION].to_list() == [True, True]
-    assert node_features[DEFAULT_ATTR_KEYS.SOLUTION].to_list() == [True, True, True]
+    assert edge_attrs[DEFAULT_ATTR_KEYS.SOLUTION].to_list() == [True, True]
+    assert node_attrs[DEFAULT_ATTR_KEYS.SOLUTION].to_list() == [True, True, True]
 
 
 def test_ilp_solver_solve_with_pos_inf_rejection() -> None:
     """Test solving with positive infinity to force rejection of variables."""
     graph = RustWorkXGraph()
 
-    # Register feature keys
-    graph.add_node_feature_key("x", 0.0)
-    graph.add_edge_feature_key(DEFAULT_ATTR_KEYS.EDGE_WEIGHT, 0.0)
+    # Register attribute keys
+    graph.add_node_attribute_key("x", 0.0)
+    graph.add_edge_attribute_key(DEFAULT_ATTR_KEYS.EDGE_WEIGHT, 0.0)
 
     # Add nodes
     node0 = graph.add_node({DEFAULT_ATTR_KEYS.T: 0, "x": 1.0})
@@ -553,20 +553,20 @@ def test_ilp_solver_solve_with_pos_inf_rejection() -> None:
     solver.solve(graph)
 
     # Check that node1 is rejected despite attractive edge
-    node_features = graph.node_features()
-    edge_features = graph.edge_features()
+    node_attrs = graph.node_attrs()
+    edge_attrs = graph.edge_attrs()
 
-    assert edge_features[DEFAULT_ATTR_KEYS.SOLUTION].to_list() == [False]
-    assert node_features[DEFAULT_ATTR_KEYS.SOLUTION].to_list() == [False, False]
+    assert edge_attrs[DEFAULT_ATTR_KEYS.SOLUTION].to_list() == [False]
+    assert node_attrs[DEFAULT_ATTR_KEYS.SOLUTION].to_list() == [False, False]
 
 
 def test_ilp_solver_solve_with_neg_inf_node_weight() -> None:
     """Test solving with negative infinity on node weights to force selection."""
     graph = RustWorkXGraph()
 
-    # Register feature keys
-    graph.add_node_feature_key("priority", 0.0)
-    graph.add_edge_feature_key(DEFAULT_ATTR_KEYS.EDGE_WEIGHT, 0.0)
+    # Register attribute keys
+    graph.add_node_attribute_key("priority", 0.0)
+    graph.add_edge_attribute_key(DEFAULT_ATTR_KEYS.EDGE_WEIGHT, 0.0)
 
     # Add nodes
     node0 = graph.add_node({DEFAULT_ATTR_KEYS.T: 0, "priority": 1.0})  # High priority
@@ -583,11 +583,9 @@ def test_ilp_solver_solve_with_neg_inf_node_weight() -> None:
     solver.solve(graph)
 
     # Check that high priority node is selected despite costs
-    node_features = graph.node_features()
+    node_attrs = graph.node_attrs()
 
-    priority_node_selected = node_features.filter(node_features["priority"] == 1.0)[
-        DEFAULT_ATTR_KEYS.SOLUTION
-    ].to_list()[0]
+    priority_node_selected = node_attrs.filter(node_attrs["priority"] == 1.0)[DEFAULT_ATTR_KEYS.SOLUTION].to_list()[0]
     assert priority_node_selected
 
 
@@ -595,9 +593,9 @@ def test_ilp_solver_solve_with_inf_edge_weight() -> None:
     """Test solving with infinity on edge weights to force edge selection/rejection."""
     graph = RustWorkXGraph()
 
-    # Register feature keys
-    graph.add_node_feature_key("x", 0.0)
-    graph.add_edge_feature_key("confidence", 0.0)
+    # Register attribute keys
+    graph.add_node_attribute_key("x", 0.0)
+    graph.add_edge_attribute_key("confidence", 0.0)
 
     # Add nodes
     node0 = graph.add_node({DEFAULT_ATTR_KEYS.T: 0, "x": 0.0})
@@ -617,9 +615,9 @@ def test_ilp_solver_solve_with_inf_edge_weight() -> None:
     solver.solve(graph)
 
     # Check that only high confidence edge is selected
-    edge_features = graph.edge_features()
-    high_conf_edge = edge_features.filter(edge_features["confidence"] > 0.5)[DEFAULT_ATTR_KEYS.SOLUTION].to_list()[0]
-    low_conf_edge = edge_features.filter(edge_features["confidence"] < 0.5)[DEFAULT_ATTR_KEYS.SOLUTION].to_list()[0]
+    edge_attrs = graph.edge_attrs()
+    high_conf_edge = edge_attrs.filter(edge_attrs["confidence"] > 0.5)[DEFAULT_ATTR_KEYS.SOLUTION].to_list()[0]
+    low_conf_edge = edge_attrs.filter(edge_attrs["confidence"] < 0.5)[DEFAULT_ATTR_KEYS.SOLUTION].to_list()[0]
 
     assert not high_conf_edge
     assert low_conf_edge

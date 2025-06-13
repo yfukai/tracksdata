@@ -51,8 +51,8 @@ def test_random_nodes_add_nodes_single_time_point_2d() -> None:
     # Check that nodes were added
     assert graph.num_nodes == 5  # Should be exactly 5 nodes
 
-    # Check node features
-    nodes_df = graph.node_features()
+    # Check node attributes
+    nodes_df = graph.node_attrs()
     assert len(nodes_df) == 5
     assert DEFAULT_ATTR_KEYS.T in nodes_df.columns
     assert "x" in nodes_df.columns
@@ -85,8 +85,8 @@ def test_random_nodes_add_nodes_single_time_point_3d() -> None:
     # Check that nodes were added
     assert graph.num_nodes == 3  # Should be exactly 3 nodes
 
-    # Check node features
-    nodes_df = graph.node_features()
+    # Check node attributes
+    nodes_df = graph.node_attrs()
     assert len(nodes_df) == 3
     assert DEFAULT_ATTR_KEYS.T in nodes_df.columns
     assert "x" in nodes_df.columns
@@ -118,7 +118,7 @@ def test_random_nodes_add_nodes_all_time_points() -> None:
     operator.add_nodes(graph)
 
     # Check that nodes were added for all time points
-    nodes_df = graph.node_features()
+    nodes_df = graph.node_attrs()
     time_points = sorted(nodes_df[DEFAULT_ATTR_KEYS.T].unique())
     assert time_points == [0, 1, 2]
 
@@ -144,7 +144,7 @@ def test_random_nodes_variable_node_count() -> None:
     operator.add_nodes(graph)
 
     # Check that different time points have different numbers of nodes
-    nodes_df = graph.node_features()
+    nodes_df = graph.node_attrs()
     node_counts = []
     for t in range(10):
         nodes_at_t = nodes_df.filter(nodes_df[DEFAULT_ATTR_KEYS.T] == t)
@@ -167,7 +167,7 @@ def test_random_nodes_reproducible_with_same_seed() -> None:
         show_progress=False,  # Range where low < high
     )
     operator1.add_nodes(graph1)
-    nodes_df1 = graph1.node_features()
+    nodes_df1 = graph1.node_attrs()
 
     # Second run with same seed
     graph2 = RustWorkXGraph()
@@ -179,7 +179,7 @@ def test_random_nodes_reproducible_with_same_seed() -> None:
         show_progress=False,  # Range where low < high
     )
     operator2.add_nodes(graph2)
-    nodes_df2 = graph2.node_features()
+    nodes_df2 = graph2.node_attrs()
 
     # Results should be identical
     assert len(nodes_df1) == len(nodes_df2)
@@ -207,7 +207,7 @@ def test_random_nodes_different_with_different_seed() -> None:
         show_progress=False,  # Range where low < high
     )
     operator1.add_nodes(graph1, t=0)
-    nodes_df1 = graph1.node_features()
+    nodes_df1 = graph1.node_attrs()
 
     # Second run with different seed
     graph2 = RustWorkXGraph()
@@ -219,7 +219,7 @@ def test_random_nodes_different_with_different_seed() -> None:
         show_progress=False,  # Range where low < high
     )
     operator2.add_nodes(graph2, t=0)
-    nodes_df2 = graph2.node_features()
+    nodes_df2 = graph2.node_attrs()
 
     # Results should be different
     coords1 = nodes_df1["x"].to_numpy()
@@ -227,8 +227,8 @@ def test_random_nodes_different_with_different_seed() -> None:
     assert not np.allclose(coords1, coords2)
 
 
-def test_random_nodes_feature_keys_registration() -> None:
-    """Test that spatial feature keys are properly registered."""
+def test_random_nodes_attribute_keys_registration() -> None:
+    """Test that spatial attribute keys are properly registered."""
     graph = RustWorkXGraph()
 
     operator = RandomNodes(
@@ -240,17 +240,17 @@ def test_random_nodes_feature_keys_registration() -> None:
     )
 
     # Initially, spatial keys should not be registered
-    assert "x" not in graph.node_features_keys
-    assert "y" not in graph.node_features_keys
-    assert "z" not in graph.node_features_keys
+    assert "x" not in graph.node_attrs_keys
+    assert "y" not in graph.node_attrs_keys
+    assert "z" not in graph.node_attrs_keys
 
     # Add nodes
     operator.add_nodes(graph)
 
     # Now spatial keys should be registered
-    assert "x" in graph.node_features_keys
-    assert "y" in graph.node_features_keys
-    assert "z" in graph.node_features_keys
+    assert "x" in graph.node_attrs_keys
+    assert "y" in graph.node_attrs_keys
+    assert "z" in graph.node_attrs_keys
 
 
 def test_random_nodes_empty_time_points() -> None:

@@ -9,7 +9,7 @@ from numpy.typing import ArrayLike
 from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.functional._rx import graph_track_ids
 from tracksdata.graph._base_graph import BaseGraph
-from tracksdata.utils._dataframe import unpack_array_features
+from tracksdata.utils._dataframe import unpack_array_attrs
 from tracksdata.utils._logging import LOG
 
 if TYPE_CHECKING:
@@ -29,8 +29,8 @@ class RustWorkXGraph(BaseGraph):
             self._graph = rx_graph
 
         self._time_to_nodes: dict[int, list[int]] = {}
-        self._node_features_keys: list[str] = [DEFAULT_ATTR_KEYS.T]
-        self._edge_features_keys: list[str] = []
+        self._node_attrs_keys: list[str] = [DEFAULT_ATTR_KEYS.T]
+        self._edge_attrs_keys: list[str] = []
 
     @property
     def rx_graph(self) -> rx.PyDiGraph:
@@ -58,7 +58,7 @@ class RustWorkXGraph(BaseGraph):
         """
         # avoiding copying attributes on purpose, it could be a problem in the future
         if validate_keys:
-            self._validate_attributes(attributes, self.node_features_keys, "node")
+            self._validate_attributes(attributes, self.node_attrs_keys, "node")
 
             if "t" not in attributes:
                 raise ValueError(f"Node attributes must have a 't' key. Got {attributes.keys()}")
@@ -92,7 +92,7 @@ class RustWorkXGraph(BaseGraph):
             useful to speed up the operation when doing bulk insertions.
         """
         if validate_keys:
-            self._validate_attributes(attributes, self.edge_features_keys, "edge")
+            self._validate_attributes(attributes, self.edge_attrs_keys, "edge")
         edge_id = self.rx_graph.add_edge(source_id, target_id, attributes)
         attributes[DEFAULT_ATTR_KEYS.EDGE_ID] = edge_id
         return edge_id
@@ -101,7 +101,7 @@ class RustWorkXGraph(BaseGraph):
         self,
         neighbors_func: Callable[[rx.PyDiGraph, int], rx.NodeIndices],
         node_ids: list[int] | int,
-        feature_keys: Sequence[str] | str | None = None,
+        attribute_keys: Sequence[str] | str | None = None,
     ) -> dict[int, pl.DataFrame] | pl.DataFrame:
         """
         Get the predecessors or sucessors of a list of nodes.
@@ -112,8 +112,8 @@ class RustWorkXGraph(BaseGraph):
             node_ids = [node_ids]
             single_node = True
 
-        if isinstance(feature_keys, str):
-            feature_keys = [feature_keys]
+        if isinstance(attribute_keys, str):
+            attribute_keys = [attribute_keys]
 
         rx_graph = self.rx_graph
         valid_schema = None
@@ -123,15 +123,15 @@ class RustWorkXGraph(BaseGraph):
             neighbors_indices = neighbors_func(rx_graph, node_id)
             neighbors_data: list[dict[str, Any]] = [rx_graph[i] for i in neighbors_indices]
 
-            if feature_keys is not None:
+            if attribute_keys is not None:
                 neighbors_data = [
-                    {k: edge_data[k] for k in feature_keys if k != DEFAULT_ATTR_KEYS.NODE_ID}
+                    {k: edge_data[k] for k in attribute_keys if k != DEFAULT_ATTR_KEYS.NODE_ID}
                     for edge_data in neighbors_data
                 ]
 
             if len(neighbors_data) > 0:
                 df = pl.DataFrame(neighbors_data)
-                if feature_keys is None or DEFAULT_ATTR_KEYS.NODE_ID in feature_keys:
+                if attribute_keys is None or DEFAULT_ATTR_KEYS.NODE_ID in attribute_keys:
                     df = df.with_columns(
                         pl.Series(DEFAULT_ATTR_KEYS.NODE_ID, np.asarray(neighbors_indices, dtype=int)),
                     )
@@ -157,7 +157,7 @@ class RustWorkXGraph(BaseGraph):
     def sucessors(
         self,
         node_ids: list[int] | int,
-        feature_keys: Sequence[str] | str | None = None,
+        attribute_keys: Sequence[str] | str | None = None,
     ) -> dict[int, pl.DataFrame] | pl.DataFrame:
         """
         Get the sucessors of a list of nodes.
@@ -166,9 +166,9 @@ class RustWorkXGraph(BaseGraph):
         ----------
         node_ids : list[int] | int
             The IDs of the nodes to get the sucessors for.
-        feature_keys : Sequence[str] | str | None
-            The feature keys to get.
-            If None, all features are used.
+        attribute_keys : Sequence[str] | str | None
+            The attribute keys to get.
+            If None, all attributesare used.
 
         Returns
         -------
@@ -178,13 +178,13 @@ class RustWorkXGraph(BaseGraph):
         return self._get_neighbors(
             rx.PyDiGraph.successor_indices,
             node_ids,
-            feature_keys,
+            attribute_keys,
         )
 
     def predecessors(
         self,
         node_ids: list[int] | int,
-        feature_keys: Sequence[str] | str | None = None,
+        attribute_keys: Sequence[str] | str | None = None,
     ) -> dict[int, pl.DataFrame] | pl.DataFrame:
         """
         Get the predecessors of a list of nodes.
@@ -193,9 +193,9 @@ class RustWorkXGraph(BaseGraph):
         ----------
         node_ids : list[int] | int
             The IDs of the nodes to get the predecessors for.
-        feature_keys : Sequence[str] | str | None
-            The feature keys to get.
-            If None, all features are used.
+        attribute_keys : Sequence[str] | str | None
+            The attribute keys to get.
+            If None, all attributesare used.
 
         Returns
         -------
@@ -205,7 +205,7 @@ class RustWorkXGraph(BaseGraph):
         return self._get_neighbors(
             rx.PyDiGraph.predecessor_indices,
             node_ids,
-            feature_keys,
+            attribute_keys,
         )
 
     def filter_nodes_by_attribute(
@@ -266,8 +266,8 @@ class RustWorkXGraph(BaseGraph):
         node_ids: Sequence[int] | None = None,
         node_attr_filter: dict[str, Any] | None = None,
         edge_attr_filter: dict[str, Any] | None = None,
-        node_feature_keys: Sequence[str] | str | None = None,
-        edge_feature_keys: Sequence[str] | str | None = None,
+        node_attribute_keys: Sequence[str] | str | None = None,
+        edge_attribute_keys: Sequence[str] | str | None = None,
     ) -> "GraphView":
         """
         Create a subgraph from the graph from the given node IDs
@@ -283,10 +283,10 @@ class RustWorkXGraph(BaseGraph):
             The attributes to filter the nodes by.
         edge_attr_filter : dict[str, Any] | None
             The attributes to filter the edges by.
-        node_feature_keys : Sequence[str] | str | None
-            The feature keys to include in the subgraph.
-        edge_feature_keys : Sequence[str] | str | None
-            The feature keys to include in the subgraph.
+        node_attribute_keys : Sequence[str] | str | None
+            The attribute keys to include in the subgraph.
+        edge_attribute_keys : Sequence[str] | str | None
+            The attribute keys to include in the subgraph.
 
         Returns
         -------
@@ -298,7 +298,7 @@ class RustWorkXGraph(BaseGraph):
         self._validate_subgraph_args(node_ids, node_attr_filter, edge_attr_filter)
 
         if edge_attr_filter is not None:
-            edges_df = self.edge_features(feature_keys=edge_attr_filter.keys())
+            edges_df = self.edge_attrs(attribute_keys=edge_attr_filter.keys())
             mask = pl.reduce(lambda x, y: x & y, [edges_df[key] == value for key, value in edge_attr_filter.items()])
             node_ids = np.unique(
                 edges_df.filter(mask)
@@ -336,155 +336,155 @@ class RustWorkXGraph(BaseGraph):
         return list(self._time_to_nodes.keys())
 
     @property
-    def node_features_keys(self) -> list[str]:
+    def node_attrs_keys(self) -> list[str]:
         """
-        Get the keys of the features of the nodes.
+        Get the keys of the attributesof the nodes.
         """
-        return self._node_features_keys
+        return self._node_attrs_keys
 
     @property
-    def edge_features_keys(self) -> list[str]:
+    def edge_attrs_keys(self) -> list[str]:
         """
-        Get the keys of the features of the edges.
+        Get the keys of the attributesof the edges.
         """
-        return self._edge_features_keys
+        return self._edge_attrs_keys
 
-    def add_node_feature_key(self, key: str, default_value: Any) -> None:
+    def add_node_attribute_key(self, key: str, default_value: Any) -> None:
         """
-        Add a new feature key to the graph.
-        All existing nodes will have the default value for the new feature key.
+        Add a new attribute key to the graph.
+        All existing nodes will have the default value for the new attribute key.
 
         Parameters
         ----------
         key : str
-            The key of the new feature.
+            The key of the new attribute.
         default_value : Any
-            The default value for existing nodes for the new feature key.
+            The default value for existing nodes for the new attribute key.
         """
-        if key in self.node_features_keys:
-            raise ValueError(f"Feature key {key} already exists")
+        if key in self.node_attrs_keys:
+            raise ValueError(f"Attribute key {key} already exists")
 
-        self._node_features_keys.append(key)
+        self._node_attrs_keys.append(key)
         rx_graph = self.rx_graph
         for node_id in rx_graph.node_indices():
             rx_graph[node_id][key] = default_value
 
-    def add_edge_feature_key(self, key: str, default_value: Any) -> None:
+    def add_edge_attribute_key(self, key: str, default_value: Any) -> None:
         """
-        Add a new feature key to the graph.
-        All existing edges will have the default value for the new feature key.
+        Add a new attribute key to the graph.
+        All existing edges will have the default value for the new attribute key.
 
         Parameters
         ----------
         key : str
-            The key of the new feature.
+            The key of the new attribute.
         default_value : Any
-            The default value for existing edges for the new feature key.
+            The default value for existing edges for the new attribute key.
         """
-        if key in self.edge_features_keys:
-            raise ValueError(f"Feature key {key} already exists")
+        if key in self.edge_attrs_keys:
+            raise ValueError(f"Attribute key {key} already exists")
 
-        self._edge_features_keys.append(key)
+        self._edge_attrs_keys.append(key)
         for _, _, edge_attr in self.rx_graph.weighted_edge_list():
             edge_attr[key] = default_value
 
-    def node_features(
+    def node_attrs(
         self,
         *,
         node_ids: Sequence[int] | None = None,
-        feature_keys: Sequence[str] | str | None = None,
+        attribute_keys: Sequence[str] | str | None = None,
         unpack: bool = False,
     ) -> pl.DataFrame:
         """
-        Get the features of the nodes as a polars DataFrame.
+        Get the attributesof the nodes as a polars DataFrame.
 
         Parameters
         ----------
         node_ids : list[int] | None
-            The IDs of the nodes to get the features for.
+            The IDs of the nodes to get the attributesfor.
             If None, all nodes are used.
-        feature_keys : Sequence[str] | None
-            The feature keys to get.
-            If None, all the features of the first node are used.
+        attribute_keys : Sequence[str] | None
+            The attribute keys to get.
+            If None, all the attributesof the first node are used.
         unpack : bool
-            Whether to unpack array features into multiple scalar features.
+            Whether to unpack array attributesinto multiple scalar attributes.
 
         Returns
         -------
         pl.DataFrame
-            A polars DataFrame with the features of the nodes.
+            A polars DataFrame with the attributesof the nodes.
         """
         rx_graph = self.rx_graph
         # If no node_ids provided, use all nodes
         if node_ids is None:
             node_ids = list(rx_graph.node_indices())
 
-        if feature_keys is None:
-            feature_keys = [DEFAULT_ATTR_KEYS.NODE_ID, *self.node_features_keys]
+        if attribute_keys is None:
+            attribute_keys = [DEFAULT_ATTR_KEYS.NODE_ID, *self.node_attrs_keys]
 
-        if isinstance(feature_keys, str):
-            feature_keys = [feature_keys]
+        if isinstance(attribute_keys, str):
+            attribute_keys = [attribute_keys]
 
         if len(node_ids) == 0:
-            return pl.DataFrame({key: [] for key in feature_keys})
+            return pl.DataFrame({key: [] for key in attribute_keys})
 
         # making them unique
-        feature_keys = list(set(feature_keys))
+        attribute_keys = list(set(attribute_keys))
 
         # Create columns directly instead of building intermediate dictionaries
-        columns = {key: [] for key in feature_keys}
+        columns = {key: [] for key in attribute_keys}
 
-        if DEFAULT_ATTR_KEYS.NODE_ID in feature_keys:
+        if DEFAULT_ATTR_KEYS.NODE_ID in attribute_keys:
             columns[DEFAULT_ATTR_KEYS.NODE_ID] = np.asarray(node_ids, dtype=int)
-            feature_keys.remove(DEFAULT_ATTR_KEYS.NODE_ID)
+            attribute_keys.remove(DEFAULT_ATTR_KEYS.NODE_ID)
 
         # Build columns in a vectorized way
         for node_id in node_ids:
             node_data = rx_graph[node_id]
-            for key in feature_keys:
+            for key in attribute_keys:
                 columns[key].append(node_data[key])
 
-        for key in feature_keys:
+        for key in attribute_keys:
             columns[key] = np.asarray(columns[key])
 
         # Create DataFrame and set node_id as index in one shot
         df = pl.DataFrame(columns)
 
         if unpack:
-            df = unpack_array_features(df)
+            df = unpack_array_attrs(df)
 
         return df
 
-    def edge_features(
+    def edge_attrs(
         self,
         *,
         node_ids: list[int] | None = None,
-        feature_keys: Sequence[str] | str | None = None,
+        attribute_keys: Sequence[str] | str | None = None,
         include_targets: bool = False,
         unpack: bool = False,
     ) -> pl.DataFrame:
         """
-        Get the features of the edges as a polars DataFrame.
+        Get the attributesof the edges as a polars DataFrame.
 
         Parameters
         ----------
         node_ids : list[int] | None
-            The IDs of the subgraph to get the edge features for.
+            The IDs of the subgraph to get the edge attributesfor.
             If None, all edges of the graph are used.
-        feature_keys : Sequence[str] | str | None
-            The feature keys to get.
-            If None, all features are used.
+        attribute_keys : Sequence[str] | str | None
+            The attribute keys to get.
+            If None, all attributesare used.
         include_targets : bool
             Whether to include edges out-going from the given node_ids even
             if the target node is not in the given node_ids.
         unpack : bool
-            Whether to unpack array features into multiple scalar features.
+            Whether to unpack array attributesinto multiple scalar attributes.
         """
-        if feature_keys is None:
-            feature_keys = self.edge_features_keys
+        if attribute_keys is None:
+            attribute_keys = self.edge_attrs_keys
 
-        feature_keys = [DEFAULT_ATTR_KEYS.EDGE_ID, *feature_keys]
-        feature_keys = list(set(feature_keys))
+        attribute_keys = [DEFAULT_ATTR_KEYS.EDGE_ID, *attribute_keys]
+        attribute_keys = list(set(attribute_keys))
 
         if node_ids is None:
             rx_graph = self.rx_graph
@@ -505,7 +505,7 @@ class RustWorkXGraph(BaseGraph):
                 {
                     key: []
                     for key in [
-                        *feature_keys,
+                        *attribute_keys,
                         DEFAULT_ATTR_KEYS.EDGE_SOURCE,
                         DEFAULT_ATTR_KEYS.EDGE_TARGET,
                     ]
@@ -518,10 +518,10 @@ class RustWorkXGraph(BaseGraph):
             source = [node_map[s] for s in source]
             target = [node_map[t] for t in target]
 
-        columns = {key: [] for key in feature_keys}
+        columns = {key: [] for key in attribute_keys}
 
         for row in data:
-            for key in feature_keys:
+            for key in attribute_keys:
                 columns[key].append(row[key])
 
         columns[DEFAULT_ATTR_KEYS.EDGE_SOURCE] = source
@@ -531,7 +531,7 @@ class RustWorkXGraph(BaseGraph):
 
         df = pl.DataFrame(columns)
         if unpack:
-            df = unpack_array_features(df)
+            df = unpack_array_attrs(df)
         return df
 
     @property
@@ -548,14 +548,14 @@ class RustWorkXGraph(BaseGraph):
         """
         return self._graph.num_nodes()
 
-    def update_node_features(
+    def update_node_attrs(
         self,
         *,
         node_ids: Sequence[int],
         attributes: dict[str, Any],
     ) -> None:
         """
-        Update the features of the nodes.
+        Update the attributesof the nodes.
 
         Parameters
         ----------
@@ -565,8 +565,8 @@ class RustWorkXGraph(BaseGraph):
             The attributes to update.
         """
         for key, value in attributes.items():
-            if key not in self.node_features_keys:
-                raise ValueError(f"Node feature key '{key}' not found in graph. Expected '{self.node_features_keys}'")
+            if key not in self.node_attrs_keys:
+                raise ValueError(f"Node attribute key '{key}' not found in graph. Expected '{self.node_attrs_keys}'")
 
             if not np.isscalar(value) and len(attributes[key]) != len(node_ids):
                 raise ValueError(
@@ -580,14 +580,14 @@ class RustWorkXGraph(BaseGraph):
             for node_id, v in zip(node_ids, value, strict=False):
                 self._graph[node_id][key] = v
 
-    def update_edge_features(
+    def update_edge_attrs(
         self,
         *,
         edge_ids: ArrayLike,
         attributes: dict[str, Any],
     ) -> None:
         """
-        Update the features of the edges.
+        Update the attributesof the edges.
 
         Parameters
         ----------
@@ -598,8 +598,8 @@ class RustWorkXGraph(BaseGraph):
         """
         size = len(edge_ids)
         for key, value in attributes.items():
-            if key not in self.edge_features_keys:
-                raise ValueError(f"Edge feature key '{key}' not found in graph. Expected '{self.edge_features_keys}'")
+            if key not in self.edge_attrs_keys:
+                raise ValueError(f"Edge attribute key '{key}' not found in graph. Expected '{self.edge_attrs_keys}'")
 
             if np.isscalar(value):
                 attributes[key] = [value] * size
@@ -640,10 +640,10 @@ class RustWorkXGraph(BaseGraph):
                 "Often used from `graph.filter_nodes_by_attribute({'solution': True})`"
             ) from e
 
-        if output_key not in self.node_features_keys:
-            self.add_node_feature_key(output_key, -1)
+        if output_key not in self.node_attrs_keys:
+            self.add_node_attribute_key(output_key, -1)
 
-        self.update_node_features(
+        self.update_node_attrs(
             node_ids=node_ids,
             attributes={output_key: track_ids},
         )

@@ -29,9 +29,9 @@ class RegionPropsNodes(BaseNodesOperator):
         self._extra_properties = extra_properties or []
         self._spacing = spacing
 
-    def features_keys(self) -> list[str]:
+    def attrs_keys(self) -> list[str]:
         """
-        Get the keys of the features of the nodes.
+        Get the keys of the attributesof the nodes.
         """
         return [prop.__name__ if callable(prop) else prop for prop in self._extra_properties]
 
@@ -113,13 +113,13 @@ class RegionPropsNodes(BaseNodesOperator):
         else:
             raise ValueError(f"`labels` must be 2D or 3D, got {labels.ndim} dimensions.")
 
-        if DEFAULT_ATTR_KEYS.MASK not in graph.node_features_keys:
-            graph.add_node_feature_key(DEFAULT_ATTR_KEYS.MASK, None)
+        if DEFAULT_ATTR_KEYS.MASK not in graph.node_attrs_keys:
+            graph.add_node_attribute_key(DEFAULT_ATTR_KEYS.MASK, None)
 
-        # initialize the feature keys
+        # initialize the attribute keys
         for attr_key in axis_names + [p.__name__ if callable(p) else p for p in self._extra_properties]:
-            if attr_key not in graph.node_features_keys:
-                graph.add_node_feature_key(attr_key, -1.0)
+            if attr_key not in graph.node_attrs_keys:
+                graph.add_node_attribute_key(attr_key, -1.0)
 
         labels = np.asarray(labels)
 

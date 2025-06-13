@@ -11,7 +11,7 @@ def test_iou_edges_init_default() -> None:
     operator = IoUEdgeWeights(output_key="iou_score")
 
     assert operator.output_key == "iou_score"
-    assert operator.feature_keys == DEFAULT_ATTR_KEYS.MASK
+    assert operator.attr_keys == DEFAULT_ATTR_KEYS.MASK
     assert operator.show_progress is True
     assert operator.func == Mask.iou
 
@@ -21,7 +21,7 @@ def test_iou_edges_init_custom() -> None:
     operator = IoUEdgeWeights(output_key="custom_iou", mask_key="custom_mask", show_progress=False)
 
     assert operator.output_key == "custom_iou"
-    assert operator.feature_keys == "custom_mask"
+    assert operator.attr_keys == "custom_mask"
     assert operator.show_progress is False
     assert operator.func == Mask.iou
 
@@ -30,9 +30,9 @@ def test_iou_edges_add_weights() -> None:
     """Test adding IoU weights to edges."""
     graph = RustWorkXGraph()
 
-    # Register feature keys
-    graph.add_node_feature_key(DEFAULT_ATTR_KEYS.MASK, None)
-    graph.add_edge_feature_key(DEFAULT_ATTR_KEYS.EDGE_WEIGHT, 0.0)
+    # Register attribute keys
+    graph.add_node_attribute_key(DEFAULT_ATTR_KEYS.MASK, None)
+    graph.add_edge_attribute_key(DEFAULT_ATTR_KEYS.EDGE_WEIGHT, 0.0)
 
     # Create test masks
     mask1_data = np.array([[True, True], [True, False]], dtype=bool)
@@ -53,7 +53,7 @@ def test_iou_edges_add_weights() -> None:
     operator.add_weights(graph)
 
     # Check that IoU weights were added
-    edges_df = graph.edge_features()
+    edges_df = graph.edge_attrs()
     assert "iou_score" in edges_df.columns
 
     # checking default returned columns
@@ -72,9 +72,9 @@ def test_iou_edges_no_overlap() -> None:
     """Test IoU calculation with non-overlapping masks."""
     graph = RustWorkXGraph()
 
-    # Register feature keys
-    graph.add_node_feature_key(DEFAULT_ATTR_KEYS.MASK, None)
-    graph.add_edge_feature_key(DEFAULT_ATTR_KEYS.EDGE_WEIGHT, 0.0)
+    # Register attribute keys
+    graph.add_node_attribute_key(DEFAULT_ATTR_KEYS.MASK, None)
+    graph.add_edge_attribute_key(DEFAULT_ATTR_KEYS.EDGE_WEIGHT, 0.0)
 
     # Create non-overlapping masks
     mask1_data = np.array([[True, True], [False, False]], dtype=bool)
@@ -95,7 +95,7 @@ def test_iou_edges_no_overlap() -> None:
     operator.add_weights(graph)
 
     # Check that IoU is 0 for non-overlapping masks
-    edges_df = graph.edge_features()
+    edges_df = graph.edge_attrs()
 
     # checking default returned columns
     assert DEFAULT_ATTR_KEYS.EDGE_SOURCE in edges_df.columns
@@ -111,9 +111,9 @@ def test_iou_edges_perfect_overlap() -> None:
     """Test IoU calculation with perfectly overlapping masks."""
     graph = RustWorkXGraph()
 
-    # Register feature keys
-    graph.add_node_feature_key(DEFAULT_ATTR_KEYS.MASK, None)
-    graph.add_edge_feature_key(DEFAULT_ATTR_KEYS.EDGE_WEIGHT, 0.0)
+    # Register attribute keys
+    graph.add_node_attribute_key(DEFAULT_ATTR_KEYS.MASK, None)
+    graph.add_edge_attribute_key(DEFAULT_ATTR_KEYS.EDGE_WEIGHT, 0.0)
 
     # Create identical masks
     mask_data = np.array([[True, True], [True, False]], dtype=bool)
@@ -131,7 +131,7 @@ def test_iou_edges_perfect_overlap() -> None:
     operator = IoUEdgeWeights(output_key="iou_score", show_progress=False)
     operator.add_weights(graph)
 
-    edges_df = graph.edge_features()
+    edges_df = graph.edge_attrs()
 
     # checking default returned columns
     assert DEFAULT_ATTR_KEYS.EDGE_SOURCE in edges_df.columns
@@ -147,9 +147,9 @@ def test_iou_edges_custom_mask_key() -> None:
     """Test IoU edges operator with custom mask key."""
     graph = RustWorkXGraph()
 
-    # Register feature keys
-    graph.add_node_feature_key("custom_mask", None)
-    graph.add_edge_feature_key(DEFAULT_ATTR_KEYS.EDGE_WEIGHT, 0.0)
+    # Register attribute keys
+    graph.add_node_attribute_key("custom_mask", None)
+    graph.add_edge_attribute_key(DEFAULT_ATTR_KEYS.EDGE_WEIGHT, 0.0)
 
     # Create test masks
     mask1_data = np.array([[True, True], [True, True]], dtype=bool)
@@ -170,7 +170,7 @@ def test_iou_edges_custom_mask_key() -> None:
     operator.add_weights(graph)
 
     # Check that IoU weights were calculated
-    edges_df = graph.edge_features()
+    edges_df = graph.edge_attrs()
     assert "iou_score" in edges_df.columns
 
     # checking default returned columns

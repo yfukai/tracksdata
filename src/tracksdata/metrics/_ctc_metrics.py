@@ -58,7 +58,7 @@ def _matching_data(
         ("ref", reference_graph, reference_graph_key),
         ("comp", input_graph, input_graph_key),
     ]:
-        nodes_df = graph.node_features(feature_keys=[DEFAULT_ATTR_KEYS.T, track_id_key, DEFAULT_ATTR_KEYS.MASK])
+        nodes_df = graph.node_attrs(attribute_keys=[DEFAULT_ATTR_KEYS.T, track_id_key, DEFAULT_ATTR_KEYS.MASK])
         labels = {}
 
         for (t,), group in nodes_df.group_by(DEFAULT_ATTR_KEYS.T):
@@ -225,10 +225,10 @@ def evaluate_ctc_metrics(
             "`py-ctcmetrics` is required to evaluate CTC metrics.\nPlease install it with `pip install py-ctcmetrics`."
         ) from e
 
-    if input_track_id_key not in input_graph.node_features_keys:
+    if input_track_id_key not in input_graph.node_attrs_keys:
         input_graph.assign_track_ids(input_track_id_key)
 
-    if reference_track_id_key not in reference_graph.node_features_keys:
+    if reference_track_id_key not in reference_graph.node_attrs_keys:
         reference_graph.assign_track_ids(reference_track_id_key)
 
     input_tracks, reference_tracks, matching_data = compute_ctc_metrics_data(
