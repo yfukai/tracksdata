@@ -437,7 +437,7 @@ def test_from_ctc(
     else:
         kwargs = {}
 
-    graph = graph_backend.__class__.from_ctc(ctc_data_dir, **kwargs)
+    graph = graph_backend.__class__.from_ctc(ctc_data_dir / "02_GT/TRA", **kwargs)
 
     assert graph.num_nodes > 0
     assert graph.num_edges > 0

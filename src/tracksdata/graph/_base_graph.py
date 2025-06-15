@@ -483,9 +483,9 @@ class BaseGraph(abc.ABC):
     def match(
         self,
         other: "BaseGraph",
-        matched_node_id_key: str,
-        match_score_key: str,
-        matched_edge_mask_key: str,
+        matched_node_id_key: str = DEFAULT_ATTR_KEYS.MATCHED_NODE_ID,
+        match_score_key: str = DEFAULT_ATTR_KEYS.MATCH_SCORE,
+        matched_edge_mask_key: str = DEFAULT_ATTR_KEYS.MATCHED_EDGE_MASK,
     ) -> None:
         """
         Match the nodes of the graph to the nodes of another graph.
