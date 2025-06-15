@@ -6,7 +6,6 @@ import numpy as np
 import polars as pl
 import rustworkx as rx
 import sqlalchemy as sa
-from numpy.typing import ArrayLike
 from sqlalchemy.orm import DeclarativeBase, Session, load_only
 from sqlalchemy.sql.type_api import TypeEngine
 
@@ -630,7 +629,7 @@ class SQLGraph(BaseGraph):
     def _update_table(
         self,
         table_class: type[DeclarativeBase],
-        ids: Sequence[int],
+        ids: Sequence[int] | None,
         id_key: str,
         attrs: dict[str, Any],
     ) -> None:
@@ -646,10 +645,16 @@ class SQLGraph(BaseGraph):
             LOG.info("update %s table with scalar values: %s", table_class.__table__, attrs)
 
             with Session(self._engine) as session:
-                session.query(table_class).filter(getattr(table_class, id_key).in_(ids)).update(attrs)
+                query = session.query(table_class)
+                if ids is not None:
+                    query = query.filter(getattr(table_class, id_key).in_(ids))
+                query.update(attrs)
                 session.commit()
 
             return
+
+        if ids is None:
+            raise ValueError("`ids` must be provided to update with variable values.")
 
         # Prepare values for bulk update
         update_data = []
@@ -686,8 +691,8 @@ class SQLGraph(BaseGraph):
     def update_node_attrs(
         self,
         *,
-        node_ids: Sequence[int],
         attrs: dict[str, Any],
+        node_ids: Sequence[int] | None = None,
     ) -> None:
         if "t" in attrs:
             raise ValueError("Node attribute 't' cannot be updated.")
@@ -697,8 +702,8 @@ class SQLGraph(BaseGraph):
     def update_edge_attrs(
         self,
         *,
-        edge_ids: ArrayLike,
         attrs: dict[str, Any],
+        edge_ids: Sequence[int] | None = None,
     ) -> None:
         self._update_table(self.Edge, edge_ids, DEFAULT_ATTR_KEYS.EDGE_ID, attrs)
 
