@@ -26,6 +26,12 @@ class DefaultAttrKeys:
         Default key for edge source node identifier ("source_id").
     EDGE_TARGET : str
         Default key for edge target node identifier ("target_id").
+    MATCHED_NODE_ID : str
+        Default key to identify respective node in another graph used for matching.
+    MATCH_SCORE : str
+        Default key between a node and its respective node in another graph used for matching.
+    MATCHED_EDGE_MASK : str
+        Default key for boolean mask indicating if edge exists in the matching graph.
 
     Examples
     --------
