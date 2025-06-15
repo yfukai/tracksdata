@@ -29,8 +29,8 @@ class DistanceEdges(BaseEdgesOperator):
         closest nodes at time t-1.
     output_key : str, default DEFAULT_ATTR_KEYS.EDGE_WEIGHT
         The attribute key to store the distance values in the edges.
-    feature_keys : Sequence[str] | None, optional
-        The node feature keys to use for distance calculation. If None,
+    attr_keys : Sequence[str] | None, optional
+        The node attribute keys to use for distance calculation. If None,
         defaults to ["z", "y", "x"] if "z" exists, otherwise ["y", "x"].
     show_progress : bool, default True
         Whether to display progress information during edge addition.
@@ -57,7 +57,7 @@ class DistanceEdges(BaseEdgesOperator):
     Create a distance-based edge operator:
 
     >>> from tracksdata.edges import DistanceEdges
-    >>> edge_op = DistanceEdges(distance_threshold=50.0, n_neighbors=3, feature_keys=["x", "y"])
+    >>> edge_op = DistanceEdges(distance_threshold=50.0, n_neighbors=3, attr_keys=["x", "y"])
 
     Add edges to a graph:
 

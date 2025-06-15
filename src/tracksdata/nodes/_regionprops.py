@@ -128,7 +128,7 @@ class RegionPropsNodes(BaseNodesOperator):
         Extracts region properties from labeled images and creates corresponding
         nodes in the graph. Can handle both single time point and time series data.
         When t is None, the first axis of labels represents time and processes each
-        time point sequentially. Automatically initializes required feature keys
+        time point sequentially. Automatically initializes required attribute keys
         in the graph schema before adding nodes.
 
         Parameters
@@ -208,7 +208,7 @@ class RegionPropsNodes(BaseNodesOperator):
 
         Processes a single time point, computing region properties for each labeled
         region and creating corresponding graph nodes. Determines spatial dimensions
-        from label shape, ensures required feature keys exist, computes region
+        from label shape, ensures required attribute keys exist, computes region
         properties, extracts coordinates and extra properties, creates mask objects,
         and bulk adds all nodes. Region property caches are cleared for memory efficiency.
 

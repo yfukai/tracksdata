@@ -273,7 +273,7 @@ class SQLGraph(BaseGraph):
         ----------
         nodes : list[dict[str, Any]]
             List of node attribute dictionaries. Each dictionary must contain
-            a "t" key and any additional feature keys.
+            a "t" key and any additional attribute keys.
 
         Examples
         --------
