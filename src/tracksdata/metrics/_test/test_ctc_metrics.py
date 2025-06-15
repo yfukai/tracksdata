@@ -4,11 +4,14 @@ from pathlib import Path
 import numpy as np
 import pytest
 from ctc_metrics.scripts.evaluate import evaluate_sequence, load_data
+from tifffile import imread
 
 from tracksdata.constants import DEFAULT_ATTR_KEYS
+from tracksdata.edges import DistanceEdges
 from tracksdata.graph import RustWorkXGraph
 from tracksdata.metrics import evaluate_ctc_metrics
 from tracksdata.metrics._ctc_metrics import compute_ctc_metrics_data
+from tracksdata.nodes import RegionPropsNodes
 
 
 def test_replicating_ctc_metrics_test(pytestconfig: pytest.Config) -> None:
@@ -45,6 +48,8 @@ def test_replicating_ctc_metrics_test(pytestconfig: pytest.Config) -> None:
 
 def test_ctc_metrics(ctc_data_dir: Path) -> None:
     # hack required to load two ground-truths with ctc_metrics
+    ctc_data_dir = ctc_data_dir / "02_GT/TRA"
+
     shutil.copy(ctc_data_dir / "man_track.txt", ctc_data_dir / "res_track.txt")
 
     # loading reference intermediate data
@@ -97,3 +102,24 @@ def test_ctc_metrics(ctc_data_dir: Path) -> None:
             # and the OP_ rely on "SEG" results
             continue
         assert metrics[key] == value, f"{key=} {metrics[key]=} {value=}"
+
+
+def test_graph_match(ctc_data_dir: Path) -> None:
+    # testing _matching_data with optimal_matching=True
+    input_dir = ctc_data_dir / "01_ERR_SEG"
+    input_graph = RustWorkXGraph()
+    ref_graph = RustWorkXGraph.from_ctc(ctc_data_dir / "01_GT/TRA")
+
+    labels = np.stack([imread(p) for p in sorted(input_dir.glob("*.tif"))])
+
+    region_props_nodes = RegionPropsNodes()
+    region_props_nodes.add_nodes(input_graph, labels=labels)
+
+    distance_edges = DistanceEdges(distance_threshold=10, n_neighbors=2)
+    distance_edges.add_edges(input_graph)
+
+    input_graph.match(ref_graph)
+    input_df = input_graph.node_attrs(attr_keys=[DEFAULT_ATTR_KEYS.MATCHED_NODE_ID])
+
+    # this is required because we know ere are using ground-truths
+    assert (input_df[DEFAULT_ATTR_KEYS.MATCHED_NODE_ID] >= 0).all()
