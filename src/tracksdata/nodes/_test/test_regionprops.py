@@ -29,22 +29,22 @@ def test_regionprops_init_custom() -> None:
     assert operator.show_progress is False
 
 
-def test_regionprops_features_keys() -> None:
-    """Test features_keys method."""
+def test_regionprops_attrs_keys() -> None:
+    """Test attrs_keys method."""
     # Test with string properties
     operator = RegionPropsNodes(extra_properties=["area", "perimeter"])
-    assert operator.features_keys() == ["area", "perimeter"]
+    assert operator.attrs_keys() == ["area", "perimeter"]
 
     # Test with callable properties
     def custom_prop(region: RegionProperties) -> float:
         return region.area * 2
 
     operator = RegionPropsNodes(extra_properties=[custom_prop, "area"])
-    assert operator.features_keys() == ["custom_prop", "area"]
+    assert operator.attrs_keys() == ["custom_prop", "area"]
 
     # Test with empty properties
     operator = RegionPropsNodes()
-    assert operator.features_keys() == []
+    assert operator.attrs_keys() == []
 
 
 def test_regionprops_add_nodes_2d() -> None:
@@ -61,8 +61,8 @@ def test_regionprops_add_nodes_2d() -> None:
     # Check that nodes were added
     assert graph.num_nodes == 2  # Two regions (labels 1 and 2)
 
-    # Check node features
-    nodes_df = graph.node_features()
+    # Check node attributes
+    nodes_df = graph.node_attrs()
     assert len(nodes_df) == 2
     assert DEFAULT_ATTR_KEYS.T in nodes_df.columns
     assert "y" in nodes_df.columns
@@ -94,8 +94,8 @@ def test_regionprops_add_nodes_3d() -> None:
     # Check that nodes were added
     assert graph.num_nodes == 2  # Two regions
 
-    # Check node features
-    nodes_df = graph.node_features()
+    # Check node attributes
+    nodes_df = graph.node_attrs()
     assert len(nodes_df) == 2
     assert DEFAULT_ATTR_KEYS.T in nodes_df.columns
     assert "z" in nodes_df.columns
@@ -122,8 +122,8 @@ def test_regionprops_add_nodes_with_intensity() -> None:
 
     operator.add_nodes(graph, labels=labels, intensity_image=intensity)
 
-    # Check that nodes were added with intensity features
-    nodes_df = graph.node_features()
+    # Check that nodes were added with intensity attributes
+    nodes_df = graph.node_attrs()
     assert "mean_intensity" in nodes_df.columns
 
     # Check that mean intensities are calculated
@@ -148,7 +148,7 @@ def test_regionprops_add_nodes_timelapse() -> None:
     operator.add_nodes(graph, labels=labels)
 
     # Check that nodes were added for both time points
-    nodes_df = graph.node_features()
+    nodes_df = graph.node_attrs()
     time_points = sorted(nodes_df[DEFAULT_ATTR_KEYS.T].unique())
     assert time_points == [0, 1]
 
@@ -171,8 +171,8 @@ def test_regionprops_add_nodes_timelapse_with_intensity() -> None:
 
     operator.add_nodes(graph, labels=labels, intensity_image=intensity)
 
-    # Check that nodes were added with intensity features
-    nodes_df = graph.node_features()
+    # Check that nodes were added with intensity attributes
+    nodes_df = graph.node_attrs()
     assert "mean_intensity" in nodes_df.columns
 
     # Check mean intensities for each time point
@@ -197,7 +197,7 @@ def test_regionprops_custom_properties() -> None:
     operator.add_nodes(graph, labels=labels, t=0)
 
     # Check that custom property was calculated
-    nodes_df = graph.node_features()
+    nodes_df = graph.node_attrs()
     assert "double_area" in nodes_df.columns
     assert "area" in nodes_df.columns
 
@@ -232,7 +232,7 @@ def test_regionprops_mask_creation() -> None:
     operator.add_nodes(graph, labels=labels, t=0)
 
     # Check that masks were created
-    nodes_df = graph.node_features()
+    nodes_df = graph.node_attrs()
     masks = nodes_df[DEFAULT_ATTR_KEYS.MASK]
 
     # All masks should be Mask objects
@@ -254,7 +254,7 @@ def test_regionprops_spacing() -> None:
     operator.add_nodes(graph, labels=labels, t=0)
 
     # Check that nodes were added (spacing affects internal calculations)
-    nodes_df = graph.node_features()
+    nodes_df = graph.node_attrs()
     assert len(nodes_df) == 1
     assert "area" in nodes_df.columns
     assert DEFAULT_ATTR_KEYS.MASK in nodes_df.columns

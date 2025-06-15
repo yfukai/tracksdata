@@ -13,15 +13,15 @@ class GraphArrayView(BaseReadOnlyArray):
         self,
         graph: BaseGraph,
         shape: tuple[int, ...],
-        feature_key: str,
+        attr_key: str,
         offset: int | np.ndarray = 0,
     ):
-        if feature_key not in graph.node_features_keys:
-            raise ValueError(f"Feature key '{feature_key}' not found in graph. Expected '{graph.node_features_keys}'")
+        if attr_key not in graph.node_attr_keys:
+            raise ValueError(f"Attribute key '{attr_key}' not found in graph. Expected '{graph.node_attr_keys}'")
 
         self.graph = graph
         self._shape = shape
-        self._feature_key = feature_key
+        self._attr_key = attr_key
         self._offset = offset
         self._dtype = np.int32
 
@@ -41,18 +41,18 @@ class GraphArrayView(BaseReadOnlyArray):
             index = index[0]
 
         if isinstance(index, int):
-            node_ids = self.graph.filter_nodes_by_attribute({DEFAULT_ATTR_KEYS.T: index})
+            node_ids = self.graph.filter_nodes_by_attrs({DEFAULT_ATTR_KEYS.T: index})
 
             if len(node_ids) == 0:
                 return np.zeros(self.shape[1:], dtype=self.dtype)
 
-            # TODO: this should be a single `subgraph(t=index).node_features(...)` call
-            df = self.graph.node_features(
+            # TODO: this should be a single `subgraph(t=index).node_attrs(...)` call
+            df = self.graph.node_attrs(
                 node_ids=node_ids,
-                feature_keys=[self._feature_key, DEFAULT_ATTR_KEYS.MASK],
+                attr_keys=[self._attr_key, DEFAULT_ATTR_KEYS.MASK],
             )
 
-            dtype = polars_dtype_to_numpy_dtype(df[self._feature_key].dtype)
+            dtype = polars_dtype_to_numpy_dtype(df[self._attr_key].dtype)
 
             # napari support for bool is limited
             if np.issubdtype(dtype, bool):
@@ -63,7 +63,7 @@ class GraphArrayView(BaseReadOnlyArray):
             # TODO: reuse buffer
             buffer = np.zeros(self.shape[1:], dtype=self.dtype)
 
-            for mask, value in zip(df[DEFAULT_ATTR_KEYS.MASK], df[self._feature_key], strict=False):
+            for mask, value in zip(df[DEFAULT_ATTR_KEYS.MASK], df[self._attr_key], strict=False):
                 mask: Mask
                 mask.paint_buffer(buffer, value, offset=self._offset)
 

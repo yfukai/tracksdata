@@ -58,7 +58,7 @@ def _matching_data(
         ("ref", reference_graph, reference_graph_key),
         ("comp", input_graph, input_graph_key),
     ]:
-        nodes_df = graph.node_features(feature_keys=[DEFAULT_ATTR_KEYS.T, track_id_key, DEFAULT_ATTR_KEYS.MASK])
+        nodes_df = graph.node_attrs(attr_keys=[DEFAULT_ATTR_KEYS.T, track_id_key, DEFAULT_ATTR_KEYS.MASK])
         labels = {}
 
         for (t,), group in nodes_df.group_by(DEFAULT_ATTR_KEYS.T):
@@ -110,16 +110,15 @@ def _matching_data(
 
         if optimal_matching and len(_rows) > 0:
             LOG.info("Solving optimal matching ...")
-            _ious = np.asarray(_ious, dtype=np.float32)
-            _mapped_ref = np.asarray(_mapped_ref, dtype=int)
-            _mapped_comp = np.asarray(_mapped_comp, dtype=int)
 
             weights = sp.csr_array((_ious, (_rows, _cols)), dtype=np.float32)
             rows_id, cols_id = sp.csgraph.min_weight_full_bipartite_matching(weights, maximize=True)
 
-            _mapped_ref = _mapped_ref[rows_id].tolist()
-            _mapped_comp = _mapped_comp[cols_id].tolist()
+            # loading original group ids and filtering by the matches
+            _mapped_ref = ref_group[reference_graph_key][rows_id].to_list()
+            _mapped_comp = comp_group[input_graph_key][cols_id].to_list()
             _ious = weights[rows_id, cols_id].tolist()
+
             LOG.info("Done!")
 
         mapped_ref.append(_mapped_ref)
@@ -225,10 +224,10 @@ def evaluate_ctc_metrics(
             "`py-ctcmetrics` is required to evaluate CTC metrics.\nPlease install it with `pip install py-ctcmetrics`."
         ) from e
 
-    if input_track_id_key not in input_graph.node_features_keys:
+    if input_track_id_key not in input_graph.node_attr_keys:
         input_graph.assign_track_ids(input_track_id_key)
 
-    if reference_track_id_key not in reference_graph.node_features_keys:
+    if reference_track_id_key not in reference_graph.node_attr_keys:
         reference_graph.assign_track_ids(reference_track_id_key)
 
     input_tracks, reference_tracks, matching_data = compute_ctc_metrics_data(

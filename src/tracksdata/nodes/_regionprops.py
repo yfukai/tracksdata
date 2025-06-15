@@ -92,9 +92,9 @@ class RegionPropsNodes(BaseNodesOperator):
         self._extra_properties = extra_properties or []
         self._spacing = spacing
 
-    def features_keys(self) -> list[str]:
+    def attrs_keys(self) -> list[str]:
         """
-        Get the keys of the node features that will be extracted.
+        Get the keys of the node attributes that will be extracted.
 
         Returns only the keys for extra_properties. The centroid coordinates
         (x, y, z) and mask are always included but not listed here.
@@ -102,12 +102,12 @@ class RegionPropsNodes(BaseNodesOperator):
         Returns
         -------
         list[str]
-            List of feature key names that will be added to nodes.
+            List of attribute key names that will be added to nodes.
 
         Examples
         --------
         >>> node_op = RegionPropsNodes(extra_properties=["area", "perimeter"])
-        >>> keys = node_op.features_keys()
+        >>> keys = node_op.attrs_keys()
         >>> print(keys)
         ['area', 'perimeter']
         """
@@ -235,13 +235,13 @@ class RegionPropsNodes(BaseNodesOperator):
         else:
             raise ValueError(f"`labels` must be 2D or 3D, got {labels.ndim} dimensions.")
 
-        if DEFAULT_ATTR_KEYS.MASK not in graph.node_features_keys:
-            graph.add_node_feature_key(DEFAULT_ATTR_KEYS.MASK, None)
+        if DEFAULT_ATTR_KEYS.MASK not in graph.node_attr_keys:
+            graph.add_node_attr_key(DEFAULT_ATTR_KEYS.MASK, None)
 
-        # initialize the feature keys
+        # initialize the attribute keys
         for attr_key in axis_names + [p.__name__ if callable(p) else p for p in self._extra_properties]:
-            if attr_key not in graph.node_features_keys:
-                graph.add_node_feature_key(attr_key, -1.0)
+            if attr_key not in graph.node_attr_keys:
+                graph.add_node_attr_key(attr_key, -1.0)
 
         labels = np.asarray(labels)
 
@@ -252,18 +252,18 @@ class RegionPropsNodes(BaseNodesOperator):
             intensity_image=intensity_image,
             spacing=self._spacing,
         ):
-            attributes = dict(zip(axis_names, obj.centroid, strict=False))
+            attrs = dict(zip(axis_names, obj.centroid, strict=False))
 
             for prop in self._extra_properties:
                 if callable(prop):
-                    attributes[prop.__name__] = prop(obj)
+                    attrs[prop.__name__] = prop(obj)
                 else:
-                    attributes[prop] = getattr(obj, prop)
+                    attrs[prop] = getattr(obj, prop)
 
-            attributes[DEFAULT_ATTR_KEYS.MASK] = Mask(obj.image, obj.bbox)
-            attributes[DEFAULT_ATTR_KEYS.T] = t
+            attrs[DEFAULT_ATTR_KEYS.MASK] = Mask(obj.image, obj.bbox)
+            attrs[DEFAULT_ATTR_KEYS.T] = t
 
-            nodes_data.append(attributes)
+            nodes_data.append(attrs)
             obj._cache.clear()  # clearing to reduce memory footprint
 
         if len(nodes_data) > 0:

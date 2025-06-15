@@ -18,6 +18,7 @@ def graph_backend(request) -> BaseGraph:
         return graph_class(
             drivername="sqlite",
             database=":memory:",
+            engine_kwargs={"connect_args": {"check_same_thread": False}},
         )
     else:
         return graph_class()
@@ -35,12 +36,12 @@ def _download_to(url: str, output_path: Path) -> None:
 def ctc_data_dir(pytestconfig: pytest.Config) -> Path:
     """Fixture to download CTC data."""
 
-    temp_dir = Path(pytestconfig.cache._cachedir) / "donwloads"
+    temp_dir = Path(pytestconfig.cache._cachedir) / "downloads"
     temp_dir.mkdir(parents=True, exist_ok=True)
 
-    zip_dir = temp_dir / "Fluo-C2DL-Huh7.zip"
-    out_dir = temp_dir / "Fluo-C2DL-Huh7/02_GT/TRA"
-    url = "https://data.celltrackingchallenge.net/training-datasets/Fluo-C2DL-Huh7.zip"
+    zip_dir = temp_dir / "DIC-C2DH-HeLa.zip"
+    out_dir = temp_dir / "DIC-C2DH-HeLa"
+    url = "https://data.celltrackingchallenge.net/training-datasets/DIC-C2DH-HeLa.zip"
 
     if not zip_dir.exists():
         _download_to(url, zip_dir)

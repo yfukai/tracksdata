@@ -40,6 +40,7 @@ dependencies = [
   "imagecodecs",
   "typing-extensions",
   "ilpy >= 0.5.1",
+  "pyarrow",
 ]
 
 [project.optional-dependencies]

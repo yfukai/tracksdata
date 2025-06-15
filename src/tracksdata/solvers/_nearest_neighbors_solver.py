@@ -92,6 +92,10 @@ class NearestNeighborsSolver(BaseSolver):
         Key used to store solution results.
     edge_weight_expr : AttrExpr
         Expression used to compute edge weights.
+    output_key : str
+        The key to store the solution in the graph.
+    reset : bool
+        Whether to reset the solution values in the whole graph before solving.
 
     Examples
     --------
@@ -125,10 +129,12 @@ class NearestNeighborsSolver(BaseSolver):
         max_children: int = 2,
         edge_weight: str | ExprInput = DEFAULT_ATTR_KEYS.EDGE_WEIGHT,
         output_key: str = DEFAULT_ATTR_KEYS.SOLUTION,
+        reset: bool = True,
     ):
         self.max_children = max_children
         self.solution_key = output_key
         self.edge_weight_expr = AttrExpr(edge_weight)
+        self.reset = reset
 
     def solve(
         self,
@@ -155,10 +161,10 @@ class NearestNeighborsSolver(BaseSolver):
 
         Access solution edges:
 
-        >>> solution_edges = graph.edge_features().filter(pl.col("solution") == True)
+        >>> solution_edges = graph.edge_attrs().filter(pl.col("solution") == True)
         """
         # get edges and sort them by weight
-        edges_df = graph.edge_features(feature_keys=self.edge_weight_expr.column_names())
+        edges_df = graph.edge_attrs(attr_keys=self.edge_weight_expr.columns)
         weights = self.edge_weight_expr.evaluate(edges_df).to_numpy()
         sorted_indices = np.argsort(weights)
 
@@ -181,10 +187,14 @@ class NearestNeighborsSolver(BaseSolver):
 
         solution_edges_df = edges_df.filter(solution)
 
-        graph.add_edge_feature_key(self.solution_key, False)
-        graph.update_edge_features(
+        if self.solution_key not in graph.edge_attr_keys:
+            graph.add_edge_attr_key(self.solution_key, False)
+        elif self.reset:
+            graph.update_edge_attrs(attrs={self.solution_key: False})
+
+        graph.update_edge_attrs(
             edge_ids=solution_edges_df[DEFAULT_ATTR_KEYS.EDGE_ID].to_numpy(),
-            attributes={self.solution_key: True},
+            attrs={self.solution_key: True},
         )
 
         node_ids = np.unique(
@@ -196,8 +206,8 @@ class NearestNeighborsSolver(BaseSolver):
             )
         )
 
-        graph.add_node_feature_key(self.solution_key, False)
-        graph.update_node_features(
+        graph.add_node_attr_key(self.solution_key, False)
+        graph.update_node_attrs(
             node_ids=node_ids,
-            attributes={self.solution_key: True},
+            attrs={self.solution_key: True},
         )

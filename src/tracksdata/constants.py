@@ -47,5 +47,9 @@ class DefaultAttrKeys:
     EDGE_SOURCE = "source_id"
     EDGE_TARGET = "target_id"
 
+    MATCHED_NODE_ID = "match_node_id"
+    MATCH_SCORE = "match_score"
+    MATCHED_EDGE_MASK = "matched_edge_mask"
+
 
 DEFAULT_ATTR_KEYS = DefaultAttrKeys()
