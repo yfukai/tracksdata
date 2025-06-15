@@ -33,6 +33,7 @@ class ILPSolver(BaseSolver):
         division_weight: str | ExprInput = 0.0,
         output_key: str = DEFAULT_ATTR_KEYS.SOLUTION,
         num_threads: int = 1,
+        reset: bool = True,
     ):
         self.edge_weight_expr = AttrExpr(edge_weight)
         self.node_weight_expr = AttrExpr(node_weight)
@@ -41,6 +42,7 @@ class ILPSolver(BaseSolver):
         self.division_weight_expr = AttrExpr(division_weight)
         self.output_key = output_key
         self.num_threads = num_threads
+        self.reset = reset
         self.reset_model()
 
     def reset_model(self) -> None:
@@ -259,6 +261,8 @@ class ILPSolver(BaseSolver):
 
         if self.output_key not in graph.node_attr_keys:
             graph.add_node_attr_key(self.output_key, False)
+        elif self.reset:
+            graph.update_node_attrs(attrs={self.output_key: False})
 
         graph.update_node_attrs(
             node_ids=selected_nodes,
@@ -269,6 +273,8 @@ class ILPSolver(BaseSolver):
 
         if self.output_key not in graph.edge_attr_keys:
             graph.add_edge_attr_key(self.output_key, False)
+        elif self.reset:
+            graph.update_edge_attrs(attrs={self.output_key: False})
 
         graph.update_edge_attrs(
             edge_ids=selected_edges,

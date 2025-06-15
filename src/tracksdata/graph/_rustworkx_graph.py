@@ -4,7 +4,6 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 import polars as pl
 import rustworkx as rx
-from numpy.typing import ArrayLike
 
 from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.functional._rx import graph_track_ids
@@ -551,19 +550,22 @@ class RustWorkXGraph(BaseGraph):
     def update_node_attrs(
         self,
         *,
-        node_ids: Sequence[int],
         attrs: dict[str, Any],
+        node_ids: Sequence[int] | None = None,
     ) -> None:
         """
         Update the attributes of the nodes.
 
         Parameters
         ----------
-        node_ids : Sequence[int]
-            The IDs of the nodes to update.
         attrs : dict[str, Any]
             The attributes to update.
+        node_ids : Sequence[int] | None
+            The IDs of the nodes to update or None to update all nodes.
         """
+        if node_ids is None:
+            node_ids = self.node_ids()
+
         for key, value in attrs.items():
             if key not in self.node_attr_keys:
                 raise ValueError(f"Node attribute key '{key}' not found in graph. Expected '{self.node_attr_keys}'")
@@ -581,19 +583,22 @@ class RustWorkXGraph(BaseGraph):
     def update_edge_attrs(
         self,
         *,
-        edge_ids: ArrayLike,
         attrs: dict[str, Any],
+        edge_ids: Sequence[int] | None = None,
     ) -> None:
         """
         Update the attributes of the edges.
 
         Parameters
         ----------
-        edge_ids : Sequence[int]
-            The IDs of the edges to update.
         attrs : dict[str, Any]
             Attributes to be updated.
+        edge_ids : Sequence[int] | None
+            The IDs of the edges to update or None to update all edges.
         """
+        if edge_ids is None:
+            edge_ids = self.edge_ids()
+
         size = len(edge_ids)
         for key, value in attrs.items():
             if key not in self.edge_attr_keys:
@@ -635,7 +640,7 @@ class RustWorkXGraph(BaseGraph):
             raise RuntimeError(
                 "Are you sure this graph is a valid lineage graph?\n"
                 "This function expects a solved graph.\n"
-                "Often used from `graph.filter_nodes_by_attribute({'solution': True})`"
+                "Often used from `graph.subgraph(edge_attr_filter={'solution': True})`"
             ) from e
 
         if output_key not in self.node_attr_keys:

@@ -63,6 +63,8 @@ class NearestNeighborsSolver(BaseSolver):
 
     output_key : str
         The key to store the solution in the graph.
+    reset : bool
+        Whether to reset the solution values in the whole graph before solving.
     """
 
     def __init__(
@@ -70,10 +72,12 @@ class NearestNeighborsSolver(BaseSolver):
         max_children: int = 2,
         edge_weight: str | ExprInput = DEFAULT_ATTR_KEYS.EDGE_WEIGHT,
         output_key: str = DEFAULT_ATTR_KEYS.SOLUTION,
+        reset: bool = True,
     ):
         self.max_children = max_children
         self.solution_key = output_key
         self.edge_weight_expr = AttrExpr(edge_weight)
+        self.reset = reset
 
     def solve(
         self,
@@ -112,7 +116,11 @@ class NearestNeighborsSolver(BaseSolver):
 
         solution_edges_df = edges_df.filter(solution)
 
-        graph.add_edge_attr_key(self.solution_key, False)
+        if self.solution_key not in graph.edge_attr_keys:
+            graph.add_edge_attr_key(self.solution_key, False)
+        elif self.reset:
+            graph.update_edge_attrs(attrs={self.solution_key: False})
+
         graph.update_edge_attrs(
             edge_ids=solution_edges_df[DEFAULT_ATTR_KEYS.EDGE_ID].to_numpy(),
             attrs={self.solution_key: True},

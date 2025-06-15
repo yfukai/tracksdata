@@ -284,9 +284,13 @@ class GraphView(RustWorkXGraph):
 
     def update_node_attrs(
         self,
-        node_ids: Sequence[int],
+        *,
         attrs: dict[str, Any],
+        node_ids: Sequence[int] | None = None,
     ) -> None:
+        if node_ids is None:
+            node_ids = self.node_ids()
+
         self._root.update_node_attrs(
             node_ids=node_ids,
             attrs=attrs,
@@ -303,9 +307,13 @@ class GraphView(RustWorkXGraph):
 
     def update_edge_attrs(
         self,
-        edge_ids: Sequence[int],
+        *,
         attrs: dict[str, Any],
+        edge_ids: Sequence[int] | None = None,
     ) -> None:
+        if edge_ids is None:
+            edge_ids = self.edge_ids()
+
         self._root.update_edge_attrs(
             edge_ids=edge_ids,
             attrs=attrs,
@@ -323,6 +331,7 @@ class GraphView(RustWorkXGraph):
     def assign_track_ids(
         self,
         output_key: str = DEFAULT_ATTR_KEYS.TRACK_ID,
+        reset: bool = True,
     ) -> rx.PyDiGraph:
         """
         Compute and assign track ids to nodes.
@@ -331,6 +340,8 @@ class GraphView(RustWorkXGraph):
         ----------
         output_key : str
             The key of the output track id attribute.
+        reset : bool
+            Whether to reset all track ids before assigning new ones.
 
         Returns
         -------
@@ -350,6 +361,8 @@ class GraphView(RustWorkXGraph):
 
         if output_key not in self.node_attr_keys:
             self.add_node_attr_key(output_key, -1)
+        elif reset:
+            self.update_node_attrs(attrs={output_key: -1})
 
         self.update_node_attrs(
             node_ids=node_ids,

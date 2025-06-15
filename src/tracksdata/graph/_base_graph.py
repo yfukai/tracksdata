@@ -6,7 +6,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, TypeVar, overload
 
 import polars as pl
-from numpy.typing import ArrayLike
 
 from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.utils._logging import LOG
@@ -392,36 +391,36 @@ class BaseGraph(abc.ABC):
     def update_node_attrs(
         self,
         *,
-        node_ids: Sequence[int],
         attrs: dict[str, Any],
+        node_ids: Sequence[int] | None = None,
     ) -> None:
         """
         Update the attributes of the nodes.
 
         Parameters
         ----------
-        node_ids : Sequence[int]
-            The IDs of the nodes to update.
         attrs : dict[str, Any]
             The attributes to update.
+        node_ids : Sequence[int] | None
+            The IDs of the nodes to update or None to update all nodes.
         """
 
     @abc.abstractmethod
     def update_edge_attrs(
         self,
         *,
-        edge_ids: ArrayLike,
         attrs: dict[str, Any],
+        edge_ids: Sequence[int] | None = None,
     ) -> None:
         """
         Update the attributes of the edges.
 
         Parameters
         ----------
-        edge_ids : Sequence[int]
-            The IDs of the edges to update.
         attrs : dict[str, Any]
             Attributes to be updated.
+        edge_ids : Sequence[int] | None
+            The IDs of the edges to update or None to update all edges.
         """
 
     @classmethod

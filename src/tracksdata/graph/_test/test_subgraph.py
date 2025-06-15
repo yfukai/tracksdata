@@ -202,6 +202,12 @@ def test_update_node_attrs_with_data(graph_backend: BaseGraph, use_subgraph: boo
     df = graph_with_data.node_attrs(node_ids=nodes, attr_keys=["x"])
     assert df["x"].to_list() == [100.0, 101.0]
 
+    # test updating all nodes
+    graph_with_data.update_node_attrs(attrs={"x": 0.0})
+
+    df = graph_with_data.node_attrs(attr_keys=["x"])
+    assert (df["x"] == 0.0).all()
+
     # Test error with wrong length
     with pytest.raises(ValueError):
         graph_with_data.update_node_attrs(node_ids=nodes, attrs={"x": [1.0]})
@@ -213,21 +219,25 @@ def test_update_edge_attrs_with_data(graph_backend: BaseGraph, use_subgraph: boo
     graph_with_data = create_test_graph(graph_backend, use_subgraph)
     df = graph_with_data.edge_attrs()
 
-    if len(df) > 0:
-        # Get the first edge ID
-        edge_id = df[DEFAULT_ATTR_KEYS.EDGE_ID].to_list()[0]
+    # Get the first edge ID
+    edge_id = df[DEFAULT_ATTR_KEYS.EDGE_ID].to_list()[0]
 
-        # Update edge attribute
-        graph_with_data.update_edge_attrs(edge_ids=[edge_id], attrs={"weight": 99.0})
+    # Update edge attribute
+    graph_with_data.update_edge_attrs(edge_ids=[edge_id], attrs={"weight": 99.0})
 
-        # Verify update
-        df_updated = graph_with_data.edge_attrs(attr_keys=["weight"])
-        edge_weights = df_updated["weight"].to_list()
-        assert 99.0 in edge_weights
+    # Verify update
+    df_updated = graph_with_data.edge_attrs(attr_keys=["weight"])
+    edge_weights = df_updated["weight"].to_list()
+    assert 99.0 in edge_weights
 
-        # Test error with wrong length
-        with pytest.raises(ValueError):
-            graph_with_data.update_edge_attrs(edge_ids=[edge_id], attrs={"weight": [1.0, 2.0]})
+    # test updating all edges
+    graph_with_data.update_edge_attrs(attrs={"weight": 0.0})
+    df = graph_with_data.edge_attrs(attr_keys=["weight"])
+    assert (df["weight"] == 0.0).all()
+
+    # Test error with wrong length
+    with pytest.raises(ValueError):
+        graph_with_data.update_edge_attrs(edge_ids=[edge_id], attrs={"weight": [1.0, 2.0]})
 
 
 @parametrize_subgraph_tests
