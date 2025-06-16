@@ -46,13 +46,10 @@ def _fast_path_transverse(
         elif len(children) == 1:
             node = children[0]
 
-        elif len(children) == 2:
-            queue.append((children[1], track_id))
-            queue.append((children[0], track_id))
-            break
-
         else:
-            raise RuntimeError("Invalid graph structure:\nFound node with more than two children when parsing tracks.")
+            for child in children:
+                queue.append((child, track_id))
+            break
 
     return path
 
