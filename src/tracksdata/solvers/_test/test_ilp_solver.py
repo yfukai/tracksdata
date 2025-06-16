@@ -1,4 +1,3 @@
-import logging
 import math
 
 import pytest
@@ -98,11 +97,8 @@ def test_ilp_solver_solve_no_edges(caplog: pytest.LogCaptureFixture) -> None:
         division_weight=1.0,
     )
 
-    # Should not raise an error with no edges
-    with caplog.at_level(logging.WARNING):
+    with pytest.raises(ValueError):
         solver.solve(graph)
-
-    assert "Trivial solution found with all variables set to 0!" in caplog.text
 
 
 def test_ilp_solver_solve_simple_case() -> None:
@@ -123,8 +119,8 @@ def test_ilp_solver_solve_simple_case() -> None:
     graph.add_edge(node0, node1, {DEFAULT_ATTR_KEYS.EDGE_WEIGHT: -1.0})
     graph.add_edge(node0, node2, {DEFAULT_ATTR_KEYS.EDGE_WEIGHT: -2.0})
 
-    solver = ILPSolver()
-    solver.solve(graph)
+    solver = ILPSolver(return_solution=True)
+    solution_graph = solver.solve(graph)
 
     # Check that solution keys are added
     node_attrs = graph.node_attrs()
@@ -139,6 +135,10 @@ def test_ilp_solver_solve_simple_case() -> None:
 
     assert len(selected_edges) > 0
     assert len(selected_nodes) > 0
+
+    assert solution_graph is not None
+    assert solution_graph.num_nodes == len(selected_nodes)
+    assert solution_graph.num_edges == len(selected_edges)
 
 
 def test_ilp_solver_solve_with_appearance_weight() -> None:

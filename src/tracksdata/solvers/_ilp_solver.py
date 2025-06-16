@@ -14,6 +14,7 @@ from ilpy import (
 from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.expr import AttrExpr, ExprInput
 from tracksdata.graph._base_graph import BaseGraph
+from tracksdata.graph._graph_view import GraphView
 from tracksdata.solvers._base_solver import BaseSolver
 from tracksdata.utils._logging import LOG
 
@@ -34,15 +35,15 @@ class ILPSolver(BaseSolver):
         output_key: str = DEFAULT_ATTR_KEYS.SOLUTION,
         num_threads: int = 1,
         reset: bool = True,
+        return_solution: bool = True,
     ):
+        super().__init__(output_key=output_key, reset=reset, return_solution=return_solution)
         self.edge_weight_expr = AttrExpr(edge_weight)
         self.node_weight_expr = AttrExpr(node_weight)
         self.appearance_weight_expr = AttrExpr(appearance_weight)
         self.disappearance_weight_expr = AttrExpr(disappearance_weight)
         self.division_weight_expr = AttrExpr(division_weight)
-        self.output_key = output_key
         self.num_threads = num_threads
-        self.reset = reset
         self.reset_model()
 
     def reset_model(self) -> None:
@@ -206,6 +207,9 @@ class ILPSolver(BaseSolver):
         if self._count == 0:
             raise ValueError("Empty ILPSolver model, there is nothing to solve.")
 
+        elif len(self._edge_vars) == 0:
+            raise ValueError("No edges found in the graph, there is nothing to solve.")
+
         solution = None
         for preference in [Preference.Gurobi, Preference.Scip]:
             try:
@@ -238,7 +242,7 @@ class ILPSolver(BaseSolver):
     def solve(
         self,
         graph: BaseGraph,
-    ) -> None:
+    ) -> GraphView | None:
         nodes_df = graph.node_attrs(
             attr_keys=[
                 DEFAULT_ATTR_KEYS.NODE_ID,
@@ -280,3 +284,6 @@ class ILPSolver(BaseSolver):
             edge_ids=selected_edges,
             attrs={self.output_key: True},
         )
+
+        if self.return_solution:
+            return graph.subgraph(edge_attr_filter={self.output_key: True})

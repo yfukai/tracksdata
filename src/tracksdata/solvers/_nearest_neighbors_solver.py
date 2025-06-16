@@ -4,6 +4,7 @@ from numba import njit, typed
 from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.expr import AttrExpr, ExprInput
 from tracksdata.graph._base_graph import BaseGraph
+from tracksdata.graph._graph_view import GraphView
 from tracksdata.solvers._base_solver import BaseSolver
 
 
@@ -73,16 +74,20 @@ class NearestNeighborsSolver(BaseSolver):
         edge_weight: str | ExprInput = DEFAULT_ATTR_KEYS.EDGE_WEIGHT,
         output_key: str = DEFAULT_ATTR_KEYS.SOLUTION,
         reset: bool = True,
+        return_solution: bool = True,
     ):
+        super().__init__(
+            output_key=output_key,
+            reset=reset,
+            return_solution=return_solution,
+        )
         self.max_children = max_children
-        self.solution_key = output_key
         self.edge_weight_expr = AttrExpr(edge_weight)
-        self.reset = reset
 
     def solve(
         self,
         graph: BaseGraph,
-    ) -> None:
+    ) -> GraphView | None:
         """
         Solve the tracking problem with nearest neighbor ordering of edges.
         Each node can have only one parent and up to `max_children` child.
@@ -91,9 +96,18 @@ class NearestNeighborsSolver(BaseSolver):
         ----------
         graph : BaseGraph
             The graph to solve.
+
+        Returns
+        -------
+        GraphView | None
+            The graph view of the solution if `return_solution` is True, otherwise None.
         """
         # get edges and sort them by weight
         edges_df = graph.edge_attrs(attr_keys=self.edge_weight_expr.columns)
+
+        if len(edges_df) == 0:
+            raise ValueError("No edges found in the graph, there is nothing to solve.")
+
         weights = self.edge_weight_expr.evaluate(edges_df).to_numpy()
         sorted_indices = np.argsort(weights)
 
@@ -116,14 +130,14 @@ class NearestNeighborsSolver(BaseSolver):
 
         solution_edges_df = edges_df.filter(solution)
 
-        if self.solution_key not in graph.edge_attr_keys:
-            graph.add_edge_attr_key(self.solution_key, False)
+        if self.output_key not in graph.edge_attr_keys:
+            graph.add_edge_attr_key(self.output_key, False)
         elif self.reset:
-            graph.update_edge_attrs(attrs={self.solution_key: False})
+            graph.update_edge_attrs(attrs={self.output_key: False})
 
         graph.update_edge_attrs(
             edge_ids=solution_edges_df[DEFAULT_ATTR_KEYS.EDGE_ID].to_numpy(),
-            attrs={self.solution_key: True},
+            attrs={self.output_key: True},
         )
 
         node_ids = np.unique(
@@ -135,8 +149,11 @@ class NearestNeighborsSolver(BaseSolver):
             )
         )
 
-        graph.add_node_attr_key(self.solution_key, False)
+        graph.add_node_attr_key(self.output_key, False)
         graph.update_node_attrs(
             node_ids=node_ids,
-            attrs={self.solution_key: True},
+            attrs={self.output_key: True},
         )
+
+        if self.return_solution:
+            return graph.subgraph(edge_attr_filter={self.output_key: True})

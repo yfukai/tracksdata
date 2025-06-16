@@ -1,3 +1,5 @@
+import pytest
+
 from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.expr import AttrExpr
 from tracksdata.graph import RustWorkXGraph
@@ -9,7 +11,7 @@ def test_nearest_neighbors_solver_init_default() -> None:
     solver = NearestNeighborsSolver()
 
     assert solver.max_children == 2
-    assert solver.solution_key == DEFAULT_ATTR_KEYS.SOLUTION
+    assert solver.output_key == DEFAULT_ATTR_KEYS.SOLUTION
     assert isinstance(solver.edge_weight_expr, AttrExpr)
 
 
@@ -18,7 +20,7 @@ def test_nearest_neighbors_solver_init_custom() -> None:
     solver = NearestNeighborsSolver(max_children=3, edge_weight="custom_weight", output_key="custom_solution")
 
     assert solver.max_children == 3
-    assert solver.solution_key == "custom_solution"
+    assert solver.output_key == "custom_solution"
     assert isinstance(solver.edge_weight_expr, AttrExpr)
 
 
@@ -36,7 +38,8 @@ def test_nearest_neighbors_solver_solve_empty_graph() -> None:
     solver = NearestNeighborsSolver()
 
     # Should not raise an error on empty graph
-    solver.solve(graph)
+    with pytest.raises(ValueError):
+        solver.solve(graph)
 
 
 def test_nearest_neighbors_solver_solve_no_edges() -> None:
@@ -54,7 +57,8 @@ def test_nearest_neighbors_solver_solve_no_edges() -> None:
     solver = NearestNeighborsSolver()
 
     # Should not raise an error with no edges
-    solver.solve(graph)
+    with pytest.raises(ValueError):
+        solver.solve(graph)
 
 
 def test_nearest_neighbors_solver_solve_simple_case() -> None:
