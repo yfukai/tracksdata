@@ -92,8 +92,8 @@ def test_complex_valid_branching():
     assert tracks_graph.num_nodes() == 3 + 1  # Five tracks (includes null node (0))
 
 
-def test_invalid_three_children():
-    """Test graph with invalid structure (node with 3 children)."""
+def test_three_children():
+    """Test graph with 3 children."""
     graph = rx.PyDiGraph()
 
     # Add nodes:
@@ -105,8 +105,8 @@ def test_invalid_three_children():
     graph.add_edge(nodes[0], nodes[2], None)
     graph.add_edge(nodes[0], nodes[3], None)
 
-    with pytest.raises(RuntimeError, match="Invalid graph structure"):
-        graph_track_ids(graph)
+    _, track_ids, tracks_graph = graph_track_ids(graph)
+    assert set(tracks_graph.successor_indices(track_ids[0])) == set(track_ids[1:])
 
 
 def test_multiple_roots():
