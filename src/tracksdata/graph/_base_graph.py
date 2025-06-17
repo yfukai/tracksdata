@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any, TypeVar, overload
 
 import polars as pl
 
+from tracksdata.attrs import AttrComparison
 from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.utils._logging import LOG
 
@@ -203,16 +204,16 @@ class BaseGraph(abc.ABC):
     @abc.abstractmethod
     def filter_nodes_by_attrs(
         self,
-        attrs: dict[str, Any],
+        *attrs: AttrComparison,
     ) -> list[int]:
         """
         Filter nodes by attributes.
 
         Parameters
         ----------
-        attrs : dict[str, Any]
+        attrs : AttrComparison
             Attributes to filter by, for example:
-            >>> `graph.filter_nodes_by_attrs(dict(t=0, label='A'))`
+            >>> `graph.filter_nodes_by_attrs(Attr("t") == 0, Attr("label") == "A")`
 
         Returns
         -------
@@ -247,21 +248,11 @@ class BaseGraph(abc.ABC):
         Get the IDs of all edges in the graph.
         """
 
-    graph.subgraph(
-        # NodeAttr("t") == 1,
-        # EdgeAttr("weight") > 0.5,
-        Attr("t") == 1,
-        node_attr_keys=["t", "label"],
-        edge_attr_keys=["weight"],
-    )
-
     @abc.abstractmethod
     def subgraph(
         self,
-        *,
+        *attr_filters: AttrComparison,
         node_ids: Sequence[int] | None = None,
-        node_attr_filter: dict[str, Any] | None = None,
-        edge_attr_filter: dict[str, Any] | None = None,
         node_attr_keys: Sequence[str] | str | None = None,
         edge_attr_keys: Sequence[str] | str | None = None,
     ) -> "GraphView":
@@ -275,10 +266,8 @@ class BaseGraph(abc.ABC):
         ----------
         node_ids : Sequence[int]
             The IDs of the nodes to include in the subgraph.
-        node_attr_filter : dict[str, Any] | None
+        *attr_filters : AttrComparison
             The attributes to filter the nodes by.
-        edge_attr_filter : dict[str, Any] | None
-            The attributes to filter the edges by.
         node_attr_keys : Sequence[str] | str | None
             The attribute keys to get.
             If None, all attributesare used.

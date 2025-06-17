@@ -4,6 +4,7 @@ from typing import Any
 import polars as pl
 import rustworkx as rx
 
+from tracksdata.attrs import AttrComparison
 from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.functional._rx import graph_track_ids
 from tracksdata.graph._base_graph import BaseGraph
@@ -78,17 +79,14 @@ class GraphView(RustWorkXGraph):
 
     def subgraph(
         self,
-        *,
+        *attr_filters: AttrComparison,
         node_ids: Sequence[int] | None = None,
-        node_attr_filter: dict[str, Any] | None = None,
-        edge_attr_filter: dict[str, Any] | None = None,
         node_attr_keys: Sequence[str] | str | None = None,
         edge_attr_keys: Sequence[str] | str | None = None,
     ) -> "GraphView":
         subgraph = super().subgraph(
+            *attr_filters,
             node_ids=map_ids(self._node_map_from_root, node_ids),
-            node_attr_filter=node_attr_filter,
-            edge_attr_filter=edge_attr_filter,
             node_attr_keys=node_attr_keys,
             edge_attr_keys=edge_attr_keys,
         )
@@ -227,10 +225,10 @@ class GraphView(RustWorkXGraph):
 
     def filter_nodes_by_attrs(
         self,
-        attrs: dict[str, Any],
+        *attrs: AttrComparison,
     ) -> list[int]:
         node_ids = super().filter_nodes_by_attrs(
-            attrs=attrs,
+            *attrs,
         )
         return map_ids(self._node_map_to_root, node_ids)
 

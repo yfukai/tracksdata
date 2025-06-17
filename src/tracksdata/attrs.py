@@ -3,23 +3,31 @@ import operator
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
-from tracksdata.graph._base_graph import BaseGraph
+import polars as pl
 
 if TYPE_CHECKING:
-    from sqlalchemy.orm import DeclarativeBase, Query
+    pass
 
 
-__all__ = ["Attr", "AttrComparison", "AttrsFilter"]
+__all__ = [
+    "Attr",
+    "AttrComparison",
+    "EdgeAttr",
+    "NodeAttr",
+    "attr_comps_to_strs",
+    "polars_reduce_attr_comps",
+    "split_attr_comps",
+]
 
 
 class AttrComparison:
     def __init__(self, attr: "Attr", op: Callable, other: Any) -> None:
-        self._attr = attr
-        self._op = op
-        self._other = other
+        self.attr = attr
+        self.op = op
+        self.other = other
 
     def __repr__(self) -> str:
-        return f"Attr({self._attr}) '{self._op.__name__}' {self._other}"
+        return f"Attr({self.attr}) '{self._op.__name__}' {self._other}"
 
 
 class Attr:
@@ -62,29 +70,60 @@ def _setup_ops() -> None:
 _setup_ops()
 
 
-class AttrsFilter:
-    def __init__(self, graph: BaseGraph, attr_ops: list[AttrComparison] | AttrComparison) -> None:
-        if isinstance(attr_ops, AttrComparison):
-            attr_ops = [attr_ops]
-        self._graph = graph
-        self._attr_ops = attr_ops
+class NodeAttr(Attr):
+    """
+    A class to represent a node attribute.
+    """
 
-    def dict_filter(self) -> Callable[[dict[str, Any]], bool]:
-        def _filter(attrs: dict[str, Any]) -> bool:
-            for attr_op in self._attr_ops:
-                if not attr_op._op(attrs[str(attr_op._attr)], attr_op._other):
-                    return False
-            return True
 
-        return _filter
+class EdgeAttr(Attr):
+    """
+    A class to represent an edge attribute.
+    """
 
-    def query_filter(self, table: type["DeclarativeBase"]) -> Callable[["Query"], "Query"]:
-        def _filter(query: "Query") -> "Query":
-            query = query.filter(
-                *[attr_op._op(getattr(table, str(attr_op._attr)), attr_op._other) for attr_op in self._attr_ops]
-            )
-            for attr_op in self._attr_ops:
-                print(attr_op._op(getattr(table, str(attr_op._attr)), attr_op._other))
-            return query
 
-        return _filter
+def split_attr_comps(attr_comps: list[AttrComparison]) -> tuple[list[AttrComparison], list[AttrComparison]]:
+    """
+    Split a list of attribute comparisons into node and edge attribute comparisons.
+
+    """
+    node_attr_comps = []
+    edge_attr_comps = []
+
+    for attr_comp in attr_comps:
+        if isinstance(attr_comp.attr, NodeAttr):
+            node_attr_comps.append(attr_comp)
+        elif isinstance(attr_comp.attr, EdgeAttr):
+            edge_attr_comps.append(attr_comp)
+        else:
+            raise ValueError(f"Expected comparisons of 'NodeAttr' or 'EdgeAttr' objects, got {type(attr_comp.attr)}")
+
+    return node_attr_comps, edge_attr_comps
+
+
+def attr_comps_to_strs(attr_comps: list[AttrComparison]) -> list[str]:
+    """
+    Convert a list of attribute comparisons to a list of strings.
+    """
+    return [str(attr_comp.attr) for attr_comp in attr_comps]
+
+
+def polars_reduce_attr_comps(df: pl.DataFrame, attr_comps: list[AttrComparison]) -> pl.Expr:
+    """
+    Reduce a list of attribute comparisons to a single polars expression.
+
+    Parameters
+    ----------
+    df : pl.DataFrame
+        The dataframe to reduce the attribute comparisons on.
+    attr_comps : list[AttrComparison]
+        The attribute comparisons to reduce.
+
+    Returns
+    -------
+    pl.Expr
+        The reduced polars expression.
+    """
+    return pl.reduce(
+        lambda x, y: x & y, [attr_comp._op(df[str(attr_comp.attr)], attr_comp._other) for attr_comp in attr_comps]
+    )
