@@ -96,7 +96,7 @@ def _matching_data(
             ):
                 # intersection over reference is used to select the matches
                 inter = ref_mask.intersection(comp_mask)
-                ctc_score = inter / ref_mask.size()
+                ctc_score = inter / ref_mask.size
                 if ctc_score > min_reference_intersection:
                     _mapped_ref.append(ref_id)
                     _mapped_comp.append(comp_id)
@@ -105,7 +105,7 @@ def _matching_data(
 
                     # NOTE: there was something weird with IoU, the length when compared with `ctc_metrics`
                     #       sometimes it had an extra element
-                    iou = inter / (ref_mask.size() + comp_mask.size() - inter)
+                    iou = inter / (ref_mask.size + comp_mask.size - inter)
                     _ious.append(iou.item())
 
         if optimal_matching and len(_rows) > 0:

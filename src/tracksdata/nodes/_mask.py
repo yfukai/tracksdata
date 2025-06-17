@@ -1,3 +1,5 @@
+from functools import cached_property
+
 import blosc2
 import numpy as np
 from numpy.typing import NDArray
@@ -63,5 +65,17 @@ class Mask:
     def intersection(self, other: "Mask") -> float:
         return fast_intersection_with_bbox(self._bbox, other._bbox, self._mask, other._mask)
 
+    @cached_property
     def size(self) -> int:
         return self._mask.sum()
+
+    def __repr__(self) -> str:
+        slicing_str = ", ".join(
+            f"{i}:{j}"
+            for i, j in zip(
+                self._bbox[: self._mask.ndim],
+                self._bbox[self._mask.ndim :],
+                strict=True,
+            )
+        )
+        return f"Mask(bbox=[{slicing_str}])"
