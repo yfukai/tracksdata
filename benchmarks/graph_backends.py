@@ -131,7 +131,11 @@ def main() -> None:
                 ("distance_edges", DistanceEdges(distance_threshold=10, n_neighbors=5, show_progress=False).add_edges),
                 (
                     "nearest_neighbors_solver",
-                    NearestNeighborsSolver(edge_weight=-AttrExpr(DEFAULT_ATTR_KEYS.EDGE_WEIGHT), max_children=2).solve,
+                    NearestNeighborsSolver(
+                        edge_weight=-AttrExpr(DEFAULT_ATTR_KEYS.EDGE_WEIGHT),
+                        max_children=2,
+                        return_solution=False,
+                    ).solve,
                 ),
                 ("subgraph", lambda graph: graph.subgraph(edge_attr_filter={DEFAULT_ATTR_KEYS.SOLUTION: True})),
                 ("assing_tracks", lambda graph: graph.assign_track_ids()),
