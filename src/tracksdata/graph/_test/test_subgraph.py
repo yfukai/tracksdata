@@ -692,26 +692,10 @@ def test_subgraph_attr_filter_empty_results(graph_backend: BaseGraph) -> None:
     assert empty_subgraph_multi.num_edges == 0
 
 
-def test_subgraph_attr_filter_error_conditions(graph_backend: BaseGraph) -> None:
-    """Test error conditions for subgraph attribute filtering."""
+def test_subgraph_attr_filter_error_condition(graph_backend: BaseGraph) -> None:
+    """Test error condition for subgraph attribute filtering."""
     graph_with_data = create_test_graph(graph_backend, use_subgraph=False)
-    original_nodes = graph_with_data._test_nodes  # type: ignore
 
-    # Test error: node_ids and node_attr_filter together
-    with pytest.raises(ValueError, match="Node IDs and attributes' comparisons cannot be used together"):
-        graph_with_data.subgraph(NodeAttr("t") == 0, node_ids=original_nodes[:2])
-
-    # Test error: node_ids and edge_attr_filter together
-    with pytest.raises(ValueError, match="Node IDs and attributes' comparisons cannot be used together"):
-        graph_with_data.subgraph(EdgeAttr("weight") == 0.5, node_ids=original_nodes[:2])
-
-    # Test error: node_attr_filter and edge_attr_filter together
-    with pytest.raises(
-        ValueError, match="Node attributes' comparisons and edge attributes' comparisons cannot be used together"
-    ):
-        graph_with_data.subgraph(NodeAttr("t") == 0, EdgeAttr("weight") == 0.5)
-
-    # Test error: no parameters provided
     with pytest.raises(ValueError, match="Either node IDs or one of the attributes' comparisons must be provided"):
         graph_with_data.subgraph()
 

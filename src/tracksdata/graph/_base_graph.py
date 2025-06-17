@@ -227,12 +227,6 @@ class BaseGraph(abc.ABC):
         node_attr_comps: list[AttrComparison] | None = None,
         edge_attr_comps: list[AttrComparison] | None = None,
     ) -> None:
-        if node_ids is not None and (node_attr_comps or edge_attr_comps):
-            raise ValueError("Node IDs and attributes' comparisons cannot be used together")
-
-        if node_attr_comps and edge_attr_comps:
-            raise ValueError("Node attributes' comparisons and edge attributes' comparisons cannot be used together")
-
         if node_ids is None and not node_attr_comps and not edge_attr_comps:
             raise ValueError("Either node IDs or one of the attributes' comparisons must be provided")
 

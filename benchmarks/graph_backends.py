@@ -5,7 +5,7 @@ from pathlib import Path
 import polars as pl
 from tabulate import tabulate
 
-from tracksdata.attrs import EdgeAttr
+from tracksdata.attrs import EdgeAttr, NodeAttr
 from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.edges import DistanceEdges
 from tracksdata.expr import AttrExpr
@@ -138,7 +138,13 @@ def main() -> None:
                         return_solution=False,
                     ).solve,
                 ),
-                ("subgraph", lambda graph: graph.subgraph(EdgeAttr(DEFAULT_ATTR_KEYS.SOLUTION) == True)),
+                (
+                    "subgraph",
+                    lambda graph: graph.subgraph(
+                        NodeAttr(DEFAULT_ATTR_KEYS.SOLUTION) == True,
+                        EdgeAttr(DEFAULT_ATTR_KEYS.SOLUTION) == True,
+                    ),
+                ),
                 ("assing_tracks", lambda graph: graph.assign_track_ids()),
             ]
             for backend in [RustWorkXGraph, SQLGraphWithMemory, SQLGraphDisk]:

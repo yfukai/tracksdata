@@ -355,34 +355,35 @@ class SQLGraph(BaseGraph):
             node_ids = node_ids.tolist()
 
         with Session(self._engine) as session:
-            # selecting edges
-            edge_query = session.query(self.Edge)
-
-            edge_filtered = False
-            if edge_attr_comps:
-                edge_query = _filter_query(edge_query, self.Edge, edge_attr_comps)
-
-                assert node_ids is None, "node_ids must be None when edge_attr_filter is not None"
-
-                node_ids = edge_query.with_entities(self.Edge.source_id, self.Edge.target_id).all()
-                node_ids = np.unique(node_ids).tolist()
-                edge_filtered = True
-
             node_query = session.query(self.Node)
+
+            node_filtered = False
 
             if node_ids is not None:
                 node_query = node_query.filter(self.Node.node_id.in_(node_ids))
+                node_filtered = True
 
             if node_attr_comps:
                 node_query = _filter_query(node_query, self.Node, node_attr_comps)
                 node_ids = [i for (i,) in node_query.with_entities(self.Node.node_id).all()]
+                node_filtered = True
 
-            if not edge_filtered and node_ids is not None:
-                # TODO could this be done at the individual node filtering levels?
+            # selecting edges
+            edge_query = session.query(self.Edge)
+
+            if node_ids is not None:
                 edge_query = edge_query.filter(
                     self.Edge.source_id.in_(node_ids),
                     self.Edge.target_id.in_(node_ids),
                 )
+
+            if edge_attr_comps:
+                edge_query = _filter_query(edge_query, self.Edge, edge_attr_comps)
+
+                if not node_filtered:
+                    node_ids = edge_query.with_entities(self.Edge.source_id, self.Edge.target_id).all()
+                    node_ids = np.unique(node_ids).tolist()
+                    node_query = node_query.filter(self.Node.node_id.in_(node_ids))
 
             if node_attr_keys is not None:
                 if DEFAULT_ATTR_KEYS.NODE_ID not in node_attr_keys:

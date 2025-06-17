@@ -340,8 +340,15 @@ class RustWorkXGraph(BaseGraph):
         node_attr_comps, edge_attr_comps = split_attr_comps(attr_filters)
         self._validate_subgraph_args(node_ids, node_attr_comps, edge_attr_comps)
 
-        if edge_attr_comps:
-            edges_df = self.edge_attrs(attr_keys=attr_comps_to_strs(edge_attr_comps))
+        if node_attr_comps:
+            filtered_node_ids = self.filter_nodes_by_attrs(*node_attr_comps)
+            if node_ids is not None:
+                node_ids = np.intersect1d(node_ids, filtered_node_ids)
+            else:
+                node_ids = filtered_node_ids
+
+        if node_ids is None and edge_attr_comps:
+            edges_df = self.edge_attrs(node_ids=node_ids, attr_keys=attr_comps_to_strs(edge_attr_comps))
             mask = polars_reduce_attr_comps(edges_df, edge_attr_comps)
             node_ids = np.unique(
                 edges_df.filter(mask)
@@ -351,9 +358,6 @@ class RustWorkXGraph(BaseGraph):
                 )
                 .to_numpy()
             )
-
-        elif node_attr_comps:
-            node_ids = self.filter_nodes_by_attrs(*node_attr_comps)
 
         rx_graph, node_map = self.rx_graph.subgraph_with_nodemap(node_ids)
 
