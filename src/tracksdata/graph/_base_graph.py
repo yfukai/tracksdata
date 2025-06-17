@@ -247,6 +247,14 @@ class BaseGraph(abc.ABC):
         Get the IDs of all edges in the graph.
         """
 
+    graph.subgraph(
+        # NodeAttr("t") == 1,
+        # EdgeAttr("weight") > 0.5,
+        Attr("t") == 1,
+        node_attr_keys=["t", "label"],
+        edge_attr_keys=["weight"],
+    )
+
     @abc.abstractmethod
     def subgraph(
         self,

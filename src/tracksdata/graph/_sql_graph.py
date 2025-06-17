@@ -9,6 +9,7 @@ import sqlalchemy as sa
 from sqlalchemy.orm import DeclarativeBase, Session, load_only
 from sqlalchemy.sql.type_api import TypeEngine
 
+from tracksdata.attrs import AttrComparison, AttrsFilter
 from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.graph._base_graph import BaseGraph
 from tracksdata.utils._dataframe import unpack_array_attrs
@@ -295,12 +296,14 @@ class SQLGraph(BaseGraph):
 
     def filter_nodes_by_attrs(
         self,
-        attrs: dict[str, Any],
+        *attrs: dict[str, AttrComparison],
     ) -> list[int]:
+
+        attr_filter = AttrsFilter(self, attrs)
+
         with Session(self._engine) as session:
             query = session.query(self.Node.node_id)
-            for key, value in attrs.items():
-                query = query.filter(getattr(self.Node, key) == value)
+            query = attr_filter.query_filter(self.Node)(query)
             return [i for (i,) in query.all()]
 
     def node_ids(self) -> list[int]:

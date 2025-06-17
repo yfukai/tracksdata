@@ -125,15 +125,25 @@ def test_filter_nodes_by_attribute(graph_backend: BaseGraph) -> None:
     node3 = graph_backend.add_node({"t": 1, "label": "A"})
 
     # Filter by time
-    nodes = graph_backend.filter_nodes_by_attrs({"t": 0})
+    # nodes = graph_backend.filter_nodes_by_attrs({"t": 0})
+    from tracksdata.attrs import Attr
+
+    nodes = graph_backend.filter_nodes_by_attrs(Attr("t") == 0)
+
     assert set(nodes) == {node1, node2}
 
     # Filter by label
-    nodes = graph_backend.filter_nodes_by_attrs({"label": "A"})
+    # nodes = graph_backend.filter_nodes_by_attrs({"label": "A"})
+    nodes = graph_backend.filter_nodes_by_attrs(Attr("label") == "A")
     assert set(nodes) == {node1, node3}
 
     # Filter by t and label
-    nodes = graph_backend.filter_nodes_by_attrs({"t": 1, "label": "A"})
+    # nodes = graph_backend.filter_nodes_by_attrs({"t": 1, "label": "A"})
+    nodes = graph_backend.filter_nodes_by_attrs(
+        Attr("t") == 1,
+        Attr("label") == "A",
+    )
+
     assert set(nodes) == {node3}
 
 
