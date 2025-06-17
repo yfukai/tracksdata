@@ -10,7 +10,6 @@ if TYPE_CHECKING:
 
 
 __all__ = [
-    "Attr",
     "AttrComparison",
     "EdgeAttr",
     "NodeAttr",
@@ -27,7 +26,7 @@ class AttrComparison:
         self.other = other
 
     def __repr__(self) -> str:
-        return f"Attr({self.attr}) '{self._op.__name__}' {self._other}"
+        return f"Attr({self.attr}) '{self.op.__name__}' {self.other}"
 
 
 class Attr:
@@ -125,5 +124,5 @@ def polars_reduce_attr_comps(df: pl.DataFrame, attr_comps: list[AttrComparison])
         The reduced polars expression.
     """
     return pl.reduce(
-        lambda x, y: x & y, [attr_comp._op(df[str(attr_comp.attr)], attr_comp._other) for attr_comp in attr_comps]
+        lambda x, y: x & y, [attr_comp.op(df[str(attr_comp.attr)], attr_comp.other) for attr_comp in attr_comps]
     )

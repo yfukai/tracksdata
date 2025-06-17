@@ -348,10 +348,11 @@ class SQLGraph(BaseGraph):
     ) -> "GraphView":
         from tracksdata.graph._graph_view import GraphView
 
+        node_attr_comps, edge_attr_comps = split_attr_comps(attr_filters)
+        self._validate_subgraph_args(node_ids, node_attr_comps, edge_attr_comps)
+
         if hasattr(node_ids, "tolist"):
             node_ids = node_ids.tolist()
-
-        node_attr_comps, edge_attr_comps = split_attr_comps(attr_filters)
 
         with Session(self._engine) as session:
             # selecting edges

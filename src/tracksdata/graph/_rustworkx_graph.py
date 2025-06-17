@@ -57,7 +57,7 @@ def _create_filter_func(
 ) -> Callable[[dict[str, Any]], bool]:
     def _filter(attrs: dict[str, Any]) -> bool:
         for attr_op in attr_comps:
-            if not attr_op._op(attrs[str(attr_op.attr)], attr_op._other):
+            if not attr_op.op(attrs[str(attr_op.attr)], attr_op.other):
                 return False
         return True
 
@@ -338,6 +338,7 @@ class RustWorkXGraph(BaseGraph):
         from tracksdata.graph._graph_view import GraphView
 
         node_attr_comps, edge_attr_comps = split_attr_comps(attr_filters)
+        self._validate_subgraph_args(node_ids, node_attr_comps, edge_attr_comps)
 
         if edge_attr_comps:
             edges_df = self.edge_attrs(attr_keys=attr_comps_to_strs(edge_attr_comps))

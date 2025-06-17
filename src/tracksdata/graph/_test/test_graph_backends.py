@@ -4,6 +4,7 @@ import numpy as np
 import polars as pl
 import pytest
 
+from tracksdata.attrs import NodeAttr
 from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.graph import SQLGraph
 from tracksdata.graph._base_graph import BaseGraph
@@ -125,26 +126,27 @@ def test_filter_nodes_by_attribute(graph_backend: BaseGraph) -> None:
     node3 = graph_backend.add_node({"t": 1, "label": "A"})
 
     # Filter by time
-    # nodes = graph_backend.filter_nodes_by_attrs({"t": 0})
-    from tracksdata.attrs import Attr
-
-    nodes = graph_backend.filter_nodes_by_attrs(Attr("t") == 0)
-
+    nodes = graph_backend.filter_nodes_by_attrs(NodeAttr("t") == 0)
     assert set(nodes) == {node1, node2}
 
     # Filter by label
-    # nodes = graph_backend.filter_nodes_by_attrs({"label": "A"})
-    nodes = graph_backend.filter_nodes_by_attrs(Attr("label") == "A")
+    nodes = graph_backend.filter_nodes_by_attrs(NodeAttr("label") == "A")
     assert set(nodes) == {node1, node3}
 
-    # Filter by t and label
-    # nodes = graph_backend.filter_nodes_by_attrs({"t": 1, "label": "A"})
+    # Filter by t and label using multiple conditions
     nodes = graph_backend.filter_nodes_by_attrs(
-        Attr("t") == 1,
-        Attr("label") == "A",
+        NodeAttr("t") == 1,
+        NodeAttr("label") == "A",
     )
-
     assert set(nodes) == {node3}
+
+    # Test with inequality
+    nodes = graph_backend.filter_nodes_by_attrs(NodeAttr("t") > 0)
+    assert set(nodes) == {node3}
+
+    # Test with multiple conditions using *args for AND
+    nodes = graph_backend.filter_nodes_by_attrs(NodeAttr("t") == 0, NodeAttr("label") == "A")
+    assert set(nodes) == {node1}
 
 
 def test_time_points(graph_backend: BaseGraph) -> None:
