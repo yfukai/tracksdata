@@ -1,6 +1,7 @@
 import numpy as np
 from numba import njit, typed
 
+from tracksdata.attrs import EdgeAttr
 from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.expr import AttrExpr, ExprInput
 from tracksdata.graph._base_graph import BaseGraph
@@ -156,4 +157,4 @@ class NearestNeighborsSolver(BaseSolver):
         )
 
         if self.return_solution:
-            return graph.subgraph(edge_attr_filter={self.output_key: True})
+            return graph.subgraph(EdgeAttr(self.output_key) == True)
