@@ -183,6 +183,8 @@ def evaluate_ctc_metrics(
     reference_graph: "RustWorkXGraph",
     input_track_id_key: str = DEFAULT_ATTR_KEYS.TRACK_ID,
     reference_track_id_key: str = DEFAULT_ATTR_KEYS.TRACK_ID,
+    input_reset: bool = True,
+    reference_reset: bool = False,
     metrics: list[str] | None = None,
 ) -> dict[str, float]:
     """
@@ -205,6 +207,10 @@ def evaluate_ctc_metrics(
     reference_track_id_key : str, optional
         Key to obtain the track id from the reference graph.
         If key does not exist, it will be created.
+    input_reset : bool, optional
+        Whether to reset the track ids of the input graph. If True, the track ids will be reset to -1.
+    reference_reset : bool, optional
+        Whether to reset the track ids of the reference graph. If True, the track ids will be reset to -1.
     metrics : list[str] | None, optional
         List of metrics to evaluate. If None, all metrics are evaluated.
         Available metrics:
@@ -225,10 +231,10 @@ def evaluate_ctc_metrics(
         ) from e
 
     if input_track_id_key not in input_graph.node_attr_keys:
-        input_graph.assign_track_ids(input_track_id_key)
+        input_graph.assign_track_ids(input_track_id_key, reset=input_reset)
 
     if reference_track_id_key not in reference_graph.node_attr_keys:
-        reference_graph.assign_track_ids(reference_track_id_key)
+        reference_graph.assign_track_ids(reference_track_id_key, reset=reference_reset)
 
     input_tracks, reference_tracks, matching_data = compute_ctc_metrics_data(
         input_graph, reference_graph, input_track_id_key, reference_track_id_key
