@@ -1,6 +1,7 @@
 import polars as pl
 
 from tracksdata.array._graph_array import GraphArrayView
+from tracksdata.attrs import EdgeAttr
 from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.graph._base_graph import BaseGraph
 
@@ -41,9 +42,7 @@ def to_napari_format(
         - tracks_data: The tracks data as a polars DataFrame.
         - dict_graph: A dictionary of parent -> child relationships.
     """
-    solution_graph = graph.subgraph(
-        edge_attr_filter={solution_key: True},
-    )
+    solution_graph = graph.subgraph(EdgeAttr(solution_key) == True)
 
     tracks_graph = solution_graph.assign_track_ids(output_track_id_key)
     dict_graph = {child: parent for parent, child in tracks_graph.edge_list()}
