@@ -6,9 +6,10 @@ import numpy as np
 import polars as pl
 import rustworkx as rx
 import sqlalchemy as sa
-from sqlalchemy.orm import DeclarativeBase, Session, load_only
+from sqlalchemy.orm import DeclarativeBase, Query, Session, load_only
 from sqlalchemy.sql.type_api import TypeEngine
 
+from tracksdata.attrs import AttrComparison, split_attr_comps
 from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.graph._base_graph import BaseGraph
 from tracksdata.utils._dataframe import unpack_array_attrs
@@ -34,6 +35,34 @@ def _data_numpy_to_native(data: dict[str, Any]) -> None:
     for k, v in data.items():
         if np.isscalar(v) and hasattr(v, "item"):
             data[k] = v.item()
+
+
+def _filter_query(
+    query: Query,
+    table: type[DeclarativeBase],
+    attr_filters: list[AttrComparison],
+) -> Query:
+    """
+    Filter a query by a list of attribute filters.
+
+    Parameters
+    ----------
+    query : Query
+        The query to filter.
+    table : type[DeclarativeBase]
+        The table to filter.
+    attr_filters : list[AttrComparison]
+        The attribute filters to apply.
+
+    Returns
+    -------
+    Query
+        The filtered query.
+    """
+    query = query.filter(
+        *[attr_filter.op(getattr(table, str(attr_filter.column)), attr_filter.other) for attr_filter in attr_filters]
+    )
+    return query
 
 
 class SQLGraph(BaseGraph):
@@ -295,12 +324,11 @@ class SQLGraph(BaseGraph):
 
     def filter_nodes_by_attrs(
         self,
-        attrs: dict[str, Any],
+        *attrs: AttrComparison,
     ) -> list[int]:
         with Session(self._engine) as session:
             query = session.query(self.Node.node_id)
-            for key, value in attrs.items():
-                query = query.filter(getattr(self.Node, key) == value)
+            query = _filter_query(query, self.Node, attrs)
             return [i for (i,) in query.all()]
 
     def node_ids(self) -> list[int]:
@@ -313,53 +341,49 @@ class SQLGraph(BaseGraph):
 
     def subgraph(
         self,
-        *,
+        *attr_filters: AttrComparison,
         node_ids: Sequence[int] | None = None,
-        node_attr_filter: dict[str, Any] | None = None,
-        edge_attr_filter: dict[str, Any] | None = None,
         node_attr_keys: Sequence[str] | str | None = None,
         edge_attr_keys: Sequence[str] | str | None = None,
     ) -> "GraphView":
         from tracksdata.graph._graph_view import GraphView
 
-        self._validate_subgraph_args(node_ids, node_attr_filter, edge_attr_filter)
+        node_attr_comps, edge_attr_comps = split_attr_comps(attr_filters)
+        self._validate_subgraph_args(node_ids, node_attr_comps, edge_attr_comps)
 
         if hasattr(node_ids, "tolist"):
             node_ids = node_ids.tolist()
 
         with Session(self._engine) as session:
-            # selecting edges
-            edge_query = session.query(self.Edge)
-
-            edge_filtered = False
-            if edge_attr_filter is not None:
-                edge_query = edge_query.filter(
-                    *[getattr(self.Edge, k) == v for k, v in edge_attr_filter.items()],
-                )
-
-                assert node_ids is None, "node_ids must be None when edge_attr_filter is not None"
-
-                node_ids = edge_query.with_entities(self.Edge.source_id, self.Edge.target_id).all()
-                node_ids = np.unique(node_ids).tolist()
-                edge_filtered = True
-
             node_query = session.query(self.Node)
+
+            node_filtered = False
 
             if node_ids is not None:
                 node_query = node_query.filter(self.Node.node_id.in_(node_ids))
+                node_filtered = True
 
-            if node_attr_filter is not None:
-                node_query = node_query.filter(
-                    *[getattr(self.Node, k) == v for k, v in node_attr_filter.items()],
-                )
+            if node_attr_comps:
+                node_query = _filter_query(node_query, self.Node, node_attr_comps)
                 node_ids = [i for (i,) in node_query.with_entities(self.Node.node_id).all()]
+                node_filtered = True
 
-            if not edge_filtered and node_ids is not None:
-                # TODO could this be done at the individual node filtering levels?
+            # selecting edges
+            edge_query = session.query(self.Edge)
+
+            if node_ids is not None:
                 edge_query = edge_query.filter(
                     self.Edge.source_id.in_(node_ids),
                     self.Edge.target_id.in_(node_ids),
                 )
+
+            if edge_attr_comps:
+                edge_query = _filter_query(edge_query, self.Edge, edge_attr_comps)
+
+                if not node_filtered:
+                    node_ids = edge_query.with_entities(self.Edge.source_id, self.Edge.target_id).all()
+                    node_ids = np.unique(node_ids).tolist()
+                    node_query = node_query.filter(self.Node.node_id.in_(node_ids))
 
             if node_attr_keys is not None:
                 if DEFAULT_ATTR_KEYS.NODE_ID not in node_attr_keys:

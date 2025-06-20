@@ -4,6 +4,7 @@ import numpy as np
 import polars as pl
 import pytest
 
+from tracksdata.attrs import EdgeAttr, NodeAttr
 from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.graph import SQLGraph
 from tracksdata.graph._base_graph import BaseGraph
@@ -125,16 +126,27 @@ def test_filter_nodes_by_attribute(graph_backend: BaseGraph) -> None:
     node3 = graph_backend.add_node({"t": 1, "label": "A"})
 
     # Filter by time
-    nodes = graph_backend.filter_nodes_by_attrs({"t": 0})
+    nodes = graph_backend.filter_nodes_by_attrs(NodeAttr("t") == 0)
     assert set(nodes) == {node1, node2}
 
     # Filter by label
-    nodes = graph_backend.filter_nodes_by_attrs({"label": "A"})
+    nodes = graph_backend.filter_nodes_by_attrs(NodeAttr("label") == "A")
     assert set(nodes) == {node1, node3}
 
-    # Filter by t and label
-    nodes = graph_backend.filter_nodes_by_attrs({"t": 1, "label": "A"})
+    # Filter by t and label using multiple conditions
+    nodes = graph_backend.filter_nodes_by_attrs(
+        NodeAttr("t") == 1,
+        NodeAttr("label") == "A",
+    )
     assert set(nodes) == {node3}
+
+    # Test with inequality
+    nodes = graph_backend.filter_nodes_by_attrs(NodeAttr("t") > 0)
+    assert set(nodes) == {node3}
+
+    # Test with multiple conditions using *args for AND
+    nodes = graph_backend.filter_nodes_by_attrs(NodeAttr("t") == 0, NodeAttr("label") == "A")
+    assert set(nodes) == {node1}
 
 
 def test_time_points(graph_backend: BaseGraph) -> None:
@@ -244,6 +256,67 @@ def test_edge_attrs_subgraph_edge_ids(graph_backend: BaseGraph) -> None:
     # This will demonstrate the bug
     msg = f"Expected {expected_subset_edge_ids}, got {actual_subset_edge_ids}"
     assert actual_subset_edge_ids == expected_subset_edge_ids, msg
+
+
+def test_subgraph_with_node_and_edge_attr_filters(graph_backend: BaseGraph) -> None:
+    """Test subgraph with node and edge attribute filters."""
+    graph_backend.add_node_attr_key("x", None)
+    graph_backend.add_edge_attr_key("weight", 0.0)
+
+    node1 = graph_backend.add_node({"t": 0, "x": 1.0})
+    node2 = graph_backend.add_node({"t": 1, "x": 2.0})
+    node3 = graph_backend.add_node({"t": 2, "x": 1.0})
+    node4 = graph_backend.add_node({"t": 3, "x": 3.0})
+    node5 = graph_backend.add_node({"t": 4, "x": 0.5})
+
+    graph_backend.add_edge(node1, node3, attrs={"weight": 0.8})
+    edge2 = graph_backend.add_edge(node3, node5, attrs={"weight": 0.2})
+    graph_backend.add_edge(node2, node4, attrs={"weight": 0.0})
+
+    subgraph = graph_backend.subgraph(
+        NodeAttr("x") <= 1.0,
+        EdgeAttr("weight") < 0.5,
+    )
+
+    assert subgraph.num_nodes == 3
+    assert subgraph.num_edges == 1
+
+    subgraph_node_ids = subgraph.node_ids()
+    assert set(subgraph_node_ids) == {node1, node3, node5}
+
+    subgraph_edge_ids = subgraph.edge_ids()
+    assert set(subgraph_edge_ids) == {edge2}
+
+
+def test_subgraph_with_node_ids_and_filters(graph_backend: BaseGraph) -> None:
+    """Test subgraph with node IDs and filters."""
+    graph_backend.add_node_attr_key("x", None)
+    graph_backend.add_edge_attr_key("weight", 0.0)
+
+    node1 = graph_backend.add_node({"t": 0, "x": 1.0})
+    node2 = graph_backend.add_node({"t": 1, "x": 2.0})
+    node3 = graph_backend.add_node({"t": 2, "x": 1.0})
+    node4 = graph_backend.add_node({"t": 3, "x": 3.0})
+    node5 = graph_backend.add_node({"t": 4, "x": 0.5})
+
+    graph_backend.add_edge(node1, node3, attrs={"weight": 0.8})
+    graph_backend.add_edge(node3, node5, attrs={"weight": 0.2})
+    graph_backend.add_edge(node2, node4, attrs={"weight": 0.0})
+
+    subgraph = graph_backend.subgraph(
+        NodeAttr("x") <= 1.0,
+        EdgeAttr("weight") < 0.5,
+        node_ids=[node1, node3],
+    )
+
+    assert subgraph.num_nodes == 2
+    assert subgraph.num_edges == 0
+
+    subgraph_node_ids = subgraph.node_ids()
+    assert set(subgraph_node_ids) == {node1, node3}
+
+    subgraph_edge_ids = subgraph.edge_ids()
+    assert len(subgraph_edge_ids) == 0
 
 
 def test_add_node_attr_key(graph_backend: BaseGraph) -> None:

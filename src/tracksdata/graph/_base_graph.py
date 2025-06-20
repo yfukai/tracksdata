@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any, TypeVar, overload
 
 import polars as pl
 
+from tracksdata.attrs import AttrComparison
 from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.utils._logging import LOG
 
@@ -203,16 +204,16 @@ class BaseGraph(abc.ABC):
     @abc.abstractmethod
     def filter_nodes_by_attrs(
         self,
-        attrs: dict[str, Any],
+        *attrs: AttrComparison,
     ) -> list[int]:
         """
         Filter nodes by attributes.
 
         Parameters
         ----------
-        attrs : dict[str, Any]
+        attrs : AttrComparison
             Attributes to filter by, for example:
-            >>> `graph.filter_nodes_by_attrs(dict(t=0, label='A'))`
+            >>> `graph.filter_nodes_by_attrs(Attr("t") == 0, Attr("label") == "A")`
 
         Returns
         -------
@@ -223,17 +224,11 @@ class BaseGraph(abc.ABC):
     def _validate_subgraph_args(
         self,
         node_ids: Sequence[int] | None = None,
-        node_attr_filter: dict[str, Any] | None = None,
-        edge_attr_filter: dict[str, Any] | None = None,
+        node_attr_comps: list[AttrComparison] | None = None,
+        edge_attr_comps: list[AttrComparison] | None = None,
     ) -> None:
-        if node_ids is not None and (node_attr_filter is not None or edge_attr_filter is not None):
-            raise ValueError("Node IDs and attributes' filters cannot be used together")
-
-        if node_attr_filter is not None and edge_attr_filter is not None:
-            raise ValueError("Node attributes' filters and edge attributes' filters cannot be used together")
-
-        if node_ids is None and node_attr_filter is None and edge_attr_filter is None:
-            raise ValueError("Either node IDs or one of the attributes' filters must be provided")
+        if node_ids is None and not node_attr_comps and not edge_attr_comps:
+            raise ValueError("Either node IDs or one of the attributes' comparisons must be provided")
 
     @abc.abstractmethod
     def node_ids(self) -> list[int]:
@@ -250,10 +245,8 @@ class BaseGraph(abc.ABC):
     @abc.abstractmethod
     def subgraph(
         self,
-        *,
+        *attr_filters: AttrComparison,
         node_ids: Sequence[int] | None = None,
-        node_attr_filter: dict[str, Any] | None = None,
-        edge_attr_filter: dict[str, Any] | None = None,
         node_attr_keys: Sequence[str] | str | None = None,
         edge_attr_keys: Sequence[str] | str | None = None,
     ) -> "GraphView":
@@ -267,10 +260,8 @@ class BaseGraph(abc.ABC):
         ----------
         node_ids : Sequence[int]
             The IDs of the nodes to include in the subgraph.
-        node_attr_filter : dict[str, Any] | None
+        *attr_filters : AttrComparison
             The attributes to filter the nodes by.
-        edge_attr_filter : dict[str, Any] | None
-            The attributes to filter the edges by.
         node_attr_keys : Sequence[str] | str | None
             The attribute keys to get.
             If None, all attributesare used.

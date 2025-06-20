@@ -71,6 +71,7 @@ line-length = 120
 # https://docs.astral.sh/ruff/rules
 [tool.ruff.lint]
 pydocstyle = { convention = "numpy" }
+ignore = ["E712"]
 select = [
     "E",    # style errors
     "W",    # style warnings
@@ -108,6 +109,7 @@ exclude_lines = [
     "if TYPE_CHECKING:",  # Ignore type checking
     "if __name__ == .__main__.:", # Don't complain if non-runnable code isn't run:
     "@(abc.)?abstractmethod", # Don't complain about abstract methods, they aren't run:
+    "def .*: \\.\\.\\.$",  # Exclude function headers that end with "..." (type stubs)
 ]
 
 [tool.coverage.run]

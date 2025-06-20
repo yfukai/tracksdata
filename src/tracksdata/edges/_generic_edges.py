@@ -3,6 +3,7 @@ from typing import Any
 
 import numpy as np
 
+from tracksdata.attrs import NodeAttr
 from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.edges._base_edge_attrs import BaseEdgeAttrsOperator
 from tracksdata.graph._base_graph import BaseGraph
@@ -66,7 +67,7 @@ class GenericNodeFunctionEdgeAttrs(BaseEdgeAttrsOperator):
         t : int
             The time point to add weights for.
         """
-        source_ids = graph.filter_nodes_by_attrs({DEFAULT_ATTR_KEYS.T: t})
+        source_ids = graph.filter_nodes_by_attrs(NodeAttr(DEFAULT_ATTR_KEYS.T) == t)
         edges_df = graph.edge_attrs(node_ids=source_ids, include_targets=True)
 
         if len(edges_df) == 0:

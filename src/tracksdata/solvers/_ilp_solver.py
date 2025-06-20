@@ -11,8 +11,8 @@ from ilpy import (
     VariableType,
 )
 
+from tracksdata.attrs import Attr, EdgeAttr, ExprInput, NodeAttr
 from tracksdata.constants import DEFAULT_ATTR_KEYS
-from tracksdata.expr import AttrExpr, ExprInput
 from tracksdata.graph._base_graph import BaseGraph
 from tracksdata.graph._graph_view import GraphView
 from tracksdata.solvers._base_solver import BaseSolver
@@ -27,7 +27,7 @@ class ILPSolver(BaseSolver):
     def __init__(
         self,
         *,
-        edge_weight: str | AttrExpr = DEFAULT_ATTR_KEYS.EDGE_WEIGHT,
+        edge_weight: str | ExprInput = DEFAULT_ATTR_KEYS.EDGE_WEIGHT,
         node_weight: str | ExprInput = 0.0,
         appearance_weight: str | ExprInput = 0.0,
         disappearance_weight: str | ExprInput = 0.0,
@@ -38,11 +38,11 @@ class ILPSolver(BaseSolver):
         return_solution: bool = True,
     ):
         super().__init__(output_key=output_key, reset=reset, return_solution=return_solution)
-        self.edge_weight_expr = AttrExpr(edge_weight)
-        self.node_weight_expr = AttrExpr(node_weight)
-        self.appearance_weight_expr = AttrExpr(appearance_weight)
-        self.disappearance_weight_expr = AttrExpr(disappearance_weight)
-        self.division_weight_expr = AttrExpr(division_weight)
+        self.edge_weight_expr = EdgeAttr(edge_weight)
+        self.node_weight_expr = NodeAttr(node_weight)
+        self.appearance_weight_expr = NodeAttr(appearance_weight)
+        self.disappearance_weight_expr = NodeAttr(disappearance_weight)
+        self.division_weight_expr = NodeAttr(division_weight)
         self.num_threads = num_threads
         self.reset_model()
 
@@ -58,7 +58,7 @@ class ILPSolver(BaseSolver):
 
     def _evaluate_expr(
         self,
-        expr: AttrExpr,
+        expr: Attr,
         df: pl.DataFrame,
     ) -> list[float]:
         if len(expr.expr_columns) == 0:
@@ -68,7 +68,7 @@ class ILPSolver(BaseSolver):
 
     def _evaluate_inf_expr(
         self,
-        inf_expr: list[AttrExpr],
+        inf_expr: list[Attr],
         df: pl.DataFrame,
         node_key: str,
     ) -> list[int]:
@@ -286,4 +286,7 @@ class ILPSolver(BaseSolver):
         )
 
         if self.return_solution:
-            return graph.subgraph(edge_attr_filter={self.output_key: True})
+            return graph.subgraph(
+                NodeAttr(self.output_key) == True,
+                EdgeAttr(self.output_key) == True,
+            )
