@@ -2,6 +2,7 @@ import math
 import operator
 from collections.abc import Callable
 
+import numpy as np
 import polars as pl
 import pytest
 
@@ -309,10 +310,21 @@ def test_duplicated_columns() -> None:
     assert expr.columns == ["a"]
 
 
-def test_attr_comparison_init() -> None:
+def test_attr_reverse_comparison() -> None:
     """Test basic initialization of AttrComparison."""
     attr = Attr("test_column")
-    comp = attr == 5
+    comp = 5 == attr  # reversed on purpose
+
+    assert comp.attr == attr
+    assert comp.column == "test_column"
+    assert comp.op == operator.eq
+    assert comp.other == 5
+
+
+def test_attr_numpy_comparison() -> None:
+    """Test basic initialization of AttrComparison."""
+    attr = Attr("test_column")
+    comp = attr == np.asarray(5)
 
     assert comp.attr == attr
     assert comp.column == "test_column"
