@@ -349,7 +349,7 @@ class RustWorkXGraph(BaseGraph):
 
         if node_ids is None and edge_attr_comps:
             edges_df = self.edge_attrs(node_ids=node_ids, attr_keys=attr_comps_to_strs(edge_attr_comps))
-            mask = polars_reduce_attr_comps(edges_df, edge_attr_comps)
+            mask = polars_reduce_attr_comps(edges_df, edge_attr_comps, operator.and_)
             node_ids = np.unique(
                 edges_df.filter(mask)
                 .select(

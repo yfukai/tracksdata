@@ -551,7 +551,7 @@ def attr_comps_to_strs(attr_comps: Sequence[AttrComparison]) -> list[str]:
 def polars_reduce_attr_comps(
     df: pl.DataFrame,
     attr_comps: Sequence[AttrComparison],
-    reduce_op: Callable[[Expr, Expr], Expr] = operator.and_,
+    reduce_op: Callable[[Expr, Expr], Expr],
 ) -> pl.Expr:
     """
     Reduce a list of attribute comparisons into a single polars expression.
@@ -562,9 +562,8 @@ def polars_reduce_attr_comps(
         The dataframe to reduce the attribute comparisons on.
     attr_comps : Sequence[AttrComparison]
         The attribute comparisons to reduce.
-    reduce_op : Callable[[Expr, Expr], Expr], optional
+    reduce_op : Callable[[Expr, Expr], Expr]
         The operation to reduce the attribute comparisons with.
-        Defaults to `operator.and_` (logical AND).
 
     Returns
     -------

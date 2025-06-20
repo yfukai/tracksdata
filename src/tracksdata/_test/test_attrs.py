@@ -563,7 +563,7 @@ def test_polars_reduce_attr_comps() -> None:
     comp2 = attr2 < 35
     comp3 = attr3 == True
 
-    result_expr = polars_reduce_attr_comps(df, [comp1, comp2, comp3])
+    result_expr = polars_reduce_attr_comps(df, [comp1, comp2, comp3], operator.and_)
     result = df.select(result_expr).to_series()
 
     # Expected: (col1 > 2) & (col2 < 35) & (col3 == True)
@@ -582,7 +582,7 @@ def test_polars_reduce_attr_comps_empty() -> None:
     df = pl.DataFrame({"col1": [1, 2, 3]})
 
     with pytest.raises(ValueError, match="No attribute comparisons provided"):
-        polars_reduce_attr_comps(df, [])
+        polars_reduce_attr_comps(df, [], operator.and_)
 
 
 def test_polars_reduce_attr_comps_single() -> None:
@@ -592,7 +592,7 @@ def test_polars_reduce_attr_comps_single() -> None:
     attr = Attr("col1")
     comp = attr > 3
 
-    result_expr = polars_reduce_attr_comps(df, [comp])
+    result_expr = polars_reduce_attr_comps(df, [comp], operator.and_)
     result = df.select(result_expr).to_series()
 
     expected = [False, False, False, True, True]
