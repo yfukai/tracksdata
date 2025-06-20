@@ -43,7 +43,7 @@ class AttrComparison:
         self.other = other
 
     def __repr__(self) -> str:
-        return f"Attr({self.column}) '{self.op.__name__}' {self.other}"
+        return f"{type(self.attr).__name__}({self.column}) '{self.op.__name__}' {self.other}"
 
     def to_attr(self) -> "Attr":
         return Attr(self.op(pl.col(self.column), self.other))
@@ -383,6 +383,10 @@ def polars_reduce_attr_comps(df: pl.DataFrame, attr_comps: list[AttrComparison])
     pl.Expr
         The reduced polars expression.
     """
+    if not attr_comps:
+        # Return True for all rows by using the first column as a reference
+        raise ValueError("No attribute comparisons provided.")
+
     return pl.reduce(
         lambda x, y: x & y, [attr_comp.op(df[str(attr_comp.column)], attr_comp.other) for attr_comp in attr_comps]
     )

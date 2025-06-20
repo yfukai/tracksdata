@@ -5,7 +5,15 @@ from collections.abc import Callable
 import polars as pl
 import pytest
 
-from tracksdata.attrs import Attr
+from tracksdata.attrs import (
+    Attr,
+    AttrComparison,
+    EdgeAttr,
+    NodeAttr,
+    attr_comps_to_strs,
+    polars_reduce_attr_comps,
+    split_attr_comps,
+)
 
 
 def test_attr_expr_init_with_string() -> None:
@@ -299,3 +307,310 @@ def test_duplicated_columns() -> None:
     result = expr.evaluate(df)
     assert result.to_list() == [10, 0, -5]
     assert expr.columns == ["a"]
+
+
+def test_attr_comparison_init() -> None:
+    """Test basic initialization of AttrComparison."""
+    attr = Attr("test_column")
+    comp = attr == 5
+
+    assert comp.attr == attr
+    assert comp.column == "test_column"
+    assert comp.op == operator.eq
+    assert comp.other == 5
+
+
+def test_attr_comparison_repr() -> None:
+    """Test string representation of AttrComparison."""
+    attr = Attr("test_column")
+    comp = attr > 10
+
+    assert repr(comp) == "Attr(test_column) 'gt' 10"
+
+
+def test_attr_comparison_to_attr() -> None:
+    """Test converting AttrComparison back to Attr."""
+    df = pl.DataFrame({"test_column": [1, 2, 3, 4, 5]})
+    attr = Attr("test_column")
+    comp = attr > 3
+
+    converted_attr = comp.to_attr()
+    result = converted_attr.evaluate(df)
+
+    assert result.to_list() == [False, False, False, True, True]
+
+
+def test_attr_comparison_getattr_delegation() -> None:
+    """Test that AttrComparison delegates attribute access to its Attr representation."""
+    attr = Attr("test_column")
+    comp = attr == 5
+
+    # Test that we can access Attr methods through AttrComparison
+    assert comp.columns == ["test_column"]
+    assert comp.expr_columns == ["test_column"]
+
+
+def test_attr_comparison_operator_delegation() -> None:
+    """Test that AttrComparison delegates operators to its Attr representation."""
+    df = pl.DataFrame({"test_column": [1, 2, 3, 4, 5]})
+    attr = Attr("test_column")
+    comp = attr > 3
+
+    # Test that we can use operators on AttrComparison
+    result_attr = comp + 10
+    result = result_attr.evaluate(df)
+
+    # Should be (test_column > 3) + 10
+    expected = [(x > 3) + 10 for x in df["test_column"]]
+    assert result.to_list() == expected
+
+
+def test_attr_comparison_init_with_infinity_attr() -> None:
+    """Test that AttrComparison raises error when attr has infinity."""
+    # Create an attr with infinity
+    attr_with_inf = Attr("test") * math.inf
+
+    with pytest.raises(ValueError, match="Comparison operators are not supported for expressions with infinity"):
+        AttrComparison(attr_with_inf, operator.eq, 5)
+
+
+def test_attr_comparison_init_with_attr_other() -> None:
+    """Test that AttrComparison raises error when comparing two Attr objects."""
+    attr1 = Attr("col1")
+    attr2 = Attr("col2")
+
+    with pytest.raises(ValueError, match="Does not support comparison between expressions"):
+        AttrComparison(attr1, operator.eq, attr2)
+
+
+def test_attr_comparison_init_with_empty_columns() -> None:
+    """Test that AttrComparison raises error for empty expressions."""
+    # Create an attr with no columns (literal)
+    attr_no_cols = Attr(5)
+
+    with pytest.raises(ValueError, match="Comparison operators are not supported for empty expressions"):
+        AttrComparison(attr_no_cols, operator.eq, 10)
+
+
+def test_attr_comparison_init_with_multiple_columns() -> None:
+    """Test that AttrComparison raises error for multiple columns."""
+    # Create an attr with multiple columns
+    attr_multi_cols = Attr("col1") + Attr("col2")
+
+    with pytest.raises(ValueError, match="Comparison operators are not supported for multiple columns"):
+        AttrComparison(attr_multi_cols, operator.eq, 10)
+
+
+def test_attr_comparison_comparison_operators() -> None:
+    """Test all comparison operators with AttrComparison."""
+    df = pl.DataFrame({"test_column": [1, 2, 3, 4, 5]})
+    attr = Attr("test_column")
+
+    test_cases = [
+        (operator.eq, 3, [False, False, True, False, False]),
+        (operator.ne, 3, [True, True, False, True, True]),
+        (operator.lt, 3, [True, True, False, False, False]),
+        (operator.le, 3, [True, True, True, False, False]),
+        (operator.gt, 3, [False, False, False, True, True]),
+        (operator.ge, 3, [False, False, True, True, True]),
+    ]
+
+    for op, other, expected in test_cases:
+        comp = op(attr, other)
+        result = comp.to_attr().evaluate(df)
+        assert result.to_list() == expected
+
+
+def test_attr_comparison_binary_operators() -> None:
+    """Test binary operators with AttrComparison."""
+    df = pl.DataFrame({"test_column": [1, 2, 3, 4, 5]})
+    attr = Attr("test_column")
+    comp = AttrComparison(attr, operator.gt, 3)
+
+    # Test addition
+    result = comp + 10
+    result_series = result.evaluate(df)
+    expected = [(x > 3) + 10 for x in df["test_column"]]
+    assert result_series.to_list() == expected
+
+    # Test multiplication
+    result = comp * 2
+    result_series = result.evaluate(df)
+    expected = [(x > 3) * 2 for x in df["test_column"]]
+    assert result_series.to_list() == expected
+
+
+def test_attr_comparison_reverse_operators() -> None:
+    """Test reverse operators with AttrComparison."""
+    df = pl.DataFrame({"test_column": [1, 2, 3, 4, 5]})
+    attr = Attr("test_column")
+    comp = AttrComparison(attr, operator.gt, 3)
+
+    # Test reverse addition
+    result = 10 + comp
+    result_series = result.evaluate(df)
+    expected = [10 + (x > 3) for x in df["test_column"]]
+    assert result_series.to_list() == expected
+
+    # Test reverse multiplication
+    result = 2 * comp
+    result_series = result.evaluate(df)
+    expected = [2 * (x > 3) for x in df["test_column"]]
+    assert result_series.to_list() == expected
+
+
+def test_split_attr_comps() -> None:
+    """Test splitting attribute comparisons into node and edge comparisons."""
+    node_attr1 = NodeAttr("node_col1")
+    node_attr2 = NodeAttr("node_col2")
+    edge_attr1 = EdgeAttr("edge_col1")
+    edge_attr2 = EdgeAttr("edge_col2")
+
+    node_comp1 = node_attr1 == 1
+    node_comp2 = node_attr2 > 5
+    edge_comp1 = edge_attr1 < 10
+    edge_comp2 = edge_attr2 != 0
+
+    all_comps = [node_comp1, edge_comp1, node_comp2, edge_comp2]
+    node_comps, edge_comps = split_attr_comps(all_comps)
+
+    assert len(node_comps) == 2
+    assert len(edge_comps) == 2
+    assert node_comps[0].column == "node_col1"
+    assert node_comps[1].column == "node_col2"
+    assert edge_comps[0].column == "edge_col1"
+    assert edge_comps[1].column == "edge_col2"
+
+
+def test_split_attr_comps_empty() -> None:
+    """Test splitting empty list of attribute comparisons."""
+    node_comps, edge_comps = split_attr_comps([])
+    assert node_comps == []
+    assert edge_comps == []
+
+
+def test_split_attr_comps_only_node() -> None:
+    """Test splitting only node attribute comparisons."""
+    node_attr = NodeAttr("node_col")
+    node_comp = AttrComparison(node_attr, operator.eq, 1)
+
+    node_comps, edge_comps = split_attr_comps([node_comp])
+    assert len(node_comps) == 1
+    assert len(edge_comps) == 0
+    assert node_comps[0].column == "node_col"
+
+
+def test_split_attr_comps_only_edge() -> None:
+    """Test splitting only edge attribute comparisons."""
+    edge_attr = EdgeAttr("edge_col")
+    edge_comp = AttrComparison(edge_attr, operator.gt, 5)
+
+    node_comps, edge_comps = split_attr_comps([edge_comp])
+    assert len(node_comps) == 0
+    assert len(edge_comps) == 1
+    assert edge_comps[0].column == "edge_col"
+
+
+def test_split_attr_comps_invalid_type() -> None:
+    """Test splitting with invalid attribute type."""
+    # Create a comparison with regular Attr instead of NodeAttr or EdgeAttr
+    regular_attr = Attr("regular_col")
+    regular_comp = regular_attr == 1
+
+    with pytest.raises(ValueError, match="Expected comparisons of 'NodeAttr' or 'EdgeAttr' objects"):
+        split_attr_comps([regular_comp])
+
+
+def test_attr_comps_to_strs() -> None:
+    """Test converting attribute comparisons to strings."""
+    node_attr = NodeAttr("node_col")
+    edge_attr = EdgeAttr("edge_col")
+
+    node_comp = node_attr == 1
+    edge_comp = edge_attr > 5
+
+    result = attr_comps_to_strs([node_comp, edge_comp])
+    assert result == ["node_col", "edge_col"]
+
+
+def test_attr_comps_to_strs_empty() -> None:
+    """Test converting empty list of attribute comparisons to strings."""
+    result = attr_comps_to_strs([])
+    assert result == []
+
+
+def test_polars_reduce_attr_comps() -> None:
+    """Test reducing attribute comparisons to a single polars expression."""
+    df = pl.DataFrame({"col1": [1, 2, 3, 4, 5], "col2": [10, 20, 30, 40, 50], "col3": [True, False, True, False, True]})
+
+    attr1 = Attr("col1")
+    attr2 = Attr("col2")
+    attr3 = Attr("col3")
+
+    comp1 = attr1 > 2
+    comp2 = attr2 < 35
+    comp3 = attr3 == True
+
+    result_expr = polars_reduce_attr_comps(df, [comp1, comp2, comp3])
+    result = df.select(result_expr).to_series()
+
+    # Expected: (col1 > 2) & (col2 < 35) & (col3 == True)
+    expected = [
+        False,  # 1 > 2 = False, so False
+        False,  # 2 > 2 = False, so False
+        True,  # 3 > 2 = True, 30 < 35 = True, True == True = True, so True
+        False,  # 4 > 2 = True, 40 < 35 = False, so False
+        False,  # 5 > 2 = True, 50 < 35 = False, so False
+    ]
+    assert result.to_list() == expected
+
+
+def test_polars_reduce_attr_comps_empty() -> None:
+    """Test reducing empty list of attribute comparisons raises ValueError."""
+    df = pl.DataFrame({"col1": [1, 2, 3]})
+
+    with pytest.raises(ValueError, match="No attribute comparisons provided"):
+        polars_reduce_attr_comps(df, [])
+
+
+def test_polars_reduce_attr_comps_single() -> None:
+    """Test reducing single attribute comparison."""
+    df = pl.DataFrame({"col1": [1, 2, 3, 4, 5]})
+
+    attr = Attr("col1")
+    comp = attr > 3
+
+    result_expr = polars_reduce_attr_comps(df, [comp])
+    result = df.select(result_expr).to_series()
+
+    expected = [False, False, False, True, True]
+    assert result.to_list() == expected
+
+
+def test_attr_comparison_complex_operations() -> None:
+    """Test complex operations involving AttrComparison."""
+    df = pl.DataFrame({"col1": [1, 2, 3, 4, 5], "col2": [10, 20, 30, 40, 50]})
+
+    attr1 = Attr("col1")
+    attr2 = Attr("col2")
+
+    comp1 = attr1 > 2
+    comp2 = attr2 < 35
+
+    # Test combining comparisons with arithmetic
+    result = comp1 * 10 + comp2 * 5
+    result_series = result.evaluate(df)
+
+    expected = [(x > 2) * 10 + (y < 35) * 5 for x, y in zip(df["col1"], df["col2"], strict=False)]
+    assert result_series.to_list() == expected
+
+
+def test_attr_comparison_method_delegation() -> None:
+    """Test that AttrComparison properly delegates method calls."""
+    attr = Attr("test_column")
+    comp = attr > 3
+
+    # Test that we can call methods on the comparison
+    result = comp.alias("new_name")
+    assert isinstance(result, Attr)
+    assert result.columns == ["test_column"]

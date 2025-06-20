@@ -38,11 +38,11 @@ class ILPSolver(BaseSolver):
         return_solution: bool = True,
     ):
         super().__init__(output_key=output_key, reset=reset, return_solution=return_solution)
-        self.edge_weight_expr = Attr(edge_weight)
-        self.node_weight_expr = Attr(node_weight)
-        self.appearance_weight_expr = Attr(appearance_weight)
-        self.disappearance_weight_expr = Attr(disappearance_weight)
-        self.division_weight_expr = Attr(division_weight)
+        self.edge_weight_expr = EdgeAttr(edge_weight)
+        self.node_weight_expr = NodeAttr(node_weight)
+        self.appearance_weight_expr = NodeAttr(appearance_weight)
+        self.disappearance_weight_expr = NodeAttr(disappearance_weight)
+        self.division_weight_expr = NodeAttr(division_weight)
         self.num_threads = num_threads
         self.reset_model()
 

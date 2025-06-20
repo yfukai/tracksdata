@@ -5,7 +5,7 @@ from pathlib import Path
 import polars as pl
 from tabulate import tabulate
 
-from tracksdata.attrs import Attr, EdgeAttr, NodeAttr
+from tracksdata.attrs import EdgeAttr, NodeAttr
 from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.edges import DistanceEdges
 from tracksdata.graph import RustWorkXGraph, SQLGraph
@@ -132,7 +132,7 @@ def main() -> None:
                 (
                     "nearest_neighbors_solver",
                     NearestNeighborsSolver(
-                        edge_weight=-Attr(DEFAULT_ATTR_KEYS.EDGE_WEIGHT),
+                        edge_weight=-EdgeAttr(DEFAULT_ATTR_KEYS.EDGE_WEIGHT),
                         max_children=2,
                         return_solution=False,
                     ).solve,
