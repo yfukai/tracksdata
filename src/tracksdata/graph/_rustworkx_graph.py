@@ -31,7 +31,7 @@ def _pop_time_eq(
 
     Parameters
     ----------
-    attrs : list[AttrComparison]
+    attrs : Sequence[AttrComparison]
         The attribute filters to pop the time equality filter from.
 
     Returns
