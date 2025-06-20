@@ -507,6 +507,15 @@ def split_attr_comps(attr_comps: Sequence[AttrComparison]) -> tuple[list[AttrCom
     """
     Split a list of attribute comparisons into node and edge attribute comparisons.
 
+    Parameters
+    ----------
+    attr_comps : Sequence[AttrComparison]
+        The attribute comparisons to split.
+
+    Returns
+    -------
+    tuple[list[AttrComparison], list[AttrComparison]]
+        A tuple of lists of node and edge attribute comparisons.
     """
     node_attr_comps = []
     edge_attr_comps = []
@@ -522,23 +531,40 @@ def split_attr_comps(attr_comps: Sequence[AttrComparison]) -> tuple[list[AttrCom
     return node_attr_comps, edge_attr_comps
 
 
-def attr_comps_to_strs(attr_comps: list[AttrComparison]) -> list[str]:
+def attr_comps_to_strs(attr_comps: Sequence[AttrComparison]) -> list[str]:
     """
     Convert a list of attribute comparisons to a list of strings.
+
+    Parameters
+    ----------
+    attr_comps : Sequence[AttrComparison]
+        The attribute comparisons to convert to strings.
+
+    Returns
+    -------
+    list[str]
+        The attribute comparisons as strings.
     """
     return [str(attr_comp.column) for attr_comp in attr_comps]
 
 
-def polars_reduce_attr_comps(df: pl.DataFrame, attr_comps: list[AttrComparison]) -> pl.Expr:
+def polars_reduce_attr_comps(
+    df: pl.DataFrame,
+    attr_comps: Sequence[AttrComparison],
+    reduce_op: Callable[[Expr, Expr], Expr] = operator.and_,
+) -> pl.Expr:
     """
-    Reduce a list of attribute comparisons to a single polars expression.
+    Reduce a list of attribute comparisons into a single polars expression.
 
     Parameters
     ----------
     df : pl.DataFrame
         The dataframe to reduce the attribute comparisons on.
-    attr_comps : list[AttrComparison]
+    attr_comps : Sequence[AttrComparison]
         The attribute comparisons to reduce.
+    reduce_op : Callable[[Expr, Expr], Expr], optional
+        The operation to reduce the attribute comparisons with.
+        Defaults to `operator.and_` (logical AND).
 
     Returns
     -------
@@ -549,6 +575,4 @@ def polars_reduce_attr_comps(df: pl.DataFrame, attr_comps: list[AttrComparison])
         # Return True for all rows by using the first column as a reference
         raise ValueError("No attribute comparisons provided.")
 
-    return pl.reduce(
-        lambda x, y: x & y, [attr_comp.op(df[str(attr_comp.column)], attr_comp.other) for attr_comp in attr_comps]
-    )
+    return pl.reduce(reduce_op, [attr_comp.op(df[str(attr_comp.column)], attr_comp.other) for attr_comp in attr_comps])
