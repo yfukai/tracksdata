@@ -149,7 +149,9 @@ class NearestNeighborsSolver(BaseSolver):
             )
         )
 
-        graph.add_node_attr_key(self.output_key, False)
+        if self.output_key not in graph.node_attr_keys:
+            graph.add_node_attr_key(self.output_key, False)
+
         graph.update_node_attrs(
             node_ids=node_ids,
             attrs={self.output_key: True},

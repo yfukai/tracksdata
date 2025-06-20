@@ -222,3 +222,12 @@ def test_mask_all_true() -> None:
     assert len(indices) == 2
     assert np.array_equal(indices[0], expected_y)
     assert np.array_equal(indices[1], expected_x)
+
+
+def test_mask_repr() -> None:
+    """Test mask representation."""
+    mask_array = np.array([[True, False], [False, True]], dtype=bool)
+    bbox = np.array([0, 0, 2, 2])
+
+    mask = Mask(mask_array, bbox)
+    assert repr(mask) == "Mask(bbox=[0:2, 0:2])"

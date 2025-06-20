@@ -1,4 +1,3 @@
-# flake8: noqa: F811
 from collections.abc import Callable
 
 import polars as pl
