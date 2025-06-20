@@ -11,9 +11,8 @@ from ilpy import (
     VariableType,
 )
 
-from tracksdata.attrs import EdgeAttr, NodeAttr
+from tracksdata.attrs import Attr, EdgeAttr, ExprInput, NodeAttr
 from tracksdata.constants import DEFAULT_ATTR_KEYS
-from tracksdata.expr import AttrExpr, ExprInput
 from tracksdata.graph._base_graph import BaseGraph
 from tracksdata.graph._graph_view import GraphView
 from tracksdata.solvers._base_solver import BaseSolver
@@ -39,11 +38,11 @@ class ILPSolver(BaseSolver):
         return_solution: bool = True,
     ):
         super().__init__(output_key=output_key, reset=reset, return_solution=return_solution)
-        self.edge_weight_expr = AttrExpr(edge_weight)
-        self.node_weight_expr = AttrExpr(node_weight)
-        self.appearance_weight_expr = AttrExpr(appearance_weight)
-        self.disappearance_weight_expr = AttrExpr(disappearance_weight)
-        self.division_weight_expr = AttrExpr(division_weight)
+        self.edge_weight_expr = Attr(edge_weight)
+        self.node_weight_expr = Attr(node_weight)
+        self.appearance_weight_expr = Attr(appearance_weight)
+        self.disappearance_weight_expr = Attr(disappearance_weight)
+        self.division_weight_expr = Attr(division_weight)
         self.num_threads = num_threads
         self.reset_model()
 
@@ -59,7 +58,7 @@ class ILPSolver(BaseSolver):
 
     def _evaluate_expr(
         self,
-        expr: AttrExpr,
+        expr: Attr,
         df: pl.DataFrame,
     ) -> list[float]:
         if len(expr.expr_columns) == 0:
@@ -69,7 +68,7 @@ class ILPSolver(BaseSolver):
 
     def _evaluate_inf_expr(
         self,
-        inf_expr: list[AttrExpr],
+        inf_expr: list[Attr],
         df: pl.DataFrame,
         node_key: str,
     ) -> list[int]:

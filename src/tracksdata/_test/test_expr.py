@@ -5,46 +5,46 @@ from collections.abc import Callable
 import polars as pl
 import pytest
 
-from tracksdata.expr import AttrExpr
+from tracksdata.attrs import Attr
 
 
 def test_attr_expr_init_with_string() -> None:
-    expr = AttrExpr("test")
+    expr = Attr("test")
     assert isinstance(expr.expr, pl.Expr)
     assert expr.expr.meta.root_names() == ["test"]
 
 
 def test_attr_expr_init_with_scalar() -> None:
-    expr = AttrExpr(1.0)
+    expr = Attr(1.0)
     assert isinstance(expr.expr, pl.Expr)
     # Literal expressions don't have root names
     assert expr.expr.meta.root_names() == []
 
 
 def test_attr_expr_init_with_attr_expr() -> None:
-    expr1 = AttrExpr("test")
-    expr2 = AttrExpr(expr1).sqrt()
+    expr1 = Attr("test")
+    expr2 = Attr(expr1).sqrt()
     assert isinstance(expr2.expr, pl.Expr)
     assert expr2.expr.meta.root_names() == ["test"]
 
 
 def test_attr_expr_init_with_polars_expr() -> None:
     pl_expr = pl.col("test")
-    expr = AttrExpr(pl_expr)
+    expr = Attr(pl_expr)
     assert isinstance(expr.expr, pl.Expr)
     assert expr.expr.meta.root_names() == ["test"]
 
 
 def test_attr_expr_evaluate() -> None:
     df = pl.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
-    expr = AttrExpr("a") + AttrExpr("b")
+    expr = Attr("a") + Attr("b")
     result = expr.evaluate(df)
     assert isinstance(result, pl.Series)
     assert result.to_list() == [5, 7, 9]
 
 
 def test_attr_expr_column_names() -> None:
-    expr = AttrExpr("test")
+    expr = Attr("test")
     assert expr.columns == ["test"]
 
 
@@ -59,7 +59,7 @@ def test_attr_expr_column_names() -> None:
 )
 def test_attr_expr_unary_operators(op: Callable, func: Callable) -> None:
     df = pl.DataFrame({"a": [-1, 2, -3]})
-    expr = op(AttrExpr("a"))
+    expr = op(Attr("a"))
     result = expr.evaluate(df)
     expected = pl.Series([func(x) for x in df["a"]])
     assert result.to_list() == expected.to_list()
@@ -85,22 +85,22 @@ def test_attr_expr_unary_operators(op: Callable, func: Callable) -> None:
 )
 def test_attr_expr_binary_operators(op: Callable, func: Callable) -> None:
     df = pl.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
-    expr = op(AttrExpr("a"), AttrExpr("b"))
+    expr = op(Attr("a"), Attr("b"))
     result = expr.evaluate(df)
     expected = pl.Series([func(x, y) for x, y in zip(df["a"], df["b"], strict=False)])
     assert result.to_list() == expected.to_list()
 
 
 def test_attr_expr_alias() -> None:
-    expr = AttrExpr("test").alias("new_name")
-    assert isinstance(expr, AttrExpr)
+    expr = Attr("test").alias("new_name")
+    assert isinstance(expr, Attr)
     # Note: alias doesn't change root names
     assert expr.columns == ["test"]
 
 
 def test_attr_expr_method_delegation() -> None:
     df = pl.DataFrame({"a": [1, 2, 3]})
-    expr = AttrExpr("a").log(2)
+    expr = Attr("a").log(2)
     result = expr.evaluate(df)
     expected = df.select(pl.col("a").log(2)).to_series()
     assert result.to_list() == expected.to_list()
@@ -108,7 +108,7 @@ def test_attr_expr_method_delegation() -> None:
 
 def test_attr_expr_complex_expression() -> None:
     df = pl.DataFrame({"iou": [0.5, 0.7, 0.9], "distance": [10, 20, 30]})
-    expr = (1 - AttrExpr("iou")) * AttrExpr("distance")
+    expr = (1 - Attr("iou")) * Attr("distance")
     result = expr.evaluate(df)
     expected = [(1 - iou) * dist for iou, dist in zip(df["iou"], df["distance"], strict=False)]
     assert result.to_list() == expected
@@ -116,7 +116,7 @@ def test_attr_expr_complex_expression() -> None:
 
 def test_attr_expr_with_infinity() -> None:
     df = pl.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]})
-    expr = (AttrExpr("a") == 1) * math.inf - math.inf * (AttrExpr("b") > 4) + AttrExpr("c")
+    expr = (Attr("a") == 1) * math.inf - math.inf * (Attr("b") > 4) + Attr("c")
 
     result = expr.evaluate(df)
     assert result.to_list() == [7, 8, 9]
@@ -134,7 +134,7 @@ def test_attr_expr_with_infinity() -> None:
 def test_attr_expr_multiple_positive_infinity() -> None:
     """Test expression with multiple positive infinity terms."""
     df = pl.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]})
-    expr = AttrExpr("a") * math.inf + math.inf * AttrExpr("b") + AttrExpr("c")
+    expr = Attr("a") * math.inf + math.inf * Attr("b") + Attr("c")
 
     result = expr.evaluate(df)
     assert result.to_list() == [7, 8, 9]  # Only finite term remains
@@ -153,7 +153,7 @@ def test_attr_expr_multiple_positive_infinity() -> None:
 def test_attr_expr_multiple_negative_infinity() -> None:
     """Test expression with multiple negative infinity terms."""
     df = pl.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]})
-    expr = AttrExpr("a") * (-math.inf) - math.inf * AttrExpr("b") + AttrExpr("c")
+    expr = Attr("a") * (-math.inf) - math.inf * Attr("b") + Attr("c")
 
     result = expr.evaluate(df)
     assert result.to_list() == [7, 8, 9]  # Only finite term remains
@@ -172,7 +172,7 @@ def test_attr_expr_multiple_negative_infinity() -> None:
 def test_attr_expr_only_infinity_terms() -> None:
     """Test expression with only infinity terms (no finite terms)."""
     df = pl.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
-    expr = AttrExpr("a") * math.inf - math.inf * AttrExpr("b")
+    expr = Attr("a") * math.inf - math.inf * Attr("b")
 
     result = expr.evaluate(df)
     assert result.to_list() == [0]  # All infinity terms become literal zero
@@ -187,7 +187,7 @@ def test_attr_expr_only_infinity_terms() -> None:
 def test_attr_expr_complex_infinity_expressions() -> None:
     """Test infinity with more complex expressions (not just boolean comparisons)."""
     df = pl.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]})
-    expr = (AttrExpr("a") + AttrExpr("b")) * math.inf - math.inf * (AttrExpr("c") / 2) + AttrExpr("a")
+    expr = (Attr("a") + Attr("b")) * math.inf - math.inf * (Attr("c") / 2) + Attr("a")
 
     result = expr.evaluate(df)
     assert result.to_list() == [1, 2, 3]  # Only AttrExpr("a") remains
@@ -212,8 +212,8 @@ def test_attr_expr_nested_infinity_operations() -> None:
     df = pl.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
 
     # Create intermediate expressions with infinity
-    inf_expr = AttrExpr("a") * math.inf
-    finite_expr = AttrExpr("b") + 1
+    inf_expr = Attr("a") * math.inf
+    finite_expr = Attr("b") + 1
 
     # Combine them
     combined = inf_expr + finite_expr
@@ -234,10 +234,10 @@ def test_attr_expr_infinity_column_name_tracking() -> None:
 
     # Simpler test: separate infinity operations that are easier to track
     expr = (
-        AttrExpr("x") * math.inf  # positive infinity
-        + AttrExpr("y") * math.inf  # positive infinity
-        - math.inf * AttrExpr("z")  # negative infinity
-        + AttrExpr("x")  # finite term
+        Attr("x") * math.inf  # positive infinity
+        + Attr("y") * math.inf  # positive infinity
+        - math.inf * Attr("z")  # negative infinity
+        + Attr("x")  # finite term
     )
 
     result = expr.evaluate(df)
@@ -257,7 +257,7 @@ def test_attr_expr_infinity_column_name_tracking() -> None:
 def test_attr_expr_no_infinity_terms() -> None:
     """Test that expressions without infinity work normally."""
     df = pl.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
-    expr = AttrExpr("a") * 2 + AttrExpr("b") - 1
+    expr = Attr("a") * 2 + Attr("b") - 1
 
     result = expr.evaluate(df)
     assert result.to_list() == [5, 8, 11]  # 2*a + b - 1 = 2*[1,2,3] + [4,5,6] - 1 = [2,4,6] + [4,5,6] - 1 = [5,8,11]
@@ -272,11 +272,11 @@ def test_attr_expr_no_infinity_terms() -> None:
 
 def test_attr_expr_scalar_operations() -> None:
     df = pl.DataFrame({"a": [1, 2, 3]})
-    expr = AttrExpr("a") * 2
+    expr = Attr("a") * 2
     result = expr.evaluate(df)
     assert result.to_list() == [2, 4, 6]
 
-    expr = 2 * AttrExpr("a")  # Test reverse operation
+    expr = 2 * Attr("a")  # Test reverse operation
     result = expr.evaluate(df)
     assert result.to_list() == [2, 4, 6]
 
@@ -284,18 +284,18 @@ def test_attr_expr_scalar_operations() -> None:
 def test_attr_expr_boolean_operations() -> None:
     df = pl.DataFrame({"a": [True, False, True], "b": [False, True, True]})
 
-    expr = AttrExpr("a") & AttrExpr("b")  # and
+    expr = Attr("a") & Attr("b")  # and
     result = expr.evaluate(df)
     assert result.to_list() == [False, False, True]
 
-    expr = AttrExpr("a") | AttrExpr("b")  # or
+    expr = Attr("a") | Attr("b")  # or
     result = expr.evaluate(df)
     assert result.to_list() == [True, True, True]
 
 
 def test_duplicated_columns() -> None:
     df = pl.DataFrame({"a": [1, 2, 3]})
-    expr = (AttrExpr("a") == 1) * 10 - 5 * (AttrExpr("a") > 2)
+    expr = (Attr("a") == 1) * 10 - 5 * (Attr("a") > 2)
     result = expr.evaluate(df)
     assert result.to_list() == [10, 0, -5]
     assert expr.columns == ["a"]

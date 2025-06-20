@@ -1,9 +1,8 @@
 import numpy as np
 from numba import njit, typed
 
-from tracksdata.attrs import EdgeAttr, NodeAttr
+from tracksdata.attrs import Attr, EdgeAttr, ExprInput, NodeAttr
 from tracksdata.constants import DEFAULT_ATTR_KEYS
-from tracksdata.expr import AttrExpr, ExprInput
 from tracksdata.graph._base_graph import BaseGraph
 from tracksdata.graph._graph_view import GraphView
 from tracksdata.solvers._base_solver import BaseSolver
@@ -83,7 +82,7 @@ class NearestNeighborsSolver(BaseSolver):
             return_solution=return_solution,
         )
         self.max_children = max_children
-        self.edge_weight_expr = AttrExpr(edge_weight)
+        self.edge_weight_expr = Attr(edge_weight)
 
     def solve(
         self,

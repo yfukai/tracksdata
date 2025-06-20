@@ -60,7 +60,7 @@ def _filter_query(
         The filtered query.
     """
     query = query.filter(
-        *[attr_filter.op(getattr(table, str(attr_filter.attr)), attr_filter.other) for attr_filter in attr_filters]
+        *[attr_filter.op(getattr(table, str(attr_filter.column)), attr_filter.other) for attr_filter in attr_filters]
     )
     return query
 

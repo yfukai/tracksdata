@@ -1,7 +1,7 @@
 from profilehooks import profile
 
+from tracksdata.attrs import Attr
 from tracksdata.edges._distance_edges import DistanceEdges
-from tracksdata.expr import AttrExpr
 from tracksdata.graph._sql_graph import SQLGraph
 from tracksdata.nodes._random import RandomNodes
 from tracksdata.solvers._nearest_neighbors_solver import NearestNeighborsSolver
@@ -19,7 +19,7 @@ def main() -> None:
     dist_operator = DistanceEdges(distance_threshold=30.0, n_neighbors=5, show_progress=False)
 
     solver = NearestNeighborsSolver(
-        edge_weight=AttrExpr("weight"),
+        edge_weight=Attr("weight"),
         max_children=2,
     )
 

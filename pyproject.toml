@@ -67,11 +67,11 @@ path = "src/tracksdata/__about__.py"
 target-version = "py310"
 src = ["src"]
 line-length = 120
-ignore = ["E712"]
 
 # https://docs.astral.sh/ruff/rules
 [tool.ruff.lint]
 pydocstyle = { convention = "numpy" }
+ignore = ["E712"]
 select = [
     "E",    # style errors
     "W",    # style warnings

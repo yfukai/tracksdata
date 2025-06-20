@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 
 
 def _pop_time_eq(
-    attrs: list[AttrComparison],
+    attrs: Sequence[AttrComparison],
 ) -> tuple[list[AttrComparison], int | None]:
     """
     Pop the time equality filter from a list of attribute filters.
@@ -42,7 +42,7 @@ def _pop_time_eq(
     out_attrs = []
     time = None
     for attr_comp in attrs:
-        if str(attr_comp.attr) == DEFAULT_ATTR_KEYS.T and attr_comp.op == operator.eq:
+        if str(attr_comp.column) == DEFAULT_ATTR_KEYS.T and attr_comp.op == operator.eq:
             if time is not None:
                 raise ValueError(f"Multiple '{DEFAULT_ATTR_KEYS.T}' equality filters are not allowed\n {attrs}")
             time = int(attr_comp.other)
@@ -53,11 +53,11 @@ def _pop_time_eq(
 
 
 def _create_filter_func(
-    attr_comps: list[AttrComparison],
+    attr_comps: Sequence[AttrComparison],
 ) -> Callable[[dict[str, Any]], bool]:
     def _filter(attrs: dict[str, Any]) -> bool:
         for attr_op in attr_comps:
-            if not attr_op.op(attrs[str(attr_op.attr)], attr_op.other):
+            if not attr_op.op(attrs[str(attr_op.column)], attr_op.other):
                 return False
         return True
 
