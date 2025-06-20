@@ -538,7 +538,7 @@ class BaseGraph(abc.ABC):
         other_edges_df = other.edge_attrs(attr_keys=[])
 
         other_edges_df = other_edges_df.with_columns(
-            {
+            *{
                 col: other_edges_df[col].map_elements(other_to_node_ids.get, return_dtype=pl.Int64).alias(col)
                 for col in [DEFAULT_ATTR_KEYS.EDGE_SOURCE, DEFAULT_ATTR_KEYS.EDGE_TARGET]
             }

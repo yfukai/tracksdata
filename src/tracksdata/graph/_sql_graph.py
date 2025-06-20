@@ -104,7 +104,7 @@ class SQLGraph(BaseGraph):
         self.Node = Node
         self.Edge = Edge
 
-        self._boolean_columns = {self.Node: [], self.Edge: []}
+        self._boolean_columns: dict[type[DeclarativeBase], list[str]] = {self.Node: [], self.Edge: []}
 
     def _cast_boolean_columns(self, table_class: type[DeclarativeBase], df: pl.DataFrame) -> pl.DataFrame:
         """
