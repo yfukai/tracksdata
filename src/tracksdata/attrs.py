@@ -5,9 +5,10 @@ from collections.abc import Callable, Sequence
 from typing import Any, Union
 
 import polars as pl
+import numpy as np
 from polars import DataFrame, Expr, Series
 
-Scalar = int | float | str | bool
+Scalar = int | float | str | bool | complex | np.number
 ExprInput = Union[str, Scalar, "Attr", Expr, "AttrComparison"]
 
 
@@ -22,7 +23,7 @@ __all__ = [
 
 
 class AttrComparison:
-    def __init__(self, attr: "Attr", op: Callable, other: Any) -> None:
+    def __init__(self, attr: "Attr", op: Callable, other: ExprInput) -> None:
         if attr.has_inf():
             raise ValueError("Comparison operators are not supported for expressions with infinity.")
 
@@ -40,6 +41,11 @@ class AttrComparison:
         self.attr = attr
         self.column = columns[0]
         self.op = op
+
+        if isinstance(other, np.number):
+            # casting numpy scalars to python scalars
+            # numpy scalars are problematic for sqlalchemy
+            other = other.item()
         self.other = other
 
     def __repr__(self) -> str:
@@ -94,7 +100,7 @@ class Attr:
         else:
             self.expr = pl.lit(value)
 
-    def _wrap(self, expr: Expr | Any) -> Union["Attr", Any]:
+    def _wrap(self, expr: ExprInput) -> Union["Attr", Any]:
         if isinstance(expr, Expr):
             result = Attr(expr)
             # Propagate infinity tracking
@@ -151,7 +157,7 @@ class Attr:
 
     def _delegate_comparison_operator(
         self,
-        other: Any,
+        other: ExprInput,
         op: Callable,
         reverse: bool = False,
     ) -> "AttrComparison | Attr":
