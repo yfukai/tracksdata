@@ -22,6 +22,26 @@ __all__ = [
 ]
 
 
+_OPS_MATH_SYMBOLS: dict[Callable, str] = {
+    operator.add: "+",
+    operator.sub: "-",
+    operator.mul: "*",
+    operator.truediv: "/",
+    operator.floordiv: "//",
+    operator.mod: "%",
+    operator.pow: "**",
+    operator.and_: "&",
+    operator.or_: "|",
+    operator.xor: "^",
+    operator.eq: "==",
+    operator.ne: "!=",
+    operator.lt: "<",
+    operator.le: "<=",
+    operator.gt: ">",
+    operator.ge: ">=",
+}
+
+
 class AttrComparison:
     def __init__(self, attr: "Attr", op: Callable, other: ExprInput) -> None:
         if attr.has_inf():
@@ -49,7 +69,7 @@ class AttrComparison:
         self.other = other
 
     def __repr__(self) -> str:
-        return f"{type(self.attr).__name__}({self.column}) '{self.op.__name__}' {self.other}"
+        return f"{type(self.attr).__name__}({self.column}) {_OPS_MATH_SYMBOLS[self.op]} {self.other}"
 
     def to_attr(self) -> "Attr":
         return Attr(self.op(pl.col(self.column), self.other))
@@ -307,7 +327,7 @@ class Attr:
         return expr_attr
 
     def __repr__(self) -> str:
-        return f"AttrExpr({self.expr})"
+        return f"Attr({self.expr})"
 
     # Binary operators
     def __add__(self, other: ExprInput) -> "Attr": ...

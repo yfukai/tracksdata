@@ -337,7 +337,7 @@ def test_attr_comparison_repr() -> None:
     attr = Attr("test_column")
     comp = attr > 10
 
-    assert repr(comp) == "Attr(test_column) 'gt' 10"
+    assert repr(comp) == "Attr(test_column) > 10"
 
 
 def test_attr_comparison_to_attr() -> None:
