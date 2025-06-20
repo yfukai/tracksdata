@@ -197,15 +197,16 @@ class Attr:
         op: Callable,
         reverse: bool = False,
     ) -> "AttrComparison | Attr":
-        if isinstance(other, Attr):
-            return self._delegate_operator(other, op, reverse)
-
         if reverse:
             lhs = Attr(other)
             rhs = self
         else:
             lhs = self
-            rhs = Attr(other)
+            rhs = other
+
+        if isinstance(other, Attr):
+            return self._delegate_operator(other, op, reverse=False)
+
         return AttrComparison(lhs, op, rhs)
 
     def alias(self, name: str) -> "Attr":
