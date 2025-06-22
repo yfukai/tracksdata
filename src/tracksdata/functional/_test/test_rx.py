@@ -5,14 +5,14 @@ import rustworkx as rx
 from tracksdata.functional._rx import graph_track_ids
 
 
-def test_empty_graph():
+def test_empty_graph() -> None:
     """Test that empty graph raises ValueError."""
     graph = rx.PyDiGraph()
     with pytest.raises(ValueError, match="Graph is empty"):
         graph_track_ids(graph)
 
 
-def test_single_path():
+def test_single_path() -> None:
     """Test graph with a single linear path."""
     graph = rx.PyDiGraph()
 
@@ -29,7 +29,7 @@ def test_single_path():
     assert tracks_graph.num_nodes() == 1 + 1  # Single track (includes null node (0))
 
 
-def test_branching_path():
+def test_branching_path() -> None:
     """Test graph with a valid branching path (two children)."""
     graph = rx.PyDiGraph()
 
@@ -51,7 +51,7 @@ def test_branching_path():
     assert tracks_graph.num_nodes() == 3 + 1  # Three tracks (includes null node (0))
 
 
-def test_invalid_multiple_parents():
+def test_invalid_multiple_parents() -> None:
     """Test graph with invalid structure (node with multiple parents, merge)."""
     graph = rx.PyDiGraph()
 
@@ -67,7 +67,7 @@ def test_invalid_multiple_parents():
         graph_track_ids(graph)
 
 
-def test_complex_valid_branching():
+def test_complex_valid_branching() -> None:
     """Test graph with complex but valid branching pattern."""
     graph = rx.PyDiGraph()
 
@@ -92,8 +92,8 @@ def test_complex_valid_branching():
     assert tracks_graph.num_nodes() == 3 + 1  # Five tracks (includes null node (0))
 
 
-def test_invalid_three_children():
-    """Test graph with invalid structure (node with 3 children)."""
+def test_three_children() -> None:
+    """Test graph with 3 children."""
     graph = rx.PyDiGraph()
 
     # Add nodes:
@@ -105,11 +105,11 @@ def test_invalid_three_children():
     graph.add_edge(nodes[0], nodes[2], None)
     graph.add_edge(nodes[0], nodes[3], None)
 
-    with pytest.raises(RuntimeError, match="Invalid graph structure"):
-        graph_track_ids(graph)
+    _, track_ids, tracks_graph = graph_track_ids(graph)
+    assert set(tracks_graph.successor_indices(track_ids[0])) == set(track_ids[1:])
 
 
-def test_multiple_roots():
+def test_multiple_roots() -> None:
     """Test graph with multiple valid root nodes."""
     graph = rx.PyDiGraph()
 

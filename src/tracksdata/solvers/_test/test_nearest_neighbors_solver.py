@@ -1,5 +1,7 @@
+import pytest
+
+from tracksdata.attrs import Attr
 from tracksdata.constants import DEFAULT_ATTR_KEYS
-from tracksdata.expr import AttrExpr
 from tracksdata.graph import RustWorkXGraph
 from tracksdata.solvers import NearestNeighborsSolver
 
@@ -9,8 +11,8 @@ def test_nearest_neighbors_solver_init_default() -> None:
     solver = NearestNeighborsSolver()
 
     assert solver.max_children == 2
-    assert solver.solution_key == DEFAULT_ATTR_KEYS.SOLUTION
-    assert isinstance(solver.edge_weight_expr, AttrExpr)
+    assert solver.output_key == DEFAULT_ATTR_KEYS.SOLUTION
+    assert isinstance(solver.edge_weight_expr, Attr)
 
 
 def test_nearest_neighbors_solver_init_custom() -> None:
@@ -18,13 +20,13 @@ def test_nearest_neighbors_solver_init_custom() -> None:
     solver = NearestNeighborsSolver(max_children=3, edge_weight="custom_weight", output_key="custom_solution")
 
     assert solver.max_children == 3
-    assert solver.solution_key == "custom_solution"
-    assert isinstance(solver.edge_weight_expr, AttrExpr)
+    assert solver.output_key == "custom_solution"
+    assert isinstance(solver.edge_weight_expr, Attr)
 
 
 def test_nearest_neighbors_solver_init_with_attr_expr() -> None:
     """Test NearestNeighborsSolver initialization with AttrExpr."""
-    weight_expr = AttrExpr("weight") * 2
+    weight_expr = Attr("weight") * 2
     solver = NearestNeighborsSolver(edge_weight=weight_expr)
 
     assert str(solver.edge_weight_expr) == str(weight_expr)
@@ -36,7 +38,8 @@ def test_nearest_neighbors_solver_solve_empty_graph() -> None:
     solver = NearestNeighborsSolver()
 
     # Should not raise an error on empty graph
-    solver.solve(graph)
+    with pytest.raises(ValueError):
+        solver.solve(graph)
 
 
 def test_nearest_neighbors_solver_solve_no_edges() -> None:
@@ -54,7 +57,8 @@ def test_nearest_neighbors_solver_solve_no_edges() -> None:
     solver = NearestNeighborsSolver()
 
     # Should not raise an error with no edges
-    solver.solve(graph)
+    with pytest.raises(ValueError):
+        solver.solve(graph)
 
 
 def test_nearest_neighbors_solver_solve_simple_case() -> None:
@@ -184,7 +188,7 @@ def test_nearest_neighbors_solver_solve_custom_weight_expr() -> None:
     graph.add_edge(node0, node2, {"custom_weight": 1.0})
 
     # Use negative custom weight (so lower values become higher priority)
-    weight_expr = -AttrExpr("custom_weight")
+    weight_expr = -Attr("custom_weight")
     solver = NearestNeighborsSolver(edge_weight=weight_expr, max_children=1)
     solver.solve(graph)
 
@@ -218,7 +222,7 @@ def test_nearest_neighbors_solver_solve_complex_expression() -> None:
     graph.add_edge(node0, node2, {"distance": 2.0, "confidence": 0.9})
 
     # Use complex expression: distance / confidence (lower is better)
-    weight_expr = AttrExpr("distance") / AttrExpr("confidence")
+    weight_expr = Attr("distance") / Attr("confidence")
     solver = NearestNeighborsSolver(edge_weight=weight_expr, max_children=1)
     solver.solve(graph)
 

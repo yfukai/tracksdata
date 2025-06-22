@@ -3,6 +3,7 @@ from collections.abc import Sequence
 import numpy as np
 from scipy.spatial import KDTree
 
+from tracksdata.attrs import NodeAttr
 from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.edges._base_edges import BaseEdgesOperator
 from tracksdata.graph._base_graph import BaseGraph
@@ -119,8 +120,8 @@ class DistanceEdges(BaseEdgesOperator):
         else:
             attr_keys = self.attr_keys
 
-        prev_node_ids = np.asarray(graph.filter_nodes_by_attrs({DEFAULT_ATTR_KEYS.T: t - 1}))
-        cur_node_ids = np.asarray(graph.filter_nodes_by_attrs({DEFAULT_ATTR_KEYS.T: t}))
+        prev_node_ids = np.asarray(graph.filter_nodes_by_attrs(NodeAttr(DEFAULT_ATTR_KEYS.T) == t - 1))
+        cur_node_ids = np.asarray(graph.filter_nodes_by_attrs(NodeAttr(DEFAULT_ATTR_KEYS.T) == t))
 
         if len(prev_node_ids) == 0:
             LOG.warning(

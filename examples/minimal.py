@@ -7,8 +7,8 @@ import numpy as np
 from profilehooks import profile as profile_hook
 from tifffile import imread
 
+from tracksdata.attrs import EdgeAttr
 from tracksdata.edges import DistanceEdges, IoUEdgeAttr
-from tracksdata.expr import AttrExpr
 from tracksdata.functional._napari import to_napari_format
 from tracksdata.graph import RustWorkXGraph, SQLGraph  # noqa: F401
 from tracksdata.nodes import RegionPropsNodes
@@ -33,7 +33,7 @@ def _minimal_example(show_napari_viewer: bool) -> None:
     dist_weight = 1 / dist_operator.distance_threshold
 
     solver = NearestNeighborsSolver(
-        edge_weight=-AttrExpr("iou") + AttrExpr("weight") * dist_weight,
+        edge_weight=-EdgeAttr("iou") + EdgeAttr("weight") * dist_weight,
         max_children=2,
     )
     # solver = ILPSolver(
