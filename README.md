@@ -1,7 +1,10 @@
 # TracksData
 
+[![PyPI - License](https://img.shields.io/pypi/l/tracksdata.svg?color=green)](https://github.com/royerlab/tracksdata/raw/main/LICENSE)
 [![PyPI - Version](https://img.shields.io/pypi/v/tracksdata.svg)](https://pypi.org/project/tracksdata)
 [![PyPI - Python Version](https://img.shields.io/pypi/pyversions/tracksdata.svg)](https://pypi.org/project/tracksdata)
+[![CI](https://github.com/royerlab/tracksdata/actions/workflows/ci.yaml/badge.svg)](https://github.com/royerlab/tracksdata/actions/workflows/ci.yaml)
+[![codecov](https://codecov.io/gh/royerlab/tracksdata/branch/main/graph/badge.svg)](https://codecov.io/gh/royerlab/tracksdata)
 
 -----
 

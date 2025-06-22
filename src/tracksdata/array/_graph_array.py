@@ -2,6 +2,7 @@ import numpy as np
 from numpy.typing import ArrayLike
 
 from tracksdata.array._base_array import ArrayIndex, BaseReadOnlyArray
+from tracksdata.attrs import NodeAttr
 from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.graph._base_graph import BaseGraph
 from tracksdata.nodes._mask import Mask
@@ -41,7 +42,7 @@ class GraphArrayView(BaseReadOnlyArray):
             index = index[0]
 
         if isinstance(index, int):
-            node_ids = self.graph.filter_nodes_by_attrs({DEFAULT_ATTR_KEYS.T: index})
+            node_ids = self.graph.filter_nodes_by_attrs(NodeAttr(DEFAULT_ATTR_KEYS.T) == index)
 
             if len(node_ids) == 0:
                 return np.zeros(self.shape[1:], dtype=self.dtype)

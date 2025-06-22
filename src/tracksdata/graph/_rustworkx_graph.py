@@ -1,3 +1,4 @@
+import operator
 from collections.abc import Callable, Sequence
 from typing import TYPE_CHECKING, Any
 
@@ -5,6 +6,12 @@ import numpy as np
 import polars as pl
 import rustworkx as rx
 
+from tracksdata.attrs import (
+    AttrComparison,
+    attr_comps_to_strs,
+    polars_reduce_attr_comps,
+    split_attr_comps,
+)
 from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.functional._rx import graph_track_ids
 from tracksdata.graph._base_graph import BaseGraph
@@ -13,6 +20,48 @@ from tracksdata.utils._logging import LOG
 
 if TYPE_CHECKING:
     from tracksdata.graph._graph_view import GraphView
+
+
+def _pop_time_eq(
+    attrs: Sequence[AttrComparison],
+) -> tuple[list[AttrComparison], int | None]:
+    """
+    Pop the time equality filter from a list of attribute filters.
+    If multiple time equality filters are found, an error is raised.
+
+    Parameters
+    ----------
+    attrs : Sequence[AttrComparison]
+        The attribute filters to pop the time equality filter from.
+
+    Returns
+    -------
+    tuple[list[AttrComparison], int | None]
+        The attribute filters without the time equality filter and the time value.
+    """
+    out_attrs = []
+    time = None
+    for attr_comp in attrs:
+        if str(attr_comp.column) == DEFAULT_ATTR_KEYS.T and attr_comp.op == operator.eq:
+            if time is not None:
+                raise ValueError(f"Multiple '{DEFAULT_ATTR_KEYS.T}' equality filters are not allowed\n {attrs}")
+            time = int(attr_comp.other)
+        else:
+            out_attrs.append(attr_comp)
+
+    return out_attrs, time
+
+
+def _create_filter_func(
+    attr_comps: Sequence[AttrComparison],
+) -> Callable[[dict[str, Any]], bool]:
+    def _filter(attrs: dict[str, Any]) -> bool:
+        for attr_op in attr_comps:
+            if not attr_op.op(attrs[str(attr_op.column)], attr_op.other):
+                return False
+        return True
+
+    return _filter
 
 
 class RustWorkXGraph(BaseGraph):
@@ -209,16 +258,16 @@ class RustWorkXGraph(BaseGraph):
 
     def filter_nodes_by_attrs(
         self,
-        attrs: dict[str, Any],
+        *attrs: AttrComparison,
     ) -> list[int]:
         """
         Filter nodes by attributes.
 
         Parameters
         ----------
-        attrs : dict[str, Any]
+        *attrs : AttrComparison
             The attributes to filter by, for example:
-            >>> `graph.filter_nodes_by_attribute(dict(t=0, label='A'))`
+            >>> `graph.filter_nodes_by_attrs(Attr("t") == 0, Attr("label") == "A")`
 
         Returns
         -------
@@ -228,19 +277,17 @@ class RustWorkXGraph(BaseGraph):
         rx_graph = self.rx_graph
         node_map = None
         # entire graph
-        if DEFAULT_ATTR_KEYS.T in attrs:
-            selected_nodes = self._time_to_nodes.get(attrs.pop(DEFAULT_ATTR_KEYS.T), [])
+        attrs, time = _pop_time_eq(attrs)
+
+        if time is not None:
+            selected_nodes = self._time_to_nodes.get(time, [])
             if len(attrs) == 0:
                 return selected_nodes
 
             # subgraph of selected nodes
             rx_graph, node_map = rx_graph.subgraph_with_nodemap(selected_nodes)
 
-        def _filter_func(node_attr: dict[str, Any]) -> bool:
-            for key, value in attrs.items():
-                if node_attr[key] != value:
-                    return False
-            return True
+        _filter_func = _create_filter_func(attrs)
 
         if node_map is None:
             return list(rx_graph.filter_nodes(_filter_func))
@@ -261,10 +308,8 @@ class RustWorkXGraph(BaseGraph):
 
     def subgraph(
         self,
-        *,
+        *attr_filters: AttrComparison,
         node_ids: Sequence[int] | None = None,
-        node_attr_filter: dict[str, Any] | None = None,
-        edge_attr_filter: dict[str, Any] | None = None,
         node_attr_keys: Sequence[str] | str | None = None,
         edge_attr_keys: Sequence[str] | str | None = None,
     ) -> "GraphView":
@@ -276,12 +321,10 @@ class RustWorkXGraph(BaseGraph):
 
         Parameters
         ----------
-        node_ids : Sequence[int]
+        *attr_filters : AttrComparison
+            The attributes to filter the nodes and edges by.
+        node_ids : Sequence[int] | None
             The IDs of the nodes to include in the subgraph.
-        node_attr_filter : dict[str, Any] | None
-            The attributes to filter the nodes by.
-        edge_attr_filter : dict[str, Any] | None
-            The attributes to filter the edges by.
         node_attr_keys : Sequence[str] | str | None
             The attribute keys to include in the subgraph.
         edge_attr_keys : Sequence[str] | str | None
@@ -294,11 +337,19 @@ class RustWorkXGraph(BaseGraph):
         """
         from tracksdata.graph._graph_view import GraphView
 
-        self._validate_subgraph_args(node_ids, node_attr_filter, edge_attr_filter)
+        node_attr_comps, edge_attr_comps = split_attr_comps(attr_filters)
+        self._validate_subgraph_args(node_ids, node_attr_comps, edge_attr_comps)
 
-        if edge_attr_filter is not None:
-            edges_df = self.edge_attrs(attr_keys=edge_attr_filter.keys())
-            mask = pl.reduce(lambda x, y: x & y, [edges_df[key] == value for key, value in edge_attr_filter.items()])
+        if node_attr_comps:
+            filtered_node_ids = self.filter_nodes_by_attrs(*node_attr_comps)
+            if node_ids is not None:
+                node_ids = np.intersect1d(node_ids, filtered_node_ids)
+            else:
+                node_ids = filtered_node_ids
+
+        if node_ids is None and edge_attr_comps:
+            edges_df = self.edge_attrs(node_ids=node_ids, attr_keys=attr_comps_to_strs(edge_attr_comps))
+            mask = polars_reduce_attr_comps(edges_df, edge_attr_comps, operator.and_)
             node_ids = np.unique(
                 edges_df.filter(mask)
                 .select(
@@ -307,18 +358,15 @@ class RustWorkXGraph(BaseGraph):
                 )
                 .to_numpy()
             )
-        elif node_attr_filter is not None:
-            node_ids = self.filter_nodes_by_attrs(node_attr_filter)
 
         rx_graph, node_map = self.rx_graph.subgraph_with_nodemap(node_ids)
 
-        if edge_attr_filter is not None:
-            LOG.info(f"Removing edges without attributes {edge_attr_filter}")
+        if edge_attr_comps:
+            LOG.info("Removing edges without attributes %s", edge_attr_comps)
+            _filter_func = _create_filter_func(edge_attr_comps)
             for source, target, edge_attr in rx_graph.weighted_edge_list():
-                for key, value in edge_attr_filter.items():
-                    if edge_attr[key] != value:
-                        rx_graph.remove_edge(source, target)
-                        break
+                if not _filter_func(edge_attr):
+                    rx_graph.remove_edge(source, target)
 
         graph_view = GraphView(
             rx_graph=rx_graph,
@@ -620,6 +668,7 @@ class RustWorkXGraph(BaseGraph):
     def assign_track_ids(
         self,
         output_key: str = DEFAULT_ATTR_KEYS.TRACK_ID,
+        reset: bool = True,
     ) -> rx.PyDiGraph:
         """
         Compute and assign track ids to nodes.
@@ -628,6 +677,8 @@ class RustWorkXGraph(BaseGraph):
         ----------
         output_key : str
             The key of the output track id attribute.
+        reset : bool
+            Whether to reset the track ids of the graph. If True, the track ids will be reset to -1.
 
         Returns
         -------
@@ -645,6 +696,8 @@ class RustWorkXGraph(BaseGraph):
 
         if output_key not in self.node_attr_keys:
             self.add_node_attr_key(output_key, -1)
+        elif reset:
+            self.update_node_attrs(node_ids=self.node_ids(), attrs={output_key: -1})
 
         self.update_node_attrs(
             node_ids=node_ids,

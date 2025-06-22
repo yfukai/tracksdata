@@ -1,10 +1,9 @@
-import logging
 import math
 
 import pytest
 
+from tracksdata.attrs import Attr
 from tracksdata.constants import DEFAULT_ATTR_KEYS
-from tracksdata.expr import AttrExpr
 from tracksdata.graph import RustWorkXGraph
 from tracksdata.solvers import ILPSolver
 
@@ -14,11 +13,11 @@ def test_ilp_solver_init_default() -> None:
     solver = ILPSolver()
 
     assert solver.output_key == DEFAULT_ATTR_KEYS.SOLUTION
-    assert isinstance(solver.edge_weight_expr, AttrExpr)
-    assert isinstance(solver.node_weight_expr, AttrExpr)
-    assert isinstance(solver.appearance_weight_expr, AttrExpr)
-    assert isinstance(solver.disappearance_weight_expr, AttrExpr)
-    assert isinstance(solver.division_weight_expr, AttrExpr)
+    assert isinstance(solver.edge_weight_expr, Attr)
+    assert isinstance(solver.node_weight_expr, Attr)
+    assert isinstance(solver.appearance_weight_expr, Attr)
+    assert isinstance(solver.disappearance_weight_expr, Attr)
+    assert isinstance(solver.division_weight_expr, Attr)
 
 
 def test_ilp_solver_init_custom() -> None:
@@ -33,17 +32,17 @@ def test_ilp_solver_init_custom() -> None:
     )
 
     assert solver.output_key == "custom_solution"
-    assert isinstance(solver.edge_weight_expr, AttrExpr)
-    assert isinstance(solver.node_weight_expr, AttrExpr)
-    assert isinstance(solver.appearance_weight_expr, AttrExpr)
-    assert isinstance(solver.disappearance_weight_expr, AttrExpr)
-    assert isinstance(solver.division_weight_expr, AttrExpr)
+    assert isinstance(solver.edge_weight_expr, Attr)
+    assert isinstance(solver.node_weight_expr, Attr)
+    assert isinstance(solver.appearance_weight_expr, Attr)
+    assert isinstance(solver.disappearance_weight_expr, Attr)
+    assert isinstance(solver.division_weight_expr, Attr)
 
 
 def test_ilp_solver_init_with_attr_expr() -> None:
     """Test ILPSolver initialization with AttrExpr objects."""
-    edge_weight_expr = AttrExpr("edge_weight") * 2
-    node_weight_expr = -AttrExpr("node_weight")
+    edge_weight_expr = Attr("edge_weight") * 2
+    node_weight_expr = -Attr("node_weight")
 
     solver = ILPSolver(edge_weight=edge_weight_expr, node_weight=node_weight_expr)
 
@@ -98,11 +97,8 @@ def test_ilp_solver_solve_no_edges(caplog: pytest.LogCaptureFixture) -> None:
         division_weight=1.0,
     )
 
-    # Should not raise an error with no edges
-    with caplog.at_level(logging.WARNING):
+    with pytest.raises(ValueError):
         solver.solve(graph)
-
-    assert "Trivial solution found with all variables set to 0!" in caplog.text
 
 
 def test_ilp_solver_solve_simple_case() -> None:
@@ -123,8 +119,8 @@ def test_ilp_solver_solve_simple_case() -> None:
     graph.add_edge(node0, node1, {DEFAULT_ATTR_KEYS.EDGE_WEIGHT: -1.0})
     graph.add_edge(node0, node2, {DEFAULT_ATTR_KEYS.EDGE_WEIGHT: -2.0})
 
-    solver = ILPSolver()
-    solver.solve(graph)
+    solver = ILPSolver(return_solution=True)
+    solution_graph = solver.solve(graph)
 
     # Check that solution keys are added
     node_attrs = graph.node_attrs()
@@ -139,6 +135,10 @@ def test_ilp_solver_solve_simple_case() -> None:
 
     assert len(selected_edges) > 0
     assert len(selected_nodes) > 0
+
+    assert solution_graph is not None
+    assert solution_graph.num_nodes == len(selected_nodes)
+    assert solution_graph.num_edges == len(selected_edges)
 
 
 def test_ilp_solver_solve_with_appearance_weight() -> None:
@@ -291,7 +291,7 @@ def test_ilp_solver_solve_custom_edge_weight_expr() -> None:
     graph.add_edge(node0, node1, {"custom_weight": 2.0, "confidence": 0.8})
 
     # Use complex expression: -custom_weight * confidence
-    weight_expr = -AttrExpr("custom_weight") * AttrExpr("confidence")
+    weight_expr = -Attr("custom_weight") * Attr("confidence")
     solver = ILPSolver(edge_weight=weight_expr)
     solver.solve(graph)
 
@@ -320,7 +320,7 @@ def test_ilp_solver_solve_custom_node_weight_expr() -> None:
     graph.add_edge(node0, node1, {DEFAULT_ATTR_KEYS.EDGE_WEIGHT: -1.0})
 
     # Use node quality as weight (negative to encourage high quality nodes)
-    node_weight_expr = -AttrExpr("quality")
+    node_weight_expr = -Attr("quality")
     solver = ILPSolver(node_weight=node_weight_expr)
     solver.solve(graph)
 
@@ -401,7 +401,7 @@ def test_ilp_solver_evaluate_expr_scalar() -> None:
     solver = ILPSolver()
 
     # Test with scalar expression (no column dependencies)
-    scalar_expr = AttrExpr(5.0)
+    scalar_expr = Attr(5.0)
     df = pl.DataFrame({"dummy": [1, 2, 3]})
 
     result = solver._evaluate_expr(scalar_expr, df)
@@ -416,7 +416,7 @@ def test_ilp_solver_evaluate_expr_column() -> None:
     solver = ILPSolver()
 
     # Test with column expression
-    column_expr = AttrExpr("values") * 2
+    column_expr = Attr("values") * 2
     df = pl.DataFrame({"values": [1.0, 2.0, 3.0]})
 
     result = solver._evaluate_expr(column_expr, df)
@@ -518,8 +518,8 @@ def test_ilp_solver_solve_with_inf_expr() -> None:
 
     solver = ILPSolver(
         edge_weight=DEFAULT_ATTR_KEYS.EDGE_WEIGHT,
-        division_weight=100.0 * AttrExpr("y")
-        - math.inf * (AttrExpr("x") == 0.0),  # Despite the penalization it's selected because of inf
+        division_weight=100.0 * Attr("y")
+        - math.inf * (Attr("x") == 0.0),  # Despite the penalization it's selected because of inf
     )
     solver.solve(graph)
 
@@ -548,7 +548,7 @@ def test_ilp_solver_solve_with_pos_inf_rejection() -> None:
 
     solver = ILPSolver(
         edge_weight=DEFAULT_ATTR_KEYS.EDGE_WEIGHT,
-        node_weight=0.1 + math.inf * (AttrExpr("x") == 0.0),  # Reject nodes where x == 0
+        node_weight=0.1 + math.inf * (Attr("x") == 0.0),  # Reject nodes where x == 0
     )
     solver.solve(graph)
 
@@ -577,7 +577,7 @@ def test_ilp_solver_solve_with_neg_inf_node_weight() -> None:
 
     solver = ILPSolver(
         edge_weight=DEFAULT_ATTR_KEYS.EDGE_WEIGHT,
-        node_weight=-math.inf * (AttrExpr("priority") == 1.0),  # Force high priority nodes
+        node_weight=-math.inf * (Attr("priority") == 1.0),  # Force high priority nodes
         appearance_weight=5.0,  # Penalize appearances
     )
     solver.solve(graph)
@@ -608,9 +608,7 @@ def test_ilp_solver_solve_with_inf_edge_weight() -> None:
 
     # The pinning is inverse the confidence to test if the pinning is working
     solver = ILPSolver(
-        edge_weight=-AttrExpr("confidence")
-        + math.inf * (AttrExpr("confidence") > 0.5)
-        - math.inf * (AttrExpr("confidence") < 0.5),
+        edge_weight=-Attr("confidence") + math.inf * (Attr("confidence") > 0.5) - math.inf * (Attr("confidence") < 0.5),
     )
     solver.solve(graph)
 
