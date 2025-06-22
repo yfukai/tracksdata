@@ -6,12 +6,11 @@
 [![CI](https://github.com/royerlab/tracksdata/actions/workflows/ci.yaml/badge.svg)](https://github.com/royerlab/tracksdata/actions/workflows/ci.yaml)
 [![codecov](https://codecov.io/gh/royerlab/tracksdata/branch/main/graph/badge.svg)](https://codecov.io/gh/royerlab/tracksdata)
 
------
+A common data structure and basic tools for multi-object tracking.
 
-## Table of Contents
+## Features
 
-- [Installation](#installation)
-- [License](#license)
+# TODO
 
 ## Installation
 
@@ -27,6 +26,10 @@ Then install tracksdata with the following command:
 pip install .
 ```
 
-## License
+## Why tracksdata?
 
-`tracksdata` is distributed under the terms of the [MIT](https://spdx.org/licenses/MIT.html) license.
+# TODO
+
+## Documentation
+
+For more information, please refer to the [documentation](https://royerlab.github.io/tracksdata/).

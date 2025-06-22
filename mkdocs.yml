@@ -42,8 +42,9 @@ plugins:
         - "tracksdata.conftest"
   # from: https://github.com/tlambert03/mkdocs-api-autonav/tree/main
   - mkdocstrings:
+      default_handler: python_xref
       handlers:
-        python:
+        python_xref:
           inventories:
             - https://docs.python.org/3/objects.inv
             - https://numpy.org/doc/stable/objects.inv
@@ -57,6 +58,10 @@ plugins:
               - "^(?!.*_test)"
             group_by_category: true
             heading_level: 1
+            # begin python-xref
+            relative_crossrefs: true
+            check_crossrefs: true
+            # end python-xref
             inherited_members: true
             merge_init_into_class: true
             parameter_headings: true
