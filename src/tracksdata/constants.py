@@ -1,10 +1,14 @@
+"""
+Module to define default and often global values used through `tracksdata`.
+"""
+
+
 class DefaultAttrKeys:
     """
-    Default attribute keys used throughout the tracksdata package.
+    This class defines the standard attribute names for nodes and edges in graphs to ensure
+    consistency across different graph implementations and operators.
 
-    Defines standard attribute names for nodes and edges in graphs to ensure
-    consistency across different graph implementations and operators. Using
-    these constants instead of hardcoded strings helps prevent typos.
+    Using these constants instead of hardcoded strings helps prevent typos.
 
     Attributes
     ----------

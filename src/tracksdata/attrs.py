@@ -1,7 +1,7 @@
 """
-Attributes are a fundamental concept in `tracksdata`.
+Module to compose attribute expressions for attribute filtering or value evaluation.
 
-They are used to query content of nodes and edges through their names as columns in a data frame.
+Attributes are used to query content of nodes and edges through their names as columns in a data frame.
 
 Users will mostly interact with [NodeAttr][tracksdata.attrs.NodeAttr] and [EdgeAttr][tracksdata.attrs.EdgeAttr]
 which are thin wrappers around [Attr][tracksdata.attrs.Attr] to distinguish between node and edge attributes

@@ -56,6 +56,7 @@ plugins:
             filters:
               - "!^_"
               - "^(?!.*_test)"
+              - "!conftest"
             group_by_category: true
             heading_level: 1
             # begin python-xref
