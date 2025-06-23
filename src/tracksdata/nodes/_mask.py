@@ -43,7 +43,11 @@ class Mask:
     def bbox(self) -> np.ndarray:
         return self._bbox
 
-    def crop(self, image: NDArray) -> NDArray:
+    def crop(
+        self,
+        image: NDArray,
+        shape: tuple[int, ...] | None = None,
+    ) -> NDArray:
         """
         Crop the mask from an image.
 
@@ -51,14 +55,25 @@ class Mask:
         ----------
         image : NDArray
             The image to crop from.
+        shape : tuple[int, ...] | None
+            The shape of the cropped image. If None, the `bbox` will be used.
 
         Returns
         -------
         NDArray
             The cropped image.
         """
-        ndim = self._mask.ndim
-        slicing = tuple(slice(self._bbox[i], self._bbox[i + ndim]) for i in range(ndim))
+        if shape is None:
+            ndim = self._mask.ndim
+            slicing = tuple(slice(self._bbox[i], self._bbox[i + ndim]) for i in range(ndim))
+
+        else:
+            center = (self._bbox[: self._mask.ndim] + self._bbox[self._mask.ndim :]) // 2
+            half_shape = np.asarray(shape) // 2
+            start = np.maximum(center - half_shape, 0)
+            end = np.minimum(center + half_shape, image.shape)
+            slicing = tuple(slice(s, e) for s, e in zip(start, end, strict=True))
+
         return image[slicing]
 
     def mask_indices(
