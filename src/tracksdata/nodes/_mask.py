@@ -35,6 +35,32 @@ class Mask:
         state["_mask"] = blosc2.unpack_array(state["_mask"])
         self.__dict__.update(state)
 
+    @property
+    def mask(self) -> NDArray[np.bool_]:
+        return self._mask
+
+    @property
+    def bbox(self) -> np.ndarray:
+        return self._bbox
+
+    def crop(self, image: NDArray) -> NDArray:
+        """
+        Crop the mask from an image.
+
+        Parameters
+        ----------
+        image : NDArray
+            The image to crop from.
+
+        Returns
+        -------
+        NDArray
+            The cropped image.
+        """
+        ndim = self._mask.ndim
+        slicing = tuple(slice(self._bbox[i], self._bbox[i + ndim]) for i in range(ndim))
+        return image[slicing]
+
     def mask_indices(
         self,
         offset: NDArray[np.integer] | int = 0,
