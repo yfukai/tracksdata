@@ -105,7 +105,7 @@ class CropFuncAttrs(BaseNodeAttrsOperator):
             The time point to add attributes for.
         frames : NDArray | None
             The frames to index by time point to pass to the `func` function.
-            Such that `frames[t]` will be passed to the `func` function.
+            Such that, when provided, `frames[t]` will be passed to the `func` function.
         """
         # Get node IDs for the specified time point
         node_ids = graph.filter_nodes_by_attrs(NodeAttr(DEFAULT_ATTR_KEYS.T) == t)

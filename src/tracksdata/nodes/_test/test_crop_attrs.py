@@ -87,7 +87,7 @@ def test_crop_func_attrs_simple_function_no_frames() -> None:
         show_progress=False,
     )
 
-    operator.add_node_attrs(graph, t=0)
+    operator.add_node_attrs(graph)
 
     # Check that attributes were added
     nodes_df = graph.node_attrs()
@@ -206,77 +206,6 @@ def test_crop_func_attrs_function_with_frames_and_attrs() -> None:
     assert weighted_intensities[node2] == 30.0
 
 
-def test_crop_func_attrs_all_time_points() -> None:
-    """Test applying function to all time points."""
-    graph = RustWorkXGraph()
-
-    # Register attribute keys
-    graph.add_node_attr_key(DEFAULT_ATTR_KEYS.MASK, None)
-    graph.add_node_attr_key("value", 0.0)
-
-    # Create test masks
-    mask_data = np.array([[True, True], [True, False]], dtype=bool)
-    mask = Mask(mask_data, bbox=np.array([0, 0, 2, 2]))
-
-    # Add nodes at different time points
-    node1 = graph.add_node({DEFAULT_ATTR_KEYS.T: 0, DEFAULT_ATTR_KEYS.MASK: mask, "value": 10.0})
-    node2 = graph.add_node({DEFAULT_ATTR_KEYS.T: 1, DEFAULT_ATTR_KEYS.MASK: mask, "value": 20.0})
-
-    def double_value(mask: Mask, value: float) -> float:
-        return value * 2.0
-
-    # Create operator and add attributes for all time points
-    operator = CropFuncAttrs(
-        func=double_value,
-        output_key="doubled_value",
-        attr_keys=["value"],
-        show_progress=False,
-    )
-
-    operator.add_node_attrs(graph)  # No t specified, should process all time points
-
-    # Check that attributes were added
-    nodes_df = graph.node_attrs()
-    assert "doubled_value" in nodes_df.columns
-
-    # Check results for both time points
-    doubled_values = dict(zip(nodes_df[DEFAULT_ATTR_KEYS.NODE_ID], nodes_df["doubled_value"], strict=False))
-    assert doubled_values[node1] == 20.0
-    assert doubled_values[node2] == 40.0
-
-
-def test_crop_func_attrs_no_nodes_at_time() -> None:
-    """Test behavior when no nodes exist at the specified time point."""
-    graph = RustWorkXGraph()
-
-    # Register attribute keys
-    graph.add_node_attr_key(DEFAULT_ATTR_KEYS.MASK, None)
-    graph.add_node_attr_key("value", 0.0)
-
-    # Add node at time 0
-    mask_data = np.array([[True, True], [True, False]], dtype=bool)
-    mask = Mask(mask_data, bbox=np.array([0, 0, 2, 2]))
-    graph.add_node({DEFAULT_ATTR_KEYS.T: 0, DEFAULT_ATTR_KEYS.MASK: mask, "value": 10.0})
-
-    def double_value(mask: Mask, value: float) -> float:
-        return value * 2.0
-
-    # Create operator and add attributes for time 1 (no nodes exist)
-    operator = CropFuncAttrs(
-        func=double_value,
-        output_key="doubled_value",
-        attr_keys=["value"],
-        show_progress=False,
-    )
-
-    # Should not raise an error, just do nothing
-    operator.add_node_attrs(graph, t=1)
-
-    # Check that no attributes were added (since no nodes at time 1)
-    nodes_df = graph.node_attrs()
-    assert "doubled_value" not in nodes_df.columns
-
-
 def test_crop_func_attrs_function_returns_different_types() -> None:
     """Test that functions can return different types."""
     graph = RustWorkXGraph()
@@ -300,13 +229,16 @@ def test_crop_func_attrs_function_returns_different_types() -> None:
     def return_dict(mask: Mask) -> dict[str, int]:
         return {"count": 3}
 
+    def return_array(mask: Mask) -> NDArray:
+        return np.asarray([1, 2, 3])
+
     # Test string return type
     operator_str = CropFuncAttrs(
         func=return_string,
         output_key="string_result",
         show_progress=False,
     )
-    operator_str.add_node_attrs(graph, t=0)
+    operator_str.add_node_attrs(graph)
 
     # Test list return type
     operator_list = CropFuncAttrs(
@@ -314,7 +246,7 @@ def test_crop_func_attrs_function_returns_different_types() -> None:
         output_key="list_result",
         show_progress=False,
     )
-    operator_list.add_node_attrs(graph, t=0)
+    operator_list.add_node_attrs(graph)
 
     # Test dict return type
     operator_dict = CropFuncAttrs(
@@ -322,13 +254,22 @@ def test_crop_func_attrs_function_returns_different_types() -> None:
         output_key="dict_result",
         show_progress=False,
     )
-    operator_dict.add_node_attrs(graph, t=0)
+    operator_dict.add_node_attrs(graph)
+
+    # Test array return type
+    operator_array = CropFuncAttrs(
+        func=return_array,
+        output_key="array_result",
+        show_progress=False,
+    )
+    operator_array.add_node_attrs(graph)
 
     # Check results
     nodes_df = graph.node_attrs()
     assert nodes_df["string_result"][0] == "test_string"
     assert nodes_df["list_result"][0].to_list() == [1, 2, 3]
     assert nodes_df["dict_result"][0] == {"count": 3}
+    np.testing.assert_array_equal(nodes_df["array_result"][0], np.asarray([1, 2, 3]))
 
 
 def test_crop_func_attrs_error_handling_missing_attr_key() -> None:
@@ -359,37 +300,7 @@ def test_crop_func_attrs_error_handling_missing_attr_key() -> None:
 
     # Should raise an error when trying to access missing attribute
     with pytest.raises(KeyError):  # Specific exception type depends on graph backend
-        operator.add_node_attrs(graph, t=0)
-
-
-def test_crop_func_attrs_function_signature_validation() -> None:
-    """Test that function signature validation works correctly."""
-    graph = RustWorkXGraph()
-
-    # Register attribute keys
-    graph.add_node_attr_key(DEFAULT_ATTR_KEYS.MASK, None)
-
-    # Create test mask
-    mask_data = np.array([[True, True], [True, False]], dtype=bool)
-    mask = Mask(mask_data, bbox=np.array([0, 0, 2, 2]))
-
-    # Add node
-    graph.add_node({DEFAULT_ATTR_KEYS.T: 0, DEFAULT_ATTR_KEYS.MASK: mask})
-
-    # Function with wrong signature (no mask parameter)
-    def wrong_signature(value: float) -> float:
-        return value * 2.0
-
-    operator = CropFuncAttrs(
-        func=wrong_signature,
-        output_key="result",
-        attr_keys=["value"],
-        show_progress=False,
-    )
-
-    # Should raise an error when function is called with wrong arguments
-    with pytest.raises(TypeError):  # Specific exception type depends on function call
-        operator.add_node_attrs(graph, t=0)
+        operator.add_node_attrs(graph)
 
 
 def test_crop_func_attrs_empty_graph() -> None:
@@ -409,7 +320,7 @@ def test_crop_func_attrs_empty_graph() -> None:
     )
 
     # Should not raise an error, just do nothing
-    operator.add_node_attrs(graph, t=0)
+    operator.add_node_attrs(graph)
 
     # Check that no attributes were added
     nodes_df = graph.node_attrs()
