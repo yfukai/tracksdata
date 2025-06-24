@@ -36,6 +36,7 @@ class ILPSolver(BaseSolver):
         num_threads: int = 1,
         reset: bool = True,
         return_solution: bool = True,
+        gap: float = 0.0,
     ):
         super().__init__(output_key=output_key, reset=reset, return_solution=return_solution)
         self.edge_weight_expr = EdgeAttr(edge_weight)
@@ -44,6 +45,7 @@ class ILPSolver(BaseSolver):
         self.disappearance_weight_expr = NodeAttr(disappearance_weight)
         self.division_weight_expr = NodeAttr(division_weight)
         self.num_threads = num_threads
+        self.gap = gap
         self.reset_model()
 
     def reset_model(self) -> None:
@@ -221,6 +223,7 @@ class ILPSolver(BaseSolver):
                 solver.set_num_threads(self.num_threads)
                 solver.set_objective(self._objective)
                 solver.set_constraints(self._constraints)
+                solver.set_optimality_gap(self.gap)
                 solution = solver.solve()
                 break
             except Exception as e:

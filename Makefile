@@ -10,7 +10,7 @@ help:
 	@echo "  clean        - Clean coverage files and cache"
 
 # Install dependencies
-install: install
+install:
 	uv sync --extra test
 
 # Run tests without coverage
