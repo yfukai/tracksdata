@@ -113,14 +113,14 @@ def _numba_dag(node_ids: np.ndarray, parent_ids: np.ndarray) -> dict[int, list[i
     dict[int, list[int]]
         DAG where parent maps to their children (parent -> children)
     """
-    forest = {}
+    dag = {}
     for parent in parent_ids:
-        forest[parent] = typed.List.empty_list(types.int64)
+        dag[parent] = typed.List.empty_list(types.int64)
 
     for i in range(len(parent_ids)):
-        forest[parent_ids[i]].append(node_ids[i])
+        dag[parent_ids[i]].append(node_ids[i])
 
-    return forest
+    return dag
 
 
 def _rx_graph_to_dict_dag(graph: rx.PyDiGraph) -> dict[int, list[int]]:
