@@ -144,13 +144,19 @@ def _rx_graph_to_dict_dag(graph: rx.PyDiGraph) -> dict[int, list[int]]:
         np.asarray(graph.edge_list(), dtype=np.int64),
         schema=["source", "target"],
     )
-    graph_df = (
-        graph_df.join(edge_list, on="target", how="left")
-        .with_columns(pl.col("source").fill_null(NO_PARENT))
-        .select(pl.col("target"), pl.col("source"))
-        .to_numpy(order="fortran")
-        .T
-    )
+    try:
+        graph_df = (
+            graph_df.join(edge_list, on="target", how="left", validate="1:1")
+            .with_columns(pl.col("source").fill_null(NO_PARENT))
+            .select(pl.col("target"), pl.col("source"))
+            .to_numpy(order="fortran")
+            .T
+        )
+    except pl.exceptions.ComputeError as e:
+        if "join keys did not fulfill 1:1" in str(e):
+            raise RuntimeError("Invalid graph structure, found node with multiple parents") from e
+        else:
+            raise e
 
     # above we convert to numpy representation and then create numba dict
     # inside a njit function, otherwise it's very slow
