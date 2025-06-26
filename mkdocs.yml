@@ -1,7 +1,14 @@
 site_name: tracksdata
+site_url: https://royerlab.github.io/tracksdata/
 repo_name: "royerlab/tracksdata"
 repo_url: "https://github.com/royerlab/tracksdata"
 watch: [mkdocs.yml, README.md, src]
+
+# Version management with mike
+extra:
+  version:
+    provider: mike
+    default: latest
 
 # maximum strictness
 # https://www.mkdocs.org/user-guide/configuration/#validation
