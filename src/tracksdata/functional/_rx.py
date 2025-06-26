@@ -1,4 +1,5 @@
 import numpy as np
+import polars as pl
 import rustworkx as rx
 from numba import njit, typed, types
 
@@ -12,7 +13,7 @@ def _fast_path_transverse(
     node: int,
     track_id: int,
     queue: list[tuple[int, int]],
-    forest: dict[int, list[int]],
+    dag: dict[int, list[int]],
 ) -> list[int]:
     """
     Transverse a path in the forest directed graph and add path (track) split into queue.
@@ -25,7 +26,7 @@ def _fast_path_transverse(
         Reference track id for path split.
     queue : list[tuple[int, int]]
         Source nodes and path (track) id reference queue.
-    forest : dict[int, list[int]]
+    dag : dict[int, list[int]]
         Directed graph (tree) of paths relationships.
 
     Returns
@@ -38,7 +39,7 @@ def _fast_path_transverse(
     while True:
         path.append(node)
 
-        children = forest.get(node)
+        children = dag.get(node)
         if children is None:
             # end of track
             break
@@ -95,7 +96,34 @@ def _fast_dag_transverse(
     return paths, track_ids, parent_track_ids, lengths
 
 
-def _numba_dag(graph: rx.PyDiGraph) -> dict[int, list[int]]:
+@njit
+def _numba_dag(node_ids: np.ndarray, parent_ids: np.ndarray) -> dict[int, list[int]]:
+    """
+    Creates a dict DAG of track lineages
+
+    Parameters
+    ----------
+    node_ids : np.ndarray
+        Nodes indices.
+    parent_ids : np.ndarray
+        Parent indices.
+
+    Returns
+    -------
+    dict[int, list[int]]
+        DAG where parent maps to their children (parent -> children)
+    """
+    dag = {}
+    for parent in parent_ids:
+        dag[parent] = typed.List.empty_list(types.int64)
+
+    for i in range(len(parent_ids)):
+        dag[parent_ids[i]].append(node_ids[i])
+
+    return dag
+
+
+def _rx_graph_to_dict_dag(graph: rx.PyDiGraph) -> dict[int, list[int]]:
     """Creates the DAG of track lineages
 
     Parameters
@@ -108,24 +136,31 @@ def _numba_dag(graph: rx.PyDiGraph) -> dict[int, list[int]]:
     dict[int, list[int]]
         DAG where parent maps to their children (parent -> children)
     """
-    forest = typed.Dict.empty(types.int64, types.ListType(types.int64))
-    forest[NO_PARENT] = typed.List.empty_list(types.int64)
+    # target are the children
+    # source are the parents
+    node_indices = np.asarray(graph.node_indices(), dtype=np.int64)
+    graph_df = pl.DataFrame({"target": node_indices})
+    edge_list = pl.from_numpy(
+        np.asarray(graph.edge_list(), dtype=np.int64),
+        schema=["source", "target"],
+    )
+    try:
+        graph_df = (
+            graph_df.join(edge_list, on="target", how="left", validate="1:1")
+            .with_columns(pl.col("source").fill_null(NO_PARENT))
+            .select(pl.col("target"), pl.col("source"))
+            .to_numpy(order="fortran")
+            .T
+        )
+    except pl.exceptions.ComputeError as e:
+        if "join keys did not fulfill 1:1" in str(e):
+            raise RuntimeError("Invalid graph structure, found node with multiple parents") from e
+        else:
+            raise e
 
-    for node in graph.node_indices():
-        children = typed.List.empty_list(types.int64)
-        for child in graph.successor_indices(node):
-            children.append(child)
-
-        if len(children) > 0:
-            forest[node] = children
-
-        in_degree = graph.in_degree(node)
-        if in_degree == 0:
-            forest[NO_PARENT].append(node)
-        elif in_degree > 1:
-            raise RuntimeError(
-                f"Invalid graph structure:\nnode ({node}) with ({in_degree}) parents. Expected at most one parent."
-            )
+    # above we convert to numpy representation and then create numba dict
+    # inside a njit function, otherwise it's very slow
+    forest = _numba_dag(graph_df[0], graph_df[1])
 
     return forest
 
@@ -153,14 +188,17 @@ def graph_track_ids(
         raise ValueError("Graph is empty")
 
     LOG.info(f"Graph has {graph.num_nodes()} nodes and {graph.num_edges()} edges")
+
     # was it better (faster) when using a numpy array for the digraph as in ultrack?
-    dag = _numba_dag(graph)
+    dag = _rx_graph_to_dict_dag(graph)
     roots = dag.pop(NO_PARENT)
 
     paths, track_ids, parent_track_ids, lengths = _fast_dag_transverse(roots, dag)
 
-    tracks_graph = rx.PyDiGraph(node_count_hint=len(track_ids), edge_count_hint=len(track_ids))
-    tracks_graph.add_nodes_from([None] * (len(track_ids) + 1))
+    n_tracks = len(track_ids)
+
+    tracks_graph = rx.PyDiGraph(node_count_hint=n_tracks, edge_count_hint=n_tracks)
+    tracks_graph.add_nodes_from([None] * (n_tracks + 1))
     tracks_graph.add_edges_from_no_data(
         [(p, c) for p, c in zip(parent_track_ids, track_ids, strict=True) if p != NO_PARENT]
     )

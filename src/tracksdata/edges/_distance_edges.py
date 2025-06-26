@@ -43,7 +43,7 @@ class DistanceEdges(BaseEdgesOperator):
     n_neighbors : int
         The maximum number of neighbors to consider for adding edges.
         This in respect from the current to the previous frame.
-        That means, a node in frame t will have edges to the clostest
+        That means, a node in frame t will have edges to the closest
         n_neighbors nodes in frame t-1.
     output_key : str
         The key used to store distance values in edges.
@@ -120,8 +120,8 @@ class DistanceEdges(BaseEdgesOperator):
         else:
             attr_keys = self.attr_keys
 
-        prev_node_ids = np.asarray(graph.filter_nodes_by_attrs(NodeAttr(DEFAULT_ATTR_KEYS.T) == t - 1))
-        cur_node_ids = np.asarray(graph.filter_nodes_by_attrs(NodeAttr(DEFAULT_ATTR_KEYS.T) == t))
+        prev_node_ids = graph.filter_nodes_by_attrs(NodeAttr(DEFAULT_ATTR_KEYS.T) == t - 1)
+        cur_node_ids = graph.filter_nodes_by_attrs(NodeAttr(DEFAULT_ATTR_KEYS.T) == t)
 
         if len(prev_node_ids) == 0:
             LOG.warning(
@@ -149,6 +149,7 @@ class DistanceEdges(BaseEdgesOperator):
         )
         is_valid = ~np.isinf(distances)
 
+        prev_node_ids = np.asarray(prev_node_ids)
         # kdtree return from 0 to n-1
         # converting back to arbitrary indexing
         prev_neigh_ids[is_valid] = prev_node_ids[prev_neigh_ids[is_valid]]
@@ -157,7 +158,7 @@ class DistanceEdges(BaseEdgesOperator):
         for cur_id, neigh_ids, neigh_dist, neigh_valid in zip(
             cur_node_ids, prev_neigh_ids, distances, is_valid, strict=True
         ):
-            for neigh_id, dist in zip(neigh_ids[neigh_valid], neigh_dist[neigh_valid], strict=True):
+            for neigh_id, dist in zip(neigh_ids[neigh_valid].tolist(), neigh_dist[neigh_valid].tolist(), strict=True):
                 edges_data.append(
                     {
                         "source_id": neigh_id,

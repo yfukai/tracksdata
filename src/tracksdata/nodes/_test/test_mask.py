@@ -231,3 +231,25 @@ def test_mask_repr() -> None:
 
     mask = Mask(mask_array, bbox)
     assert repr(mask) == "Mask(bbox=[0:2, 0:2])"
+
+
+def test_mask_crop() -> None:
+    """Test mask cropping."""
+    mask_array = np.array([[True, False], [False, True]], dtype=bool)
+    bbox = np.array([1, 1, 3, 3])
+
+    mask = Mask(mask_array, bbox)
+    image = np.array([[0, 0, 0, 0], [0, 1, 2, 0], [0, 3, 4, 0], [0, 0, 0, 0]])
+    cropped_image = mask.crop(image)
+    assert np.array_equal(cropped_image, image[1:3, 1:3])
+
+
+def test_mask_crop_with_shape() -> None:
+    """Test mask cropping with shape."""
+    mask_array = np.array([[True, False], [False, True]], dtype=bool)
+    bbox = np.array([1, 1, 3, 3])
+
+    mask = Mask(mask_array, bbox)
+    image = np.array([[0, 0, 0, 0], [0, 1, 2, 0], [0, 3, 4, 0], [0, 0, 0, 0]])
+    cropped_image = mask.crop(image, shape=(2, 4))
+    assert np.array_equal(cropped_image, image[1:3, 0:4])
