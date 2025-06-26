@@ -70,6 +70,11 @@ jobs:
         if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/jookuma/mkdocs') && github.event_name == 'push'
         uses: actions/configure-pages@v4
 
+      - name: Build site for Pages
+        if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/jookuma/mkdocs') && github.event_name == 'push'
+        run: |
+          uv run mkdocs build
+
       - name: Upload artifact
         if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/jookuma/mkdocs') && github.event_name == 'push'
         uses: actions/upload-pages-artifact@v3

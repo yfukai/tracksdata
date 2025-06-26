@@ -31,7 +31,7 @@ class Mask:
         mask: NDArray[np.bool_],
         bbox: np.ndarray,
     ):
-        bbox = np.asarray(bbox, dtype=bool)
+        bbox = np.asarray(bbox, dtype=np.int64)
 
         if mask.ndim != bbox.shape[0] // 2:
             raise ValueError(f"Mask dimension {mask.ndim} does not match bbox dimension {bbox.shape[0]} // 2")
