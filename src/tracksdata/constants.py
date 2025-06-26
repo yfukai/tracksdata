@@ -39,11 +39,12 @@ class DefaultAttrKeys:
 
     Examples
     --------
-    >>> from tracksdata.constants import DEFAULT_ATTR_KEYS
-    >>> print(DEFAULT_ATTR_KEYS.NODE_ID)
-    node_id
-    >>> print(DEFAULT_ATTR_KEYS.EDGE_WEIGHT)
-    weight
+    ```python
+    from tracksdata.constants import DEFAULT_ATTR_KEYS
+
+    print(DEFAULT_ATTR_KEYS.NODE_ID)  # Output: node_id
+    print(DEFAULT_ATTR_KEYS.EDGE_WEIGHT)  # Output: weight
+    ```
     """
 
     NODE_ID = "node_id"

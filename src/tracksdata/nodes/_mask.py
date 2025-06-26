@@ -21,7 +21,9 @@ class Mask:
         Equivalent to slicing a numpy array with `[start:end]`.
     Examples
     --------
-    >>> mask = Mask(mask=np.array([[True, False], [False, True]]), bbox=np.array([0, 0, 2, 2]))
+    ```python
+    mask = Mask(mask=np.array([[True, False], [False, True]]), bbox=np.array([0, 0, 2, 2]))
+    ```
     """
 
     def __init__(

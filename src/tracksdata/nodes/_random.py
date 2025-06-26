@@ -55,24 +55,33 @@ class RandomNodes(BaseNodesOperator):
     --------
     Generate 2D random nodes:
 
-    >>> from tracksdata.nodes import RandomNodes
-    >>> node_op = RandomNodes(n_time_points=10, n_nodes_per_tp=(5, 15), n_dim=2, random_state=42)
+    ```python
+    from tracksdata.nodes import RandomNodes
+
+    node_op = RandomNodes(n_time_points=10, n_nodes_per_tp=(5, 15), n_dim=2, random_state=42)
+    ```
 
     Add nodes to a graph:
 
-    >>> node_op.add_nodes(graph)
+    ```python
+    node_op.add_nodes(graph)
+    ```
 
     Generate nodes for a specific time point:
 
-    >>> node_op.add_nodes(graph, t=5)
+    ```python
+    node_op.add_nodes(graph, t=5)
+    ```
 
     Use 3D coordinates with consistent node count:
 
-    >>> node_op = RandomNodes(
-    ...     n_time_points=20,
-    ...     n_nodes_per_tp=(10, 10),  # exactly 10 nodes per time point
-    ...     n_dim=3,
-    ... )
+    ```python
+    node_op = RandomNodes(
+        n_time_points=20,
+        n_nodes_per_tp=(10, 10),  # exactly 10 nodes per time point
+        n_dim=3,
+    )
+    ```
     """
 
     def __init__(

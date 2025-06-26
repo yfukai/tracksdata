@@ -102,22 +102,32 @@ class RustWorkXGraph(BaseGraph):
     --------
     Create an empty graph:
 
-    >>> from tracksdata.graph import RustWorkXGraph
-    >>> graph = RustWorkXGraph()
+    ```python
+    from tracksdata.graph import RustWorkXGraph
+
+    graph = RustWorkXGraph()
+    ```
 
     Add nodes and edges:
 
-    >>> node_id = graph.add_node({"t": 0, "x": 10.5, "y": 20.3})
-    >>> edge_id = graph.add_edge(source_id, target_id, {"weight": 0.8})
+    ```python
+    node_id = graph.add_node({"t": 0, "x": 10.5, "y": 20.3})
+    edge_id = graph.add_edge(source_id, target_id, {"weight": 0.8})
+    ```
 
     Filter nodes by attributes:
 
-    >>> from tracksdata.attrs import NodeAttr
-    >>> node_ids = graph.filter_nodes_by_attrs(NodeAttr("t") == 0)
+    ```python
+    from tracksdata.attrs import NodeAttr
+
+    node_ids = graph.filter_nodes_by_attrs(NodeAttr("t") == 0)
+    ```
 
     Create subgraphs:
 
-    >>> subgraph = graph.subgraph(NodeAttr("t") == 0)
+    ```python
+    subgraph = graph.subgraph(NodeAttr("t") == 0)
+    ```
     """
 
     def __init__(self, rx_graph: rx.PyDiGraph | None = None) -> None:
@@ -150,7 +160,9 @@ class RustWorkXGraph(BaseGraph):
             The attributes of the node to be added, must have a "t" key.
             The keys of the attributes will be used as the attributes of the node.
             For example:
-            >>> `graph.add_node(dict(t=0, label='A', intensity=100))`
+            ```python
+            graph.add_node(dict(t=0, label="A", intensity=100))
+            ```
         validate_keys : bool
             Whether to check if the attributes keys are valid.
             If False, the attributes keys will not be checked,
@@ -319,7 +331,9 @@ class RustWorkXGraph(BaseGraph):
         ----------
         *attrs : AttrComparison
             The attributes to filter by, for example:
-            >>> `graph.filter_nodes_by_attrs(Attr("t") == 0, Attr("label") == "A")`
+            ```python
+            graph.filter_nodes_by_attrs(Attr("t") == 0, Attr("label") == "A")
+            ```
 
         Returns
         -------

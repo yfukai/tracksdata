@@ -170,10 +170,12 @@ class Attr:
 
     Examples
     --------
-    >>> Attr("t") == 1  # filter for time point 1
-    >>> Attr("iou").log()  # log the iou
-    >>> Attr(1.0)  # constant value
-    >>> Attr((1 - Attr("iou")) * Attr("distance"))  # complex expression
+    ```python
+    Attr("t") == 1  # filter for time point 1
+    Attr("iou").log()  # log the iou
+    Attr(1.0)  # constant value
+    Attr((1 - Attr("iou")) * Attr("distance"))  # complex expression
+    ```
     """
 
     expr: Expr

@@ -115,20 +115,28 @@ class SQLGraph(BaseGraph):
     --------
     Create an in-memory SQLite graph:
 
-    >>> graph = SQLGraph("sqlite", ":memory:")
+    ```python
+    graph = SQLGraph("sqlite", ":memory:")
+    ```
 
     Create a persistent SQLite graph:
 
-    >>> graph = SQLGraph("sqlite", "my_graph.db")
+    ```python
+    graph = SQLGraph("sqlite", "my_graph.db")
+    ```
 
     Create a PostgreSQL graph:
 
-    >>> graph = SQLGraph("postgresql", "tracking_db", username="user", password="pass", host="localhost", port=5432)
+    ```python
+    graph = SQLGraph("postgresql", "tracking_db", username="user", password="pass", host="localhost", port=5432)
+    ```
 
     Add nodes and edges:
 
-    >>> node_id = graph.add_node({"t": 0, "x": 10.5, "y": 20.3})
-    >>> edge_id = graph.add_edge(node_id, target_id, {"weight": 0.8})
+    ```python
+    node_id = graph.add_node({"t": 0, "x": 10.5, "y": 20.3})
+    edge_id = graph.add_edge(node_id, target_id, {"weight": 0.8})
+    ```
     """
 
     node_id_time_multiplier: int = 1_000_000_000
@@ -260,8 +268,10 @@ class SQLGraph(BaseGraph):
 
         Examples
         --------
-        >>> node_id = graph.add_node({"t": 0, "x": 10.5, "y": 20.3})
-        >>> node_id = graph.add_node({"t": 1, "x": 15.2, "y": 25.8, "intensity": 150.0})
+        ```python
+        node_id = graph.add_node({"t": 0, "x": 10.5, "y": 20.3})
+        node_id = graph.add_node({"t": 1, "x": 15.2, "y": 25.8, "intensity": 150.0})
+        ```
         """
         if validate_keys:
             self._validate_attributes(attrs, self.node_attr_keys, "node")
@@ -306,11 +316,13 @@ class SQLGraph(BaseGraph):
 
         Examples
         --------
-        >>> nodes = [
-        ...     {"t": 0, "x": 10, "y": 20, "label": "A"},
-        ...     {"t": 0, "x": 15, "y": 25, "label": "B"},
-        ... ]
-        >>> graph.bulk_add_nodes(nodes)
+        ```python
+        nodes = [
+            {"t": 0, "x": 10, "y": 20, "label": "A"},
+            {"t": 0, "x": 15, "y": 25, "label": "B"},
+        ]
+        graph.bulk_add_nodes(nodes)
+        ```
         """
         for node in nodes:
             time = node["t"]
@@ -357,8 +369,10 @@ class SQLGraph(BaseGraph):
 
         Examples
         --------
-        >>> edge_id = graph.add_edge(node1_id, node2_id, {"weight": 0.8})
-        >>> edge_id = graph.add_edge(node1_id, node2_id, {"weight": 0.9, "distance": 5.2, "confidence": 0.95})
+        ```python
+        edge_id = graph.add_edge(node1_id, node2_id, {"weight": 0.8})
+        edge_id = graph.add_edge(node1_id, node2_id, {"weight": 0.9, "distance": 5.2, "confidence": 0.95})
+        ```
         """
         if validate_keys:
             self._validate_attributes(attrs, self.edge_attr_keys, "edge")
@@ -400,11 +414,13 @@ class SQLGraph(BaseGraph):
 
         Examples
         --------
-        >>> edges = [
-        ...     {"source_id": 1, "target_id": 2, "weight": 0.8},
-        ...     {"source_id": 2, "target_id": 3, "weight": 0.9},
-        ... ]
-        >>> graph.bulk_add_edges(edges)
+        ```python
+        edges = [
+            {"source_id": 1, "target_id": 2, "weight": 0.8},
+            {"source_id": 2, "target_id": 3, "weight": 0.9"},
+        ]
+        graph.bulk_add_edges(edges)
+        ```
         """
         for edge in edges:
             _data_numpy_to_native(edge)
@@ -509,8 +525,10 @@ class SQLGraph(BaseGraph):
 
         Examples
         --------
-        >>> successors_df = graph.sucessors(node_id)
-        >>> successors_dict = graph.sucessors([node1, node2, node3])
+        ```python
+        successors_df = graph.sucessors(node_id)
+        successors_dict = graph.sucessors([node1, node2, node3])
+        ```
         """
         return self._get_neighbors(
             node_key=DEFAULT_ATTR_KEYS.EDGE_SOURCE,
@@ -548,8 +566,10 @@ class SQLGraph(BaseGraph):
 
         Examples
         --------
-        >>> predecessors_df = graph.predecessors(node_id)
-        >>> predecessors_dict = graph.predecessors([node1, node2, node3])
+        ```python
+        predecessors_df = graph.predecessors(node_id)
+        predecessors_dict = graph.predecessors([node1, node2, node3])
+        ```
         """
         return self._get_neighbors(
             node_key=DEFAULT_ATTR_KEYS.EDGE_TARGET,
@@ -581,8 +601,10 @@ class SQLGraph(BaseGraph):
 
         Examples
         --------
-        >>> node_ids = graph.filter_nodes_by_attribute({"t": 0})
-        >>> node_ids = graph.filter_nodes_by_attribute({"t": 1, "label": "A"})
+        ```python
+        node_ids = graph.filter_nodes_by_attribute({"t": 0})
+        node_ids = graph.filter_nodes_by_attribute({"t": 1, "label": "A"})
+        ```
         """
         with Session(self._engine) as session:
             query = session.query(self.Node.node_id)
@@ -600,8 +622,10 @@ class SQLGraph(BaseGraph):
 
         Examples
         --------
-        >>> all_nodes = graph.node_ids()
-        >>> print(f"Graph contains {len(all_nodes)} nodes")
+        ```python
+        all_nodes = graph.node_ids()
+        print(f"Graph contains {len(all_nodes)} nodes")
+        ```
         """
         with Session(self._engine) as session:
             return [i for (i,) in session.query(self.Node.node_id).all()]

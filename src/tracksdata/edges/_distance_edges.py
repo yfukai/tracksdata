@@ -57,20 +57,29 @@ class DistanceEdges(BaseEdgesOperator):
     --------
     Create a distance-based edge operator:
 
-    >>> from tracksdata.edges import DistanceEdges
-    >>> edge_op = DistanceEdges(distance_threshold=50.0, n_neighbors=3, attr_keys=["x", "y"])
+    ```python
+    from tracksdata.edges import DistanceEdges
+
+    edge_op = DistanceEdges(distance_threshold=50.0, n_neighbors=3, attr_keys=["x", "y"])
+    ```
 
     Add edges to a graph:
 
-    >>> edge_op.add_edges(graph)
+    ```python
+    edge_op.add_edges(graph)
+    ```
 
     Add edges for a specific time point:
 
-    >>> edge_op.add_edges(graph, t=5)
+    ```python
+    edge_op.add_edges(graph, t=5)
+    ```
 
     Use custom output key:
 
-    >>> edge_op = DistanceEdges(distance_threshold=30.0, n_neighbors=2, output_key="euclidean_distance")
+    ```python
+    edge_op = DistanceEdges(distance_threshold=30.0, n_neighbors=2, output_key="euclidean_distance")
+    ```
     """
 
     def __init__(

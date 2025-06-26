@@ -102,27 +102,37 @@ class NearestNeighborsSolver(BaseSolver):
     --------
     Basic usage with default settings:
 
-    >>> from tracksdata.solvers import NearestNeighborsSolver
-    >>> solver = NearestNeighborsSolver()
-    >>> solver.solve(graph)
+    ```python
+    from tracksdata.solvers import NearestNeighborsSolver
+
+    solver = NearestNeighborsSolver()
+    solver.solve(graph)
+    ```
 
     Customize maximum children for cell division tracking:
 
-    >>> solver = NearestNeighborsSolver(max_children=3)
-    >>> solver.solve(graph)
+    ```python
+    solver = NearestNeighborsSolver(max_children=3)
+    solver.solve(graph)
+    ```
 
     Use custom edge weight expression:
 
-    >>> from tracksdata.expr import AttrExpr
-    >>> solver = NearestNeighborsSolver(
-    ...     edge_weight=-AttrExpr("iou"),  # Higher IoU is better
-    ...     max_children=2,
-    ... )
+    ```python
+    from tracksdata.attrs import EdgeAttr
+
+    solver = NearestNeighborsSolver(
+        edge_weight=-EdgeAttr("iou"),  # Higher IoU is better
+        max_children=2,
+    )
+    ```
 
     Combine multiple edge attributes:
 
-    >>> weight_expr = AttrExpr("distance") + 0.5 * AttrExpr("color_diff")
-    >>> solver = NearestNeighborsSolver(edge_weight=weight_expr)
+    ```python
+    weight_expr = EdgeAttr("distance") + 0.5 * EdgeAttr("color_diff")
+    solver = NearestNeighborsSolver(edge_weight=weight_expr)
+    ```
     """
 
     def __init__(
@@ -161,12 +171,16 @@ class NearestNeighborsSolver(BaseSolver):
 
         Examples
         --------
-        >>> solver = NearestNeighborsSolver(max_children=2)
-        >>> solver.solve(graph)
+        ```python
+        solver = NearestNeighborsSolver(max_children=2)
+        solver.solve(graph)
+        ```
 
         Access solution edges:
 
-        >>> solution_edges = graph.edge_attrs().filter(pl.col("solution") == True)
+        ```python
+        solution_edges = graph.edge_attrs().filter(pl.col("solution") == True)
+        ```
 
         Returns
         -------

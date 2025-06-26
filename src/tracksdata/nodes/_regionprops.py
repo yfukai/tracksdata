@@ -54,30 +54,43 @@ class RegionPropsNodes(BaseNodesOperator):
     --------
     Create a basic RegionPropsNodes operator:
 
-    >>> from tracksdata.nodes import RegionPropsNodes
-    >>> node_op = RegionPropsNodes()
+    ```python
+    from tracksdata.nodes import RegionPropsNodes
+
+    node_op = RegionPropsNodes()
+    ```
 
     Add common geometric properties:
 
-    >>> node_op = RegionPropsNodes(extra_properties=["area", "perimeter", "eccentricity"])
+    ```python
+    node_op = RegionPropsNodes(extra_properties=["area", "perimeter", "eccentricity"])
+    ```
 
     Add custom properties using functions:
 
-    >>> def custom_property(region):
-    ...     return region.area / region.perimeter
-    >>> node_op = RegionPropsNodes(extra_properties=["area", custom_property])
+    ```python
+    def custom_property(region):
+        return region.area / region.perimeter
+
+
+    node_op = RegionPropsNodes(extra_properties=["area", custom_property])
+    ```
 
     Use with physical spacing:
 
-    >>> node_op = RegionPropsNodes(
-    ...     spacing=(0.5, 0.1, 0.1),  # z, y, x spacing
-    ...     extra_properties=["area", "volume"],
-    ... )
+    ```python
+    node_op = RegionPropsNodes(
+        spacing=(0.5, 0.1, 0.1),  # z, y, x spacing
+        extra_properties=["area", "volume"],
+    )
+    ```
 
     Add nodes from a time series:
 
-    >>> labels_series = np.random.randint(0, 10, (10, 100, 100))
-    >>> node_op.add_nodes(graph, labels=labels_series)
+    ```python
+    labels_series = np.random.randint(0, 10, (10, 100, 100))
+    node_op.add_nodes(graph, labels=labels_series)
+    ```
     """
 
     def __init__(
@@ -106,10 +119,11 @@ class RegionPropsNodes(BaseNodesOperator):
 
         Examples
         --------
-        >>> node_op = RegionPropsNodes(extra_properties=["area", "perimeter"])
-        >>> keys = node_op.attrs_keys()
-        >>> print(keys)
-        ['area', 'perimeter']
+        ```python
+        node_op = RegionPropsNodes(extra_properties=["area", "perimeter"])
+        keys = node_op.attrs_keys()
+        print(keys)  # ['area', 'perimeter']
+        ```
         """
         return [prop.__name__ if callable(prop) else prop for prop in self._extra_properties]
 
@@ -155,22 +169,28 @@ class RegionPropsNodes(BaseNodesOperator):
         --------
         Add nodes from a single 2D labeled image:
 
-        >>> labels = skimage.measure.label(binary_image)
-        >>> node_op.add_nodes(graph, labels=labels, t=0)
+        ```python
+        labels = skimage.measure.label(binary_image)
+        node_op.add_nodes(graph, labels=labels, t=0)
+        ```
 
         Add nodes from a time series:
 
-        >>> labels_series = np.stack(
-        ...     [
-        ...         skimage.measure.label(binary_image_t0),
-        ...         skimage.measure.label(binary_image_t1),
-        ...     ]
-        ... )
-        >>> node_op.add_nodes(graph, labels=labels_series)
+        ```python
+        labels_series = np.stack(
+            [
+                skimage.measure.label(binary_image_t0),
+                skimage.measure.label(binary_image_t1),
+            ]
+        )
+        node_op.add_nodes(graph, labels=labels_series)
+        ```
 
         Add nodes with intensity information:
 
-        >>> node_op.add_nodes(graph, labels=labels, t=0, intensity_image=fluorescence_image)
+        ```python
+        node_op.add_nodes(graph, labels=labels, t=0, intensity_image=fluorescence_image)
+        ```
         """
         if t is None:
             for t in tqdm(range(labels.shape[0]), disable=not self.show_progress, desc="Adding nodes"):

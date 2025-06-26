@@ -87,20 +87,28 @@ class ILPSolver(BaseSolver):
     --------
     Basic tracking with distance-based costs:
 
-    >>> from tracksdata.solvers import ILPSolver
-    >>> solver = ILPSolver(edge_weight="distance")
-    >>> solution = solver.solve(graph)
+    ```python
+    from tracksdata.solvers import ILPSolver
+
+    solver = ILPSolver(edge_weight="distance")
+    solution = solver.solve(graph)
+    ```
 
     Tracking with appearance and disappearance costs:
 
-    >>> solver = ILPSolver(edge_weight="distance", appearance_weight=10.0, disappearance_weight=10.0)
-    >>> solution = solver.solve(graph)
+    ```python
+    solver = ILPSolver(edge_weight="distance", appearance_weight=10.0, disappearance_weight=10.0)
+    solution = solver.solve(graph)
+    ```
 
     Using attribute expressions for complex costs:
 
-    >>> from tracksdata.attrs import EdgeAttr
-    >>> solver = ILPSolver(edge_weight=EdgeAttr("distance") + 0.1 * EdgeAttr("angle_change"), division_weight=5.0)
-    >>> solution = solver.solve(graph)
+    ```python
+    from tracksdata.attrs import EdgeAttr
+
+    solver = ILPSolver(edge_weight=EdgeAttr("distance") + 0.1 * EdgeAttr("angle_change"), division_weight=5.0)
+    solution = solver.solve(graph)
+    ```
 
     Notes
     -----

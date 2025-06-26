@@ -66,13 +66,18 @@ class GraphView(RustWorkXGraph):
     --------
     Create a subgraph view filtered by time:
 
-    >>> from tracksdata.attrs import NodeAttr
-    >>> view = graph.subgraph(NodeAttr("t") == 5)
+    ```python
+    from tracksdata.attrs import NodeAttr
+
+    view = graph.subgraph(NodeAttr("t") == 5)
+    ```
 
     Access nodes in the view:
 
-    >>> node_ids = view.node_ids()
-    >>> node_attrs = view.node_attrs(node_ids=node_ids)
+    ```python
+    node_ids = view.node_ids()
+    node_attrs = view.node_attrs(node_ids=node_ids)
+    ```
 
     The view automatically maps between local and root IDs when needed.
     """
