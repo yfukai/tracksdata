@@ -30,6 +30,7 @@ class ILPSolver(BaseSolver):
     it suitable for complex biological tracking scenarios.
 
     The optimization problem includes:
+
     - Node selection variables (whether a detection is part of a track)
     - Edge selection variables (connections between detections)
     - Appearance variables (track starts)
@@ -108,6 +109,7 @@ class ILPSolver(BaseSolver):
     install Gurobi if available, otherwise SCIP will be used as fallback.
 
     The ILP formulation ensures:
+
     - Flow conservation: incoming flow equals outgoing flow for each node
     - Track consistency: each detection belongs to at most one track
     - Optimal solution: globally minimizes the total cost function

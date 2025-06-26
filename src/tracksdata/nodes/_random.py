@@ -24,7 +24,8 @@ class RandomNodes(BaseNodesOperator):
         The minimum and maximum number of nodes to generate per time point.
         The actual number is randomly chosen within this range for each time point.
     n_dim : Literal[2, 3], default 3
-        The spatial dimensionality of the coordinates.
+        The spatial dimensionality of the coordinates:
+
         - 2: generates (x, y) coordinates
         - 3: generates (x, y, z) coordinates
     random_state : int, default 0

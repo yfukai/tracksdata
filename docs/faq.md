@@ -7,6 +7,7 @@ TracksData is a Python library that provides a common data structure and tools f
 
 ### When should I use TracksData?
 TracksData is ideal for:
+
 - Multi-object tracking in microscopy or computer vision
 - Biological cell tracking and lineage analysis
 - Particle tracking in physics simulations
@@ -18,12 +19,14 @@ TracksData focuses on providing a unified data structure and modular components 
 ## Technical Questions
 
 ### Which graph backend should I use?
+
 - **RustWorkXGraph**: For most applications where data fits in memory
 - **SQLGraph**: For large datasets or when you need persistent storage
 - **GraphView**: For working with subsets of larger graphs
 
 ### How do I handle missing detections?
 TracksData solvers naturally handle missing detections through:
+
 - Appearance/disappearance costs in ILPSolver
 - Gap closing by allowing edges to skip time points
 - Track termination and re-initialization
@@ -58,11 +61,13 @@ class CustomEdges(BaseEdgesOperator):
 
 ### How fast is TracksData?
 Performance depends on the components used:
+
 - **RustWorkXGraph**: Very fast for in-memory operations
 - **ILPSolver**: Optimal but slower for large problems
 - **NearestNeighborsSolver**: Fast heuristic for simple scenarios
 
 ### How do I optimize for large datasets?
+
 - Use SQLGraph for datasets that don't fit in memory
 - Consider NearestNeighborsSolver for speed over optimality
 - Use distance thresholds to limit edge creation
@@ -82,6 +87,7 @@ tracks_data = to_napari_format(solution)
 
 ### Can I export to other formats?
 Yes, graphs can be converted to:
+
 - Pandas/Polars DataFrames via `node_attrs()` and `edge_attrs()`
 - NetworkX graphs for further analysis
 - Custom formats by iterating over nodes and edges
@@ -109,11 +115,13 @@ conda install -c conda-forge rust
 ```
 
 ### Solver fails with "no solution found"
+
 - Check that edges exist between time points
 - Verify edge weights are reasonable (not too high)
 - Consider adjusting appearance/disappearance costs
 
 ### Memory usage is too high
+
 - Use SQLGraph instead of RustWorkXGraph
 - Process data in smaller chunks
 - Limit the number of edges with distance thresholds

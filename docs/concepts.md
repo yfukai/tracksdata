@@ -9,6 +9,7 @@ TracksData represents tracking data as a directed graph where:
 - **Tracks** are paths through the graph representing object trajectories
 
 This representation naturally handles complex tracking scenarios like:
+
 - Object appearances and disappearances
 - Track merging and splitting (divisions)
 - Temporary occlusions
