@@ -10,7 +10,13 @@ A common data structure and basic tools for multi-object tracking.
 
 ## Features
 
-# TODO
+- Graph-based representation of tracking problems
+- In-memory (RustWorkX) and database-backed (SQL) graph backends
+- Node operators for feature extraction from segmentation masks
+- Edge operators for connecting detections (distance, IoU, custom metrics)
+- Tracking solvers: nearest neighbors and integer linear programming
+- Cell Tracking Challenge (CTC) format support
+- Attribute filtering and querying system
 
 ## Installation
 
@@ -28,8 +34,18 @@ pip install .
 
 ## Why tracksdata?
 
-# TODO
+TracksData provides a common data structure for multi-object tracking problems. It uses graphs to represent detections (nodes) and their connections (edges), making it easier to work with tracking data across different algorithms and formats.
+
+Key benefits:
+- Consistent data representation for tracking problems
+- Modular components that can be combined as needed
+- Support for both small datasets (in-memory) and large datasets (database)
+- Integration with Cell Tracking Challenge benchmarks
 
 ## Documentation
 
-For more information, please refer to the [documentation](https://royerlab.github.io/tracksdata/).
+- [Full Documentation](https://royerlab.github.io/tracksdata/)
+- [Getting Started](https://royerlab.github.io/tracksdata/getting_started/)
+- [Core Concepts](https://royerlab.github.io/tracksdata/concepts/)
+- [API Reference](https://royerlab.github.io/tracksdata/reference/)
+- [FAQ](https://royerlab.github.io/tracksdata/faq/)
