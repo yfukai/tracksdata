@@ -47,7 +47,8 @@ Key benefits:
 ## Documentation
 
 - [Full Documentation](https://royerlab.github.io/tracksdata/)
-- [Getting Started](https://royerlab.github.io/tracksdata/getting_started/)
+- [Installation](https://royerlab.github.io/tracksdata/installation/)
 - [Core Concepts](https://royerlab.github.io/tracksdata/concepts/)
-- [API Reference](https://royerlab.github.io/tracksdata/reference/)
+- [Getting Started](https://royerlab.github.io/tracksdata/getting_started/)
+- [API Reference](https://royerlab.github.io/tracksdata/reference/tracksdata/)
 - [FAQ](https://royerlab.github.io/tracksdata/faq/)
