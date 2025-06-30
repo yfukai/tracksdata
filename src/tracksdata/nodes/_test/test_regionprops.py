@@ -11,7 +11,6 @@ def test_regionprops_init_default() -> None:
     """Test RegionPropsNodes initialization with default parameters."""
     operator = RegionPropsNodes()
 
-    assert operator._cache is True
     assert operator._extra_properties == []
     assert operator._spacing is None
     assert operator.show_progress is True
@@ -19,11 +18,8 @@ def test_regionprops_init_default() -> None:
 
 def test_regionprops_init_custom() -> None:
     """Test RegionPropsNodes initialization with custom parameters."""
-    operator = RegionPropsNodes(
-        cache=False, extra_properties=["area", "perimeter"], spacing=(1.0, 2.0), show_progress=False
-    )
+    operator = RegionPropsNodes(extra_properties=["area", "perimeter"], spacing=(1.0, 2.0), show_progress=False)
 
-    assert operator._cache is False
     assert operator._extra_properties == ["area", "perimeter"]
     assert operator._spacing == (1.0, 2.0)
     assert operator.show_progress is False

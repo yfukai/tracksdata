@@ -16,12 +16,12 @@ def _constrained_nearest_neighbors(
     max_children: int,
 ) -> None:
     """
-    Optimized constraint satisfaction for nearest neighbor tracking.
+    Greedy nearest neighbor tracking solver with maximum number of children constraint.
 
     Numba-compiled function that efficiently applies tracking constraints by
     processing edges in weight-sorted order (best first) and greedily accepting
     edges that don't violate constraints. Ensures optimal solution for the
-    nearest neighbor tracking problem in O(n) time.
+    nearest neighbor tracking problem in O(n) time with n being the number of edges.
 
     Parameters
     ----------

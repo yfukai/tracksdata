@@ -591,7 +591,8 @@ class NodeAttr(Attr):
 
     See Also
     --------
-    `tracksdata.attrs.Attr` : The base class for all attributes.
+    [Attr][tracksdata.attrs.Attr]:
+        The base class for all attributes.
     """
 
 
@@ -601,7 +602,8 @@ class EdgeAttr(Attr):
 
     See Also
     --------
-    `tracksdata.attrs.Attr` : The base class for all attributes.
+    [Attr][tracksdata.attrs.Attr]:
+        The base class for all attributes.
     """
 
 

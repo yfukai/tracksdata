@@ -5,7 +5,7 @@
 TracksData is built around a graph-based representation of multi-object tracking data:
 
 - **Nodes** represent objects at specific time points (detections)
-- **Edges** represent connections between objects across time (tracks)
+- **Edges** represent connections between objects across time (connections)
 - **Attributes** store additional data like coordinates, features, or costs
 
 ## Quick Example
@@ -38,13 +38,10 @@ edge_generator = DistanceEdges(
 edge_generator.add_edges(graph)
 
 # Solve the tracking problem
-solver = ILPSolver(
-    edge_weight="weight",
-    appearance_weight=5.0,
-    disappearance_weight=5.0
-)
+solver = NearestNeighborsSolver(edge_weight="weight")
 solution = solver.solve(graph)
 
+print(f"Original graph has {graph.num_nodes} nodes and {graph.num_edges} edges")
 print(f"Solution has {solution.num_nodes} nodes and {solution.num_edges} edges")
 ```
 
@@ -63,7 +60,7 @@ from tracksdata.attrs import NodeAttr
 
 # Extract nodes from labeled images
 node_op = RegionPropsNodes(extra_properties=["area", "eccentricity"])
-node_op.add_nodes(graph, labels=labeled_images)
+node_op.add_nodes(graph, labels=labels)
 
 # Filter nodes by time
 t0_nodes = graph.filter_nodes_by_attrs(NodeAttr("t") == 0)

@@ -25,10 +25,6 @@ class RegionPropsNodes(BaseNodesOperator):
 
     Parameters
     ----------
-    cache : bool, default True
-        Whether to enable caching of computed properties in regionprops.
-        Caching improves performance when accessing multiple properties
-        but uses more memory.
     extra_properties : list[str | Callable[[RegionProperties], Any]] | None, optional
         Additional properties to compute for each region. Can be:
         - String names of built-in regionprops properties (e.g., 'area', 'perimeter')
@@ -43,8 +39,6 @@ class RegionPropsNodes(BaseNodesOperator):
 
     Attributes
     ----------
-    _cache : bool
-        Whether caching is enabled for regionprops.
     _extra_properties : list
         List of additional properties to compute.
     _spacing : tuple[float, float] | None
@@ -95,13 +89,11 @@ class RegionPropsNodes(BaseNodesOperator):
 
     def __init__(
         self,
-        cache: bool = True,
         extra_properties: list[str | Callable[[RegionProperties], Any]] | None = None,
         spacing: tuple[float, float] | None = None,
         show_progress: bool = True,
     ):
         super().__init__(show_progress=show_progress)
-        self._cache = cache
         self._extra_properties = extra_properties or []
         self._spacing = spacing
 
@@ -230,7 +222,7 @@ class RegionPropsNodes(BaseNodesOperator):
         region and creating corresponding graph nodes. Determines spatial dimensions
         from label shape, ensures required attribute keys exist, computes region
         properties, extracts coordinates and extra properties, creates mask objects,
-        and bulk adds all nodes. Region property caches are cleared for memory efficiency.
+        and bulk adds all nodes.
 
         Parameters
         ----------
@@ -271,6 +263,7 @@ class RegionPropsNodes(BaseNodesOperator):
             labels,
             intensity_image=intensity_image,
             spacing=self._spacing,
+            cache=True,
         ):
             attrs = dict(zip(axis_names, obj.centroid, strict=False))
 

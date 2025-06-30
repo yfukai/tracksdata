@@ -13,7 +13,7 @@ from tracksdata.attrs import (
     split_attr_comps,
 )
 from tracksdata.constants import DEFAULT_ATTR_KEYS
-from tracksdata.functional._rx import graph_track_ids
+from tracksdata.functional._rx import _assign_track_ids
 from tracksdata.graph._base_graph import BaseGraph
 from tracksdata.utils._dataframe import unpack_array_attrs
 from tracksdata.utils._logging import LOG
@@ -93,9 +93,7 @@ class RustWorkXGraph(BaseGraph):
 
     See Also
     --------
-    :class:`tracksdata.graph.BaseGraph`
-        Base class for all graph implementations.
-    :class:`tracksdata.graph.SQLGraph`
+    [SQLGraph][tracksdata.graph.SQLGraph]:
         Database-backed graph implementation for larger datasets.
 
     Examples
@@ -752,7 +750,7 @@ class RustWorkXGraph(BaseGraph):
             A compressed graph (parent -> child) with track ids lineage relationships.
         """
         try:
-            node_ids, track_ids, tracks_graph = graph_track_ids(self.rx_graph)
+            node_ids, track_ids, tracks_graph = _assign_track_ids(self.rx_graph)
         except RuntimeError as e:
             raise RuntimeError(
                 "Are you sure this graph is a valid lineage graph?\n"

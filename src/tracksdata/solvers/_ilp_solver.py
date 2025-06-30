@@ -76,11 +76,13 @@ class ILPSolver(BaseSolver):
 
     See Also
     --------
-    :class:`tracksdata.solvers.NearestNeighborsSolver`
+    [NearestNeighborsSolver][tracksdata.solvers.NearestNeighborsSolver]:
         Greedy nearest neighbors tracking solver.
-    :class:`tracksdata.attrs.NodeAttr`
+
+    [NodeAttr][tracksdata.attrs.NodeAttr]:
         For creating node attribute expressions.
-    :class:`tracksdata.attrs.EdgeAttr`
+
+    [EdgeAttr][tracksdata.attrs.EdgeAttr]:
         For creating edge attribute expressions.
 
     Examples
@@ -112,9 +114,9 @@ class ILPSolver(BaseSolver):
 
     Notes
     -----
-    The solver uses the ilpy library which provides interfaces to commercial
-    solvers (Gurobi) and open-source solvers (SCIP). For best performance,
-    install Gurobi if available, otherwise SCIP will be used as fallback.
+    The solver uses the [ilpy](https://github.com/funkelab/ilpy) library which provides interfaces
+    to commercial solvers (Gurobi) and open-source solvers (SCIP).
+    For best performance, install Gurobi if available, otherwise SCIP will be used as fallback.
 
     The ILP formulation ensures:
 

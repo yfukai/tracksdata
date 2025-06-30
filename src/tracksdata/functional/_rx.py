@@ -165,7 +165,7 @@ def _rx_graph_to_dict_dag(graph: rx.PyDiGraph) -> dict[int, list[int]]:
     return forest
 
 
-def graph_track_ids(
+def _assign_track_ids(
     graph: rx.PyDiGraph,
 ) -> tuple[np.ndarray, np.ndarray, rx.PyDiGraph]:
     """

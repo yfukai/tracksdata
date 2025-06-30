@@ -46,9 +46,10 @@ class RandomNodes(BaseNodesOperator):
 
     See Also
     --------
-    :class:`tracksdata.nodes.RegionPropsNodes`
+    [RegionPropsNodes][tracksdata.nodes.RegionPropsNodes]:
         Extract nodes from segmented images using region properties.
-    :class:`tracksdata.nodes.Mask`
+
+    [Mask][tracksdata.nodes.Mask]:
         Node operator for mask-based objects.
 
     Examples

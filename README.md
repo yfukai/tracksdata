@@ -12,11 +12,13 @@ A common data structure and basic tools for multi-object tracking.
 
 - Graph-based representation of tracking problems
 - In-memory (RustWorkX) and database-backed (SQL) graph backends
-- Node operators for feature extraction from segmentation masks
-- Edge operators for connecting detections (distance, IoU, custom metrics)
-- Tracking solvers: nearest neighbors and integer linear programming
-- Cell Tracking Challenge (CTC) format support
-- Attribute filtering and querying system
+- Nodes and edges can take arbitrary attributes
+- Standardize API for node operators (e.g. defining objects and their attributes)
+- Standardize API for edge operators (e.g. creating edges between nodes)
+- Basic tracking solvers: nearest neighbors and integer linear programming
+- Compatible with Cell Tracking Challenge (CTC) format
+- Efficient subgraphing based on attributes on any graph backend
+- Integration with cell tracking evaluation metrics
 
 ## Installation
 
@@ -34,13 +36,13 @@ pip install .
 
 ## Why tracksdata?
 
-TracksData provides a common data structure for multi-object tracking problems. It uses graphs to represent detections (nodes) and their connections (edges), making it easier to work with tracking data across different algorithms and formats.
+TracksData provides a common data structure for multi-object tracking problems.
+It uses graphs to represent detections (nodes) and their connections (edges), making it easier to work with tracking data across different algorithms.
 
 Key benefits:
 - Consistent data representation for tracking problems
 - Modular components that can be combined as needed
 - Support for both small datasets (in-memory) and large datasets (database)
-- Integration with Cell Tracking Challenge benchmarks
 
 ## Documentation
 

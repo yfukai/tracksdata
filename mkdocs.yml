@@ -1,10 +1,7 @@
 site_name: tracksdata
-site_url: https://jookuma.github.io/tracksdata/
-repo_name: "jookuma/tracksdata"
-repo_url: "https://github.com/jookuma/tracksdata"
-# site_url: https://royerlab.github.io/tracksdata/
-# repo_name: "royerlab/tracksdata"
-# repo_url: "https://github.com/royerlab/tracksdata"
+site_url: https://royerlab.github.io/tracksdata/
+repo_name: "royerlab/tracksdata"
+repo_url: "https://github.com/royerlab/tracksdata"
 watch: [mkdocs.yml, README.md, src]
 
 # Version management with mike
@@ -37,9 +34,9 @@ theme:
 
 nav:
   - Home: index.md
-  - Getting Started: getting_started.md
   - Installation: installation.md
   - Concepts: concepts.md
+  - Getting Started: getting_started.md
   - FAQ: faq.md
   - Contributing: contributing.md
 

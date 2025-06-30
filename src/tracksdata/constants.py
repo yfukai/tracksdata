@@ -13,23 +13,23 @@ class DefaultAttrKeys:
     Attributes
     ----------
     NODE_ID : str
-        Default key for node identifiers ("node_id").
+        Default key for node identifiers.
     T : str
-        Default key for time information ("t").
+        Default key for time information.
     MASK : str
-        Default key for node masks ("mask").
+        Default key for node masks.
     SOLUTION : str
-        Default key for solution information ("solution").
+        Default key for solution information.
     TRACK_ID : str
-        Default key for track identifiers ("track_id").
+        Default key for track identifiers.
     EDGE_ID : str
-        Default key for edge identifiers ("edge_id").
+        Default key for edge identifiers.
     EDGE_WEIGHT : str
-        Default key for edge weights ("weight").
+        Default key for edge weights.
     EDGE_SOURCE : str
-        Default key for edge source node identifier ("source_id").
+        Default key for edge source node identifier.
     EDGE_TARGET : str
-        Default key for edge target node identifier ("target_id").
+        Default key for edge target node identifier.
     MATCHED_NODE_ID : str
         Default key to identify respective node in another graph used for matching.
     MATCH_SCORE : str

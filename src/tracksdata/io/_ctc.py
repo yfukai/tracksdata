@@ -120,6 +120,8 @@ def load_ctc(
     Load a CTC ground truth file into a graph.
     The resulting graph will have region properties attributesfrom a CTC ground truth file.
 
+    Graph backend method API (e.g. `graph.from_ctc`) is preferred over this function.
+
     Parameters
     ----------
     data_dir : str | Path
@@ -141,8 +143,11 @@ def load_ctc(
 
     See Also
     --------
-    BaseGraph.from_ctc : Create a graph from a CTC data directory.
-    RegionPropsNodes : Operator to create nodes from label images.
+    [BaseGraph.from_ctc][tracksdata.graph._base_graph.BaseGraph.from_ctc]:
+        Create a graph from a CTC data directory.
+
+    [RegionPropsNodes][tracksdata.nodes.RegionPropsNodes]:
+        Operator to create nodes from label images.
 
     """
     data_dir = Path(data_dir)

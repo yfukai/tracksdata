@@ -2,14 +2,14 @@ import numpy as np
 import pytest
 import rustworkx as rx
 
-from tracksdata.functional._rx import graph_track_ids
+from tracksdata.functional._rx import _assign_track_ids
 
 
 def test_empty_graph() -> None:
     """Test that empty graph raises ValueError."""
     graph = rx.PyDiGraph()
     with pytest.raises(ValueError, match="Graph is empty"):
-        graph_track_ids(graph)
+        _assign_track_ids(graph)
 
 
 def test_single_path() -> None:
@@ -21,7 +21,7 @@ def test_single_path() -> None:
     graph.add_edge(nodes[0], nodes[1], None)
     graph.add_edge(nodes[1], nodes[2], None)
 
-    node_ids, track_ids, tracks_graph = graph_track_ids(graph)
+    node_ids, track_ids, tracks_graph = _assign_track_ids(graph)
 
     assert np.array_equal(node_ids, [0, 1, 2])
     assert np.array_equal(track_ids, [1, 1, 1])
@@ -41,7 +41,7 @@ def test_branching_path() -> None:
     graph.add_edge(nodes[0], nodes[1], None)
     graph.add_edge(nodes[0], nodes[2], None)
 
-    node_ids, track_ids, tracks_graph = graph_track_ids(graph)
+    node_ids, track_ids, tracks_graph = _assign_track_ids(graph)
 
     # Should create 2 tracks: one for each branch
     assert len(node_ids) == 3
@@ -64,7 +64,7 @@ def test_invalid_multiple_parents() -> None:
     graph.add_edge(nodes[1], nodes[2], None)
 
     with pytest.raises(RuntimeError, match="Invalid graph structure"):
-        graph_track_ids(graph)
+        _assign_track_ids(graph)
 
 
 def test_complex_valid_branching() -> None:
@@ -83,7 +83,7 @@ def test_complex_valid_branching() -> None:
     graph.add_edge(nodes[1], nodes[3], None)
     graph.add_edge(nodes[2], nodes[4], None)
 
-    node_ids, track_ids, tracks_graph = graph_track_ids(graph)
+    node_ids, track_ids, tracks_graph = _assign_track_ids(graph)
 
     assert len(node_ids) == 5
     assert len(track_ids) == 5
@@ -105,7 +105,7 @@ def test_three_children() -> None:
     graph.add_edge(nodes[0], nodes[2], None)
     graph.add_edge(nodes[0], nodes[3], None)
 
-    _, track_ids, tracks_graph = graph_track_ids(graph)
+    _, track_ids, tracks_graph = _assign_track_ids(graph)
     assert set(tracks_graph.successor_indices(track_ids[0])) == set(track_ids[1:])
 
 
@@ -119,7 +119,7 @@ def test_multiple_roots() -> None:
     graph.add_edge(nodes[0], nodes[1], None)
     graph.add_edge(nodes[2], nodes[3], None)
 
-    node_ids, track_ids, tracks_graph = graph_track_ids(graph)
+    node_ids, track_ids, tracks_graph = _assign_track_ids(graph)
 
     assert len(node_ids) == 4
     assert len(track_ids) == 4

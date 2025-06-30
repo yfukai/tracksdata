@@ -440,8 +440,11 @@ class BaseGraph(abc.ABC):
 
         See Also
         --------
-        tracksdata.io._ctc.load_ctc : Load a CTC ground truth file into a graph.
-        RegionPropsNodes : Operator to create nodes from label images.
+        [load_ctc][tracksdata.io._ctc.load_ctc]:
+            Load a CTC ground truth file into a graph.
+
+        [RegionPropsNodes][tracksdata.nodes.RegionPropsNodes]:
+            Operator to create nodes from label images.
 
         Returns
         -------

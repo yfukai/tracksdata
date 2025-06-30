@@ -6,7 +6,7 @@ import rustworkx as rx
 
 from tracksdata.attrs import AttrComparison
 from tracksdata.constants import DEFAULT_ATTR_KEYS
-from tracksdata.functional._rx import graph_track_ids
+from tracksdata.functional._rx import _assign_track_ids
 from tracksdata.graph._base_graph import BaseGraph
 from tracksdata.graph._rustworkx_graph import RustWorkXGraph
 
@@ -31,7 +31,7 @@ class GraphView(RustWorkXGraph):
     GraphView provides a lightweight way to work with subsets of a larger graph
     while maintaining the ability to synchronize changes back to the original graph.
     It acts as a view layer that maps between local node/edge IDs and the root
-    graph's IDs, enabling efficient subgraph operations without data duplication.
+    graph's IDs, enabling efficient subgraph operations with minimal data duplication.
 
     Parameters
     ----------
@@ -42,7 +42,8 @@ class GraphView(RustWorkXGraph):
     root : BaseGraph
         Reference to the root graph that this view is derived from.
     sync : bool, default True
-        Whether to automatically synchronize changes back to the root graph.
+        Whether to automatically synchronize changes in the view.
+        By default only the root graph is updated.
 
     Attributes
     ----------
@@ -57,10 +58,11 @@ class GraphView(RustWorkXGraph):
 
     See Also
     --------
-    :class:`tracksdata.graph.RustWorkXGraph`
+    [RustWorkXGraph][tracksdata.graph.RustWorkXGraph]:
         The base graph implementation that this view extends.
-    :class:`tracksdata.graph.BaseGraph`
-        Base class for all graph implementations.
+
+    [SQLGraph][tracksdata.graph.SQLGraph]:
+        Database-backed graph implementation for larger datasets.
 
     Examples
     --------
@@ -404,7 +406,7 @@ class GraphView(RustWorkXGraph):
             A compressed graph (parent -> child) with track ids lineage relationships.
         """
         try:
-            node_ids, track_ids, tracks_graph = graph_track_ids(self.rx_graph)
+            node_ids, track_ids, tracks_graph = _assign_track_ids(self.rx_graph)
         except RuntimeError as e:
             raise RuntimeError(
                 "Are you sure this graph is a valid lineage graph?\n"

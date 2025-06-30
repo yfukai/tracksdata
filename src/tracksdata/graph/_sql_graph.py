@@ -106,9 +106,7 @@ class SQLGraph(BaseGraph):
 
     See Also
     --------
-    :class:`tracksdata.graph.BaseGraph`
-        Base class for all graph implementations.
-    :class:`tracksdata.graph.RustworkxGraph`
+    [RustWorkXGraph][tracksdata.graph.RustWorkXGraph]:
         In memory Rustworkx-based graph implementation.
 
     Examples
