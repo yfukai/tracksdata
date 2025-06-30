@@ -13,7 +13,7 @@ from tracksdata.attrs import (
     split_attr_comps,
 )
 from tracksdata.constants import DEFAULT_ATTR_KEYS
-from tracksdata.functional._rx import graph_track_ids
+from tracksdata.functional._rx import _assign_track_ids
 from tracksdata.graph._base_graph import BaseGraph
 from tracksdata.utils._dataframe import unpack_array_attrs
 from tracksdata.utils._logging import LOG
@@ -65,10 +65,70 @@ def _create_filter_func(
 
 
 class RustWorkXGraph(BaseGraph):
+    """
+    High-performance in-memory graph implementation using rustworkx.
+
+    RustWorkXGraph provides a fast, memory-efficient graph backend built on
+    rustworkx (a Rust-based graph library). It stores nodes and edges in memory
+    with their attributes, making it suitable for moderate-sized graphs that
+    fit in RAM. This implementation offers excellent performance for graph
+    algorithms and is the recommended choice for most tracking applications.
+
+    Parameters
+    ----------
+    rx_graph : rx.PyDiGraph | None, optional
+        An existing rustworkx directed graph to wrap. If None, creates a new
+        empty graph.
+
+    Attributes
+    ----------
+    rx_graph : rx.PyDiGraph
+        The underlying rustworkx directed graph object.
+    _time_to_nodes : dict[int, list[int]]
+        Mapping from time points to lists of node IDs at that time.
+    _node_attr_keys : list[str]
+        List of available node attribute keys.
+    _edge_attr_keys : list[str]
+        List of available edge attribute keys.
+
+    See Also
+    --------
+    [SQLGraph][tracksdata.graph.SQLGraph]:
+        Database-backed graph implementation for larger datasets.
+
+    Examples
+    --------
+    Create an empty graph:
+
+    ```python
+    from tracksdata.graph import RustWorkXGraph
+
+    graph = RustWorkXGraph()
+    ```
+
+    Add nodes and edges:
+
+    ```python
+    node_id = graph.add_node({"t": 0, "x": 10.5, "y": 20.3})
+    edge_id = graph.add_edge(source_id, target_id, {"weight": 0.8})
+    ```
+
+    Filter nodes by attributes:
+
+    ```python
+    from tracksdata.attrs import NodeAttr
+
+    node_ids = graph.filter_nodes_by_attrs(NodeAttr("t") == 0)
+    ```
+
+    Create subgraphs:
+
+    ```python
+    subgraph = graph.subgraph(NodeAttr("t") == 0)
+    ```
+    """
+
     def __init__(self, rx_graph: rx.PyDiGraph | None = None) -> None:
-        """
-        TODO
-        """
         super().__init__()
 
         if rx_graph is None:
@@ -98,7 +158,9 @@ class RustWorkXGraph(BaseGraph):
             The attributes of the node to be added, must have a "t" key.
             The keys of the attributes will be used as the attributes of the node.
             For example:
-            >>> `graph.add_node(dict(t=0, label='A', intensity=100))`
+            ```python
+            graph.add_node(dict(t=0, label="A", intensity=100))
+            ```
         validate_keys : bool
             Whether to check if the attributes keys are valid.
             If False, the attributes keys will not be checked,
@@ -267,7 +329,9 @@ class RustWorkXGraph(BaseGraph):
         ----------
         *attrs : AttrComparison
             The attributes to filter by, for example:
-            >>> `graph.filter_nodes_by_attrs(Attr("t") == 0, Attr("label") == "A")`
+            ```python
+            graph.filter_nodes_by_attrs(Attr("t") == 0, Attr("label") == "A")
+            ```
 
         Returns
         -------
@@ -686,7 +750,7 @@ class RustWorkXGraph(BaseGraph):
             A compressed graph (parent -> child) with track ids lineage relationships.
         """
         try:
-            node_ids, track_ids, tracks_graph = graph_track_ids(self.rx_graph)
+            node_ids, track_ids, tracks_graph = _assign_track_ids(self.rx_graph)
         except RuntimeError as e:
             raise RuntimeError(
                 "Are you sure this graph is a valid lineage graph?\n"

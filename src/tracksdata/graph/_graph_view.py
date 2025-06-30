@@ -6,7 +6,7 @@ import rustworkx as rx
 
 from tracksdata.attrs import AttrComparison
 from tracksdata.constants import DEFAULT_ATTR_KEYS
-from tracksdata.functional._rx import graph_track_ids
+from tracksdata.functional._rx import _assign_track_ids
 from tracksdata.graph._base_graph import BaseGraph
 from tracksdata.graph._rustworkx_graph import RustWorkXGraph
 
@@ -25,6 +25,65 @@ def map_ids(
 
 
 class GraphView(RustWorkXGraph):
+    """
+    A filtered view of a graph that maintains bidirectional mapping to the root graph.
+
+    GraphView provides a lightweight way to work with subsets of a larger graph
+    while maintaining the ability to synchronize changes back to the original graph.
+    It acts as a view layer that maps between local node/edge IDs and the root
+    graph's IDs, enabling efficient subgraph operations with minimal data duplication.
+
+    Parameters
+    ----------
+    rx_graph : rx.PyDiGraph
+        The rustworkx graph object representing the subgraph.
+    node_map_to_root : dict[int, int]
+        Mapping from local node IDs to root graph node IDs.
+    root : BaseGraph
+        Reference to the root graph that this view is derived from.
+    sync : bool, default True
+        Whether to automatically synchronize changes in the view.
+        By default only the root graph is updated.
+
+    Attributes
+    ----------
+    _node_map_to_root : dict[int, int]
+        Mapping from view node IDs to root graph node IDs.
+    _node_map_from_root : dict[int, int]
+        Mapping from root graph node IDs to view node IDs.
+    _edge_map_to_root : dict[int, int]
+        Mapping from view edge IDs to root graph edge IDs.
+    _edge_map_from_root : dict[int, int]
+        Mapping from root graph edge IDs to view edge IDs.
+
+    See Also
+    --------
+    [RustWorkXGraph][tracksdata.graph.RustWorkXGraph]:
+        The base graph implementation that this view extends.
+
+    [SQLGraph][tracksdata.graph.SQLGraph]:
+        Database-backed graph implementation for larger datasets.
+
+    Examples
+    --------
+    Create a subgraph view filtered by time:
+
+    ```python
+    from tracksdata.attrs import NodeAttr
+
+    view = graph.subgraph(NodeAttr("t") == 5)
+    ```
+
+    Access nodes in the view:
+
+    ```python
+    node_ids = view.node_ids()
+    node_attrs = view.node_attrs(node_ids=node_ids)
+    ```
+
+    The view automatically maps between local and root IDs when needed.
+    """
+
     def __init__(
         self,
         rx_graph: rx.PyDiGraph,
@@ -347,7 +406,7 @@ class GraphView(RustWorkXGraph):
             A compressed graph (parent -> child) with track ids lineage relationships.
         """
         try:
-            node_ids, track_ids, tracks_graph = graph_track_ids(self.rx_graph)
+            node_ids, track_ids, tracks_graph = _assign_track_ids(self.rx_graph)
         except RuntimeError as e:
             raise RuntimeError(
                 "Are you sure this graph is a valid lineage graph?\n"
