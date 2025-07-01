@@ -855,6 +855,8 @@ class RustWorkXGraph(BaseGraph):
             )
         )
 
+        # I'm a bit concerned with the internal booking of indices of rustworkx
+        # so I'm adding this sanity check
         assert len(node_map_to_root) == rx_graph.num_nodes()
 
         graph_view = GraphView(rx_graph, node_map_to_root=node_map_to_root, root=self)
