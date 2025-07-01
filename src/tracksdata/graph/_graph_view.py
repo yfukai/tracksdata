@@ -1,5 +1,5 @@
 from collections.abc import Callable, Sequence
-from typing import Any
+from typing import Any, overload
 
 import polars as pl
 import rustworkx as rx
@@ -9,6 +9,14 @@ from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.functional._rx import _assign_track_ids
 from tracksdata.graph._base_graph import BaseGraph
 from tracksdata.graph._rustworkx_graph import RustWorkXGraph
+
+
+@overload
+def map_ids(map: dict[int, int], indices: Sequence[int]) -> list[int]: ...
+
+
+@overload
+def map_ids(map: dict[int, int], indices: None) -> None: ...
 
 
 def map_ids(
@@ -449,3 +457,24 @@ class GraphView(RustWorkXGraph):
         if isinstance(node_ids, int):
             return rx_graph.out_degree(self._node_map_from_root[node_ids])
         return [rx_graph.out_degree(self._node_map_from_root[node_id]) for node_id in node_ids]
+
+    def contract_nodes(
+        self,
+        permanent_node_ids: Sequence[int],
+    ) -> "GraphView":
+        """
+        TODO
+        """
+        subgraph = super().contract_nodes(
+            permanent_node_ids=map_ids(self._node_map_from_root, permanent_node_ids),
+        )
+
+        subgraph._root = self._root
+
+        subgraph._node_map_to_root = {k: self._node_map_to_root[v] for k, v in subgraph._node_map_to_root.items()}
+        subgraph._node_map_from_root = {v: k for k, v in subgraph._node_map_to_root.items()}
+
+        subgraph._edge_map_to_root = {k: self._edge_map_to_root[v] for k, v in subgraph._edge_map_to_root.items()}
+        subgraph._edge_map_from_root = {v: k for k, v in subgraph._edge_map_to_root.items()}
+
+        return subgraph
