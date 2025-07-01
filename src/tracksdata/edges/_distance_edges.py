@@ -16,8 +16,8 @@ class DistanceEdges(BaseEdgesOperator):
 
     Creates edges between nodes in consecutive time points by finding the closest
     neighbors within a specified distance threshold using efficient KDTree-based
-    spatial indexing. Creates directed edges from nodes at time t to nodes at
-    time t+1, representing potential transitions.
+    spatial indexing. Creates directed edges from nodes in the range t-1
+    to t-delta_t to the nodes in the current time point t, representing potential transitions.
 
     Parameters
     ----------
@@ -27,7 +27,11 @@ class DistanceEdges(BaseEdgesOperator):
     n_neighbors : int
         Maximum number of neighbors to consider for each node when adding edges.
         For each node at time t, edges will be created to at most n_neighbors
-        closest nodes at time t-1.
+        closest nodes at time t-1 to t-delta_t.
+    delta_t : int, default 1
+        The number of time points to consider for adding edges.
+        For each node at time t, edges will be created to the closest
+        n_neighbors nodes at time t-1 to t-delta_t.
     output_key : str, default DEFAULT_ATTR_KEYS.EDGE_WEIGHT
         The attribute key to store the distance values in the edges.
     attr_keys : Sequence[str] | None, optional
@@ -86,13 +90,18 @@ class DistanceEdges(BaseEdgesOperator):
         self,
         distance_threshold: float,
         n_neighbors: int,
+        delta_t: int = 1,
         output_key: str = DEFAULT_ATTR_KEYS.EDGE_WEIGHT,
         attr_keys: Sequence[str] | None = None,
         show_progress: bool = True,
     ):
+        if delta_t < 1:
+            raise ValueError(f"'delta_t' must be at least 1, got {delta_t}")
+
         super().__init__(output_key=output_key, show_progress=show_progress)
         self.distance_threshold = distance_threshold
         self.n_neighbors = n_neighbors
+        self.delta_t = delta_t
         self.output_key = output_key
         self.attr_keys = attr_keys
 
@@ -129,13 +138,21 @@ class DistanceEdges(BaseEdgesOperator):
         else:
             attr_keys = self.attr_keys
 
-        prev_node_ids = graph.filter_nodes_by_attrs(NodeAttr(DEFAULT_ATTR_KEYS.T) == t - 1)
+        if self.delta_t == 1:
+            # faster than the range filter
+            prev_node_ids = graph.filter_nodes_by_attrs(NodeAttr(DEFAULT_ATTR_KEYS.T) == t - 1)
+        else:
+            prev_node_ids = graph.filter_nodes_by_attrs(
+                NodeAttr(DEFAULT_ATTR_KEYS.T) >= t - self.delta_t,
+                NodeAttr(DEFAULT_ATTR_KEYS.T) < t,
+            )
         cur_node_ids = graph.filter_nodes_by_attrs(NodeAttr(DEFAULT_ATTR_KEYS.T) == t)
 
         if len(prev_node_ids) == 0:
             LOG.warning(
-                "No nodes found for time point %d",
-                t - 1,
+                "No nodes found for time point in range (%d <= t < %d)",
+                t - self.delta_t,
+                t,
             )
             return
 

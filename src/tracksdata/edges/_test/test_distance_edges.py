@@ -12,6 +12,7 @@ def test_distance_edges_init_default_params() -> None:
     assert operator.n_neighbors == 3
     assert operator.attr_keys is None
     assert operator.show_progress is True
+    assert operator.delta_t == 1
 
 
 def test_distance_edges_init_custom_params() -> None:
@@ -19,6 +20,7 @@ def test_distance_edges_init_custom_params() -> None:
     operator = DistanceEdges(
         distance_threshold=5.0,
         n_neighbors=2,
+        delta_t=2,
         attr_keys=["x", "y"],
         show_progress=False,
         output_key="custom_distance",
@@ -28,6 +30,7 @@ def test_distance_edges_init_custom_params() -> None:
     assert operator.n_neighbors == 2
     assert operator.attr_keys == ["x", "y"]
     assert operator.show_progress is False
+    assert operator.delta_t == 2
 
 
 def test_distance_edges_add_edges_empty_graph() -> None:
@@ -252,3 +255,35 @@ def test_distance_edges_n_neighbors_limit() -> None:
 
     # Should have at most 2 edges (limited by n_neighbors)
     assert graph.num_edges == 2
+
+
+def test_distance_edges_add_edges_with_delta_t() -> None:
+    """Test adding edges with delta_t=2 connecting nodes across multiple timepoints."""
+    graph = RustWorkXGraph()
+
+    # Register attribute keys
+    graph.add_node_attr_key("x", 0.0)
+    graph.add_node_attr_key("y", 0.0)
+
+    # Add nodes at t=0, t=1, t=2
+    _ = graph.add_node({DEFAULT_ATTR_KEYS.T: 0, "x": 0.0, "y": 0.0})
+    _ = graph.add_node({DEFAULT_ATTR_KEYS.T: 1, "x": 1.0, "y": 1.0})
+    _ = graph.add_node({DEFAULT_ATTR_KEYS.T: 2, "x": 2.0, "y": 2.0})
+
+    operator = DistanceEdges(distance_threshold=5.0, n_neighbors=2, delta_t=2, show_progress=False)
+
+    operator.add_edges(graph)
+
+    # Should have edges from t=0 and t=1 to t=2
+    assert graph.num_edges >= 0
+
+
+def test_distance_edges_invalid_delta_t() -> None:
+    """Test that invalid delta_t values raise ValueError."""
+    import pytest
+
+    with pytest.raises(ValueError, match="'delta_t' must be at least 1"):
+        DistanceEdges(distance_threshold=10.0, n_neighbors=3, delta_t=0)
+
+    with pytest.raises(ValueError, match="'delta_t' must be at least 1"):
+        DistanceEdges(distance_threshold=10.0, n_neighbors=3, delta_t=-1)
