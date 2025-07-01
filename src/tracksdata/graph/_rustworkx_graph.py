@@ -797,7 +797,7 @@ class RustWorkXGraph(BaseGraph):
         permanent_node_ids: Sequence[int],
     ) -> "GraphView":
         """
-        Contract the graph to only include the given node_ids.
+        Contract the graph to only include the given `permanent_node_ids`.
         Predecessor and sucessors of removed nodes are connected during contraction.
 
         Example:
