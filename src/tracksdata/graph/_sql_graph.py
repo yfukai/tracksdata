@@ -330,7 +330,7 @@ class SQLGraph(BaseGraph):
             self._max_id_per_time[time] = node_id
 
         with Session(self._engine) as session:
-            session.bulk_insert_mappings(self.Node, nodes)
+            session.execute(sa.insert(self.Node), nodes)
             session.commit()
 
     def add_edge(
@@ -424,7 +424,7 @@ class SQLGraph(BaseGraph):
             _data_numpy_to_native(edge)
 
         with Session(self._engine) as session:
-            session.bulk_insert_mappings(self.Edge, edges)
+            session.execute(sa.insert(self.Edge), edges)
             session.commit()
 
     def _get_neighbors(
@@ -1001,8 +1001,7 @@ class SQLGraph(BaseGraph):
         LOG.info("update data sample: %s", update_data[:2])
 
         with Session(self._engine) as session:
-            # Use bulk_update_mappings for efficient bulk updates
-            session.bulk_update_mappings(table_class, update_data)
+            session.execute(sa.update(table_class), update_data)
             session.commit()
 
     def update_node_attrs(
