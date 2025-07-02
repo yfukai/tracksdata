@@ -159,7 +159,6 @@ class BaseGraph(abc.ABC):
                 validate_keys=False,
             )
 
-    @abc.abstractmethod
     def add_overlap(
         self,
         source_id: int,
@@ -181,6 +180,7 @@ class BaseGraph(abc.ABC):
         int
             The ID of the added overlap.
         """
+        raise NotImplementedError(f"{self.__class__.__name__} backend does not support overlaps.")
 
     def bulk_add_overlaps(
         self,
@@ -203,7 +203,6 @@ class BaseGraph(abc.ABC):
         for source_id, target_id in overlaps:
             self.add_overlap(source_id, target_id)
 
-    @abc.abstractmethod
     def overlaps(
         self,
         node_ids: list[int] | None = None,
@@ -223,8 +222,8 @@ class BaseGraph(abc.ABC):
         list[tuple[int, int]]
             The overlaps between the nodes in `node_ids`.
         """
+        return []
 
-    @abc.abstractmethod
     def has_overlaps(self) -> bool:
         """
         Check if the graph has any overlaps.
@@ -234,6 +233,7 @@ class BaseGraph(abc.ABC):
         bool
             True if the graph has any overlaps, False otherwise.
         """
+        return False
 
     @abc.abstractmethod
     def successors(
