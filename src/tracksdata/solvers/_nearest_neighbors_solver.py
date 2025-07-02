@@ -1,5 +1,5 @@
 import numpy as np
-from numba import njit, typed
+from numba import njit, typed, types
 
 from tracksdata.attrs import Attr, EdgeAttr, ExprInput, NodeAttr
 from tracksdata.constants import DEFAULT_ATTR_KEYS
@@ -47,6 +47,8 @@ def _constrained_nearest_neighbors(
     seen_targets = set()  # Track targets that already have a parent
     size = len(sorted_source)
 
+    empty_list = typed.List.empty_list(types.int64)
+
     for i in range(size):
         source_id = sorted_source[i]
         target_id = sorted_target[i]
@@ -68,8 +70,8 @@ def _constrained_nearest_neighbors(
             # make source and target invalid by setting their children count to max_children
             # and adding them to the seen_targets set
             for node_id in (source_id, target_id):
-                for overlapping_id in overlapping_sets[node_id]:
-                    source_children_count[overlapping_id] = max_children
+                for overlapping_id in overlapping_sets.get(node_id, empty_list):
+                    children_counter[overlapping_id] = max_children
                     seen_targets.add(overlapping_id)
 
         solution[i] = True
@@ -77,20 +79,18 @@ def _constrained_nearest_neighbors(
 
 @njit
 def _build_constraint_dict(
-    overlaps: list[list[int, 2]],
+    overlaps: np.ndarray,
 ) -> dict[int, list[int]]:
     """
     Build a dictionary of constraints for the nearest neighbor solver.
     """
-    overlapping_sets = typed.Dict.empty(
-        key_type=np.int64,
-        value_type=typed.List.empty(np.int64),
-    )
+    overlapping_sets = {}
 
     for src, tgt in overlaps:
-        overlapping_sets[src] = typed.List.empty(np.int64)
-        overlapping_sets[tgt] = typed.List.empty(np.int64)
+        overlapping_sets[src] = typed.List.empty_list(types.int64)
+        overlapping_sets[tgt] = typed.List.empty_list(types.int64)
 
+    # Second pass: add overlapping relationships
     for src, tgt in overlaps:
         overlapping_sets[src].append(tgt)
         overlapping_sets[tgt].append(src)
@@ -237,7 +237,9 @@ class NearestNeighborsSolver(BaseSolver):
         sorted_solution = np.zeros(len(sorted_source), dtype=bool)
 
         if graph.has_overlaps():
-            overlapping_sets = _build_constraint_dict(graph.overlaps())
+            overlapping_sets = _build_constraint_dict(
+                np.asarray(graph.overlaps(), dtype=np.int64),
+            )
             _constrained_nearest_neighbors(
                 sorted_source,
                 sorted_target,
