@@ -707,7 +707,7 @@ def test_sucessors_with_data(graph_backend: BaseGraph, use_subgraph: bool) -> No
 
     edges_df = graph_with_data.edge_attrs()
 
-    successors_dict = graph_with_data.sucessors(node_ids)
+    successors_dict = graph_with_data.successors(node_ids)
     out_degree = graph_with_data.out_degree(node_ids)
 
     for i, node_id in enumerate(node_ids):
@@ -725,7 +725,7 @@ def test_sucessors_with_data(graph_backend: BaseGraph, use_subgraph: bool) -> No
         assert graph_with_data._root is not None
         graph_with_data.add_node({"t": 0, "x": 0.0, "y": 0.0, "label": "test"})
         with pytest.raises(RuntimeError, match="Out of sync graph view cannot be used to get sucessors"):
-            graph_with_data.sucessors(node_ids)
+            graph_with_data.successors(node_ids)
 
 
 @parametrize_subgraph_tests

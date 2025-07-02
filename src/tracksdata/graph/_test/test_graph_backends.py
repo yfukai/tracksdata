@@ -531,7 +531,7 @@ def test_sucessors_and_degree(graph_backend: BaseGraph) -> None:
     graph_backend.add_edge(node1, node2, {"weight": 0.3})  # node1 -> node2
 
     # Test successors of node0 (should return node1 and node3)
-    successors_df = graph_backend.sucessors(node0)
+    successors_df = graph_backend.successors(node0)
     assert isinstance(successors_df, pl.DataFrame)
     assert len(successors_df) == 2  # node0 has 2 successors
     assert graph_backend.out_degree(node0) == 2
@@ -541,20 +541,20 @@ def test_sucessors_and_degree(graph_backend: BaseGraph) -> None:
     assert successor_nodes == {node1, node3}
 
     # Test successors of node1 (should return node2)
-    successors_df = graph_backend.sucessors(node1)
+    successors_df = graph_backend.successors(node1)
     assert isinstance(successors_df, pl.DataFrame)
     assert len(successors_df) == 1  # node1 has 1 successor
     assert successors_df[DEFAULT_ATTR_KEYS.NODE_ID].to_list()[0] == node2
     assert graph_backend.out_degree(node1) == 1
 
     # Test successors of node2 (should return empty - no successors)
-    successors_df = graph_backend.sucessors(node2)
+    successors_df = graph_backend.successors(node2)
     assert isinstance(successors_df, pl.DataFrame)
     assert len(successors_df) == 0  # node2 has no successors
     assert graph_backend.out_degree(node2) == 0
 
     # Test with multiple nodes
-    successors_dict = graph_backend.sucessors([node0, node1, node2])
+    successors_dict = graph_backend.successors([node0, node1, node2])
     assert isinstance(successors_dict, dict)
     assert len(successors_dict) == 3
 
@@ -655,7 +655,7 @@ def test_sucessors_with_attr_keys(graph_backend: BaseGraph) -> None:
     graph_backend.add_edge(node0, node2, {"weight": 0.7})
 
     # Test with single attribute key as string
-    successors_df = graph_backend.sucessors(node0, attr_keys="x")
+    successors_df = graph_backend.successors(node0, attr_keys="x")
     assert isinstance(successors_df, pl.DataFrame)
     assert "x" in successors_df.columns
     assert "y" not in successors_df.columns
@@ -666,7 +666,7 @@ def test_sucessors_with_attr_keys(graph_backend: BaseGraph) -> None:
     assert "x" in available_cols
 
     # Test with multiple attribute keys as list
-    successors_df = graph_backend.sucessors(node0, attr_keys=["x", "label"])
+    successors_df = graph_backend.successors(node0, attr_keys=["x", "label"])
     assert isinstance(successors_df, pl.DataFrame)
     assert "x" in successors_df.columns
     assert "label" in successors_df.columns
@@ -732,7 +732,7 @@ def test_sucessors_predecessors_edge_cases(graph_backend: BaseGraph) -> None:
     node1 = graph_backend.add_node({"t": 1, "x": 1.0})
 
     # Test successors/predecessors of isolated nodes
-    successors_df = graph_backend.sucessors(node0)
+    successors_df = graph_backend.successors(node0)
     assert isinstance(successors_df, pl.DataFrame)
     assert len(successors_df) == 0
 
@@ -741,7 +741,7 @@ def test_sucessors_predecessors_edge_cases(graph_backend: BaseGraph) -> None:
     assert len(predecessors_df) == 0
 
     # Test with empty list of nodes
-    successors_dict = graph_backend.sucessors([])
+    successors_dict = graph_backend.successors([])
     assert isinstance(successors_dict, dict)
     assert len(successors_dict) == 0
 
@@ -752,7 +752,7 @@ def test_sucessors_predecessors_edge_cases(graph_backend: BaseGraph) -> None:
     # Test with non-existent attribute keys (should work but return limited columns)
     # This depends on implementation - some might raise errors, others might ignore
     try:
-        successors_df = graph_backend.sucessors(node0, attr_keys=["nonexistent"])
+        successors_df = graph_backend.successors(node0, attr_keys=["nonexistent"])
         # If it doesn't raise an error, it should return empty or handle gracefully
         assert isinstance(successors_df, pl.DataFrame)
     except (KeyError, AttributeError):

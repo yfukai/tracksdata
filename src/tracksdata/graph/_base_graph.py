@@ -160,7 +160,83 @@ class BaseGraph(abc.ABC):
             )
 
     @abc.abstractmethod
-    def sucessors(
+    def add_overlap(
+        self,
+        source_id: int,
+        target_id: int,
+    ) -> int:
+        """
+        Add a new overlap to the graph.
+        Overlapping nodes are mutually exclusive.
+
+        Parameters
+        ----------
+        source_id : int
+            The ID of the source node.
+        target_id : int
+            The ID of the target node.
+
+        Returns
+        -------
+        int
+            The ID of the added overlap.
+        """
+
+    def bulk_add_overlaps(
+        self,
+        overlaps: list[tuple[int, int]],
+    ) -> None:
+        """
+        Add multiple overlaps to the graph.
+        Overlapping nodes are mutually exclusive.
+
+        Parameters
+        ----------
+        overlaps : list[tuple[int, int]]
+            The IDs of the nodes to add the overlaps for.
+
+        See Also
+        --------
+        [add_overlap][tracksdata.graph.BaseGraph.add_overlap]:
+            Add a single overlap to the graph.
+        """
+        for source_id, target_id in overlaps:
+            self.add_overlap(source_id, target_id)
+
+    @abc.abstractmethod
+    def overlaps(
+        self,
+        node_ids: list[int] | None = None,
+    ) -> list[tuple[int, int]]:
+        """
+        Get the overlaps between the nodes in `node_ids`.
+        If `node_ids` is None, all nodes are used.
+
+        Parameters
+        ----------
+        node_ids : list[int] | None
+            The IDs of the nodes to get the overlaps for.
+            If None, all nodes are used.
+
+        Returns
+        -------
+        list[tuple[int, int]]
+            The overlaps between the nodes in `node_ids`.
+        """
+
+    @abc.abstractmethod
+    def has_overlaps(self) -> bool:
+        """
+        Check if the graph has any overlaps.
+
+        Returns
+        -------
+        bool
+            True if the graph has any overlaps, False otherwise.
+        """
+
+    @abc.abstractmethod
+    def successors(
         self,
         node_ids: list[int] | int,
         attr_keys: Sequence[str] | str | None = None,
