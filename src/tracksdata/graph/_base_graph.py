@@ -184,7 +184,7 @@ class BaseGraph(abc.ABC):
 
     def bulk_add_overlaps(
         self,
-        overlaps: list[tuple[int, int]],
+        overlaps: list[list[int, 2]],
     ) -> None:
         """
         Add multiple overlaps to the graph.
@@ -192,7 +192,7 @@ class BaseGraph(abc.ABC):
 
         Parameters
         ----------
-        overlaps : list[tuple[int, int]]
+        overlaps : list[list[int, 2]]
             The IDs of the nodes to add the overlaps for.
 
         See Also
@@ -206,7 +206,7 @@ class BaseGraph(abc.ABC):
     def overlaps(
         self,
         node_ids: list[int] | None = None,
-    ) -> list[tuple[int, int]]:
+    ) -> list[list[int, 2]]:
         """
         Get the overlaps between the nodes in `node_ids`.
         If `node_ids` is None, all nodes are used.
@@ -219,7 +219,7 @@ class BaseGraph(abc.ABC):
 
         Returns
         -------
-        list[tuple[int, int]]
+        list[list[int, 2]]
             The overlaps between the nodes in `node_ids`.
         """
         return []

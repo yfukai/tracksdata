@@ -304,7 +304,7 @@ class ILPSolver(BaseSolver):
 
     def _add_overlap_constraints(
         self,
-        overlaps: list[tuple[int, int]],
+        overlaps: list[list[int, 2]],
     ) -> None:
         # this could be improved to avoid pairwise constraints by using
         # mutual exclusivity set constraints for a easier ILP formulation

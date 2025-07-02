@@ -77,7 +77,7 @@ def _constrained_nearest_neighbors(
 
 @njit
 def _build_constraint_dict(
-    overlaps: list[tuple[int, int]],
+    overlaps: list[list[int, 2]],
 ) -> dict[int, list[int]]:
     """
     Build a dictionary of constraints for the nearest neighbor solver.

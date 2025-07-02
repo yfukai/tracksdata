@@ -139,7 +139,7 @@ class RustWorkXGraph(BaseGraph):
         self._time_to_nodes: dict[int, list[int]] = {}
         self._node_attr_keys: list[str] = [DEFAULT_ATTR_KEYS.T]
         self._edge_attr_keys: list[str] = []
-        self._overlaps: list[tuple[int, int]] = []
+        self._overlaps: list[list[int, 2]] = []
 
     @property
     def rx_graph(self) -> rx.PyDiGraph:
@@ -229,12 +229,12 @@ class RustWorkXGraph(BaseGraph):
         int
             The ID of the added overlap.
         """
-        self._overlaps.append((source_id, target_id))
+        self._overlaps.append([source_id, target_id])
 
     def overlaps(
         self,
         node_ids: list[int] | None = None,
-    ) -> list[tuple[int, int]]:
+    ) -> list[list[int, 2]]:
         """
         Get the overlaps between the nodes in `node_ids`.
         If `node_ids` is None, all nodes are used.
@@ -247,9 +247,12 @@ class RustWorkXGraph(BaseGraph):
 
         Returns
         -------
-        list[tuple[int, int]]
+        list[list[int, 2]]
             The overlaps between the nodes in `node_ids`.
         """
+        if len(self._overlaps) == 0:
+            return []
+
         if node_ids is None:
             return self._overlaps
 
@@ -258,7 +261,6 @@ class RustWorkXGraph(BaseGraph):
 
         is_in_source = np.isin(overlaps_arr[:, 0], node_ids)
         is_in_target = np.isin(overlaps_arr[:, 1], node_ids)
-
         return overlaps_arr[is_in_source & is_in_target].tolist()
 
     def has_overlaps(self) -> bool:

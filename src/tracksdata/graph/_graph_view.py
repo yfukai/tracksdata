@@ -190,7 +190,7 @@ class GraphView(RustWorkXGraph):
 
     def bulk_add_overlaps(
         self,
-        overlaps: list[tuple[int, int]],
+        overlaps: list[list[int, 2]],
     ) -> None:
         """
         Add multiple overlaps to the graph.
@@ -198,7 +198,7 @@ class GraphView(RustWorkXGraph):
 
         Parameters
         ----------
-        overlaps : list[tuple[int, int]]
+        overlaps : list[list[int, 2]]
             The IDs of the nodes to add the overlaps for.
 
         See Also
@@ -211,7 +211,7 @@ class GraphView(RustWorkXGraph):
     def overlaps(
         self,
         node_ids: list[int] | None = None,
-    ) -> list[tuple[int, int]]:
+    ) -> list[list[int, 2]]:
         """
         Get the overlaps between the nodes in `node_ids`.
         If `node_ids` is None, all nodes are used.
@@ -224,7 +224,7 @@ class GraphView(RustWorkXGraph):
 
         Returns
         -------
-        list[tuple[int, int]]
+        list[list[int, 2]]
             The overlaps between the nodes in `node_ids`.
         """
         if node_ids is None:

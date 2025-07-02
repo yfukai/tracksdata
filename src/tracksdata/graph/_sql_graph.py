@@ -465,7 +465,7 @@ class SQLGraph(BaseGraph):
 
     def bulk_add_overlaps(
         self,
-        overlaps: list[tuple[int, int]],
+        overlaps: list[list[int, 2]],
     ) -> None:
         """
         Add multiple overlaps to the graph.
@@ -473,7 +473,7 @@ class SQLGraph(BaseGraph):
 
         Parameters
         ----------
-        overlaps : list[tuple[int, int]]
+        overlaps : list[list[int, 2]]
             The IDs of the nodes to add the overlaps for.
 
         See Also
@@ -484,7 +484,7 @@ class SQLGraph(BaseGraph):
         if hasattr(overlaps, "tolist"):
             overlaps = overlaps.tolist()
 
-        overlaps = [self.Overlap(source_id=source_id, target_id=target_id) for source_id, target_id in overlaps]
+        overlaps = [{"source_id": source_id, "target_id": target_id} for source_id, target_id in overlaps]
         with Session(self._engine) as session:
             session.execute(sa.insert(self.Overlap), overlaps)
             session.commit()
@@ -492,7 +492,7 @@ class SQLGraph(BaseGraph):
     def overlaps(
         self,
         node_ids: list[int] | None = None,
-    ) -> list[tuple[int, int]]:
+    ) -> list[list[int, 2]]:
         """
         Get the overlaps between the nodes in `node_ids`.
         """
