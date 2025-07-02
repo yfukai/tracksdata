@@ -940,8 +940,8 @@ def test_add_overlap(graph_backend: BaseGraph) -> None:
     assert graph_backend.has_overlaps()
     overlaps = graph_backend.overlaps()
     assert len(overlaps) == 2
-    assert (node1, node2) in overlaps
-    assert (node2, node3) in overlaps
+    assert [node1, node2] in overlaps
+    assert [node2, node3] in overlaps
 
 
 def test_bulk_add_overlaps(graph_backend: BaseGraph) -> None:
@@ -953,10 +953,10 @@ def test_bulk_add_overlaps(graph_backend: BaseGraph) -> None:
 
     # Create overlap pairs
     overlap_pairs = [
-        (nodes[0], nodes[1]),
-        (nodes[1], nodes[2]),
-        (nodes[2], nodes[3]),
-        (nodes[3], nodes[4]),
+        [nodes[0], nodes[1]],
+        [nodes[1], nodes[2]],
+        [nodes[2], nodes[3]],
+        [nodes[3], nodes[4]],
     ]
 
     # Add overlaps in bulk

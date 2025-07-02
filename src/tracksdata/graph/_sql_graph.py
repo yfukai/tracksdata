@@ -508,7 +508,7 @@ class SQLGraph(BaseGraph):
                     self.Overlap.target_id.in_(node_ids),
                 )
 
-            return [(source_id, target_id) for (source_id, target_id) in query.all()]
+            return [[source_id, target_id] for source_id, target_id in query.all()]
 
     def has_overlaps(self) -> bool:
         """
