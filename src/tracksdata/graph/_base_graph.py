@@ -87,7 +87,7 @@ class BaseGraph(abc.ABC):
     def bulk_add_nodes(
         self,
         nodes: list[dict[str, Any]],
-    ) -> None:
+    ) -> list[int]:
         """
         Faster method to add multiple nodes to the graph with less overhead and fewer checks.
 
@@ -97,10 +97,14 @@ class BaseGraph(abc.ABC):
             The data of the nodes to be added.
             The keys of the data will be used as the attributes of the nodes.
             Must have "t" key.
+
+        Returns
+        -------
+        list[int]
+            The IDs of the added nodes.
         """
         # this method benefits the SQLGraph backend
-        for node in nodes:
-            self.add_node(node, validate_keys=False)
+        return [self.add_node(node, validate_keys=False) for node in nodes]
 
     @abc.abstractmethod
     def add_edge(
@@ -377,7 +381,7 @@ class BaseGraph(abc.ABC):
         Parameters
         ----------
         node_ids : list[int] | None
-            The IDs of the nodes to get the attributesfor.
+            The IDs of the nodes to get the attributes for.
             If None, all nodes are used.
         attr_keys : Sequence[str] | str | None
             The attribute keys to get.

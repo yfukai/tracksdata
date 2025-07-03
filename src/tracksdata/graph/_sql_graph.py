@@ -328,17 +328,26 @@ class SQLGraph(BaseGraph):
         ]
         graph.bulk_add_nodes(nodes)
         ```
+
+        Returns
+        -------
+        list[int]
+            The IDs of the added nodes.
         """
+        node_ids = []
         for node in nodes:
             time = node["t"]
             default_node_id = (time * self.node_id_time_multiplier) - 1
             node_id = self._max_id_per_time.get(time, default_node_id) + 1
             node[DEFAULT_ATTR_KEYS.NODE_ID] = node_id
+            node_ids.append(node_id)
             self._max_id_per_time[time] = node_id
 
         with Session(self._engine) as session:
             session.execute(sa.insert(self.Node), nodes)
             session.commit()
+
+        return node_ids
 
     def add_edge(
         self,
