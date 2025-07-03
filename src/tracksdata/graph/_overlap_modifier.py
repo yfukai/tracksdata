@@ -1,3 +1,4 @@
+import functools
 from typing import Any
 
 import polars as pl
@@ -9,7 +10,9 @@ from tracksdata.graph._base_graph import BaseGraph
 from tracksdata.nodes._mask import Mask
 
 
-def check_node_overlaps(graph: BaseGraph) -> BaseGraph:
+def check_node_overlaps(
+    graph: BaseGraph,
+) -> BaseGraph:
     """
     Wraps to a `BaseGraph` object to insert node overlaps when adding nodes.
 
@@ -26,8 +29,8 @@ def check_node_overlaps(graph: BaseGraph) -> BaseGraph:
     original_add_node = graph.add_node
     original_bulk_add_nodes = graph.bulk_add_nodes
 
+    @functools.wraps(original_add_node)
     def _add_node(
-        self,
         attrs: dict[str, Any],
         validate_keys: bool = True,
     ) -> int:
@@ -48,7 +51,8 @@ def check_node_overlaps(graph: BaseGraph) -> BaseGraph:
 
         return new_node_id
 
-    def _bulk_add_nodes(self, nodes: list[dict[str, Any]]) -> list[int]:
+    @functools.wraps(original_bulk_add_nodes)
+    def _bulk_add_nodes(nodes: list[dict[str, Any]]) -> list[int]:
         new_node_ids = original_bulk_add_nodes(nodes)
         new_nodes_df = pl.DataFrame(
             {
