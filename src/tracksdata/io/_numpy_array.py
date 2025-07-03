@@ -56,6 +56,7 @@ def load_array(
     track_ids: np.ndarray | None = None,
     track_id_graph: dict[int, int] | None = None,
     radius: ArrayLike = 1,
+    image_shape: tuple[int, ...] | None = None,
 ) -> None:
     """
     Load a numpy array content into a graph.
@@ -73,12 +74,15 @@ def load_array(
         Mapping of division as child track id (key) to parent track id (value) relationships.
     radius : ArrayLike
         Integer or N-dimensional array of radii.
+    image_shape : tuple[int, ...] | None
+        Shape of the image if available masks are cropped to fit the image.
 
     See Also
     --------
     [BaseGraph.from_array][tracksdata.graph.BaseGraph.from_array]:
         Create a graph from a numpy array.
     """
+    positions = np.asarray(positions)
 
     if positions.shape[1] == 3:
         ndim = 2
@@ -88,6 +92,9 @@ def load_array(
         spatial_cols = ["x", "y", "z"]
     else:
         raise ValueError(f"Expected 4 or 5 dimensions, got {positions.shape[1]}.")
+
+    if image_shape is not None and len(image_shape) != ndim:
+        raise ValueError(f"Expected {ndim} dimensions for `image_shape`, got {len(image_shape)}.")
 
     if np.isscalar(radius):
         radius = np.broadcast_to(radius, (positions.shape[0],))
@@ -111,6 +118,7 @@ def load_array(
                 f"Expected {positions.shape[0]}, got {len(track_ids)}."
             )
         graph.add_node_attr_key(DEFAULT_ATTR_KEYS.TRACK_ID, -1)
+        track_ids = track_ids.tolist()
 
     for col in spatial_cols:
         graph.add_node_attr_key(col, -999_999)
@@ -120,11 +128,11 @@ def load_array(
     node_attrs = []
 
     for i, (position, rad) in tqdm(
-        enumerate(zip(positions, radius, strict=True)),
+        enumerate(zip(positions.tolist(), radius.tolist(), strict=True)),
         total=len(positions),
         desc="Generating node attributes",
     ):
-        mask = Mask.from_coordinates(position, rad)
+        mask = Mask.from_coordinates(position[1:], rad, image_shape=image_shape)
 
         attr = {
             DEFAULT_ATTR_KEYS.MASK: mask,
@@ -134,7 +142,7 @@ def load_array(
         }
 
         if ndim == 3:
-            attr["z"] = position[0]
+            attr["z"] = position[1]
 
         if track_ids is not None:
             attr[DEFAULT_ATTR_KEYS.TRACK_ID] = track_ids[i]

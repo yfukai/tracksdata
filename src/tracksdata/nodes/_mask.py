@@ -243,7 +243,7 @@ class Mask:
         Mask
             The mask.
         """
-        mask = _spherical_mask(radius, center.shape[0])
+        mask = _spherical_mask(radius, len(center))
         center = np.round(center)
 
         start = center - np.asarray(mask.shape) // 2
