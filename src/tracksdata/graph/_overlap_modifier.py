@@ -41,7 +41,7 @@ def check_node_overlaps(graph: BaseGraph) -> BaseGraph:
         )
 
         for node_id, node_mask in zip(
-            node_attrs[DEFAULT_ATTR_KEYS.NODE_ID], node_attrs[DEFAULT_ATTR_KEYS.MASK], strict=False
+            node_attrs[DEFAULT_ATTR_KEYS.NODE_ID], node_attrs[DEFAULT_ATTR_KEYS.MASK], strict=True
         ):
             if new_mask.intersection(node_mask) > 0 and new_node_id != node_id:
                 graph.add_overlap(new_node_id, node_id)
@@ -71,10 +71,10 @@ def check_node_overlaps(graph: BaseGraph) -> BaseGraph:
             )
 
             for new_node_id, new_mask in zip(
-                nodes_at_t[DEFAULT_ATTR_KEYS.NODE_ID], nodes_at_t[DEFAULT_ATTR_KEYS.MASK], strict=False
+                nodes_at_t[DEFAULT_ATTR_KEYS.NODE_ID], nodes_at_t[DEFAULT_ATTR_KEYS.MASK], strict=True
             ):
                 for node_id, node_mask in zip(
-                    node_attrs[DEFAULT_ATTR_KEYS.NODE_ID], node_attrs[DEFAULT_ATTR_KEYS.MASK], strict=False
+                    node_attrs[DEFAULT_ATTR_KEYS.NODE_ID], node_attrs[DEFAULT_ATTR_KEYS.MASK], strict=True
                 ):
                     if new_mask.intersection(node_mask) > 0 and new_node_id != node_id:
                         overlaps.append([new_node_id, node_id])
