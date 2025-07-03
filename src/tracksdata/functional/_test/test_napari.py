@@ -21,7 +21,7 @@ def test_napari_conversion() -> None:
 
     image_shape = (10, 22, 32)
 
-    graph = RustWorkXGraph.from_numpy_array(
+    graph = RustWorkXGraph.from_array(
         positions, track_ids=track_ids, track_id_graph=track_id_graph, radius=radius, image_shape=image_shape
     )
     graph.add_node_attr_key(DEFAULT_ATTR_KEYS.SOLUTION, True)

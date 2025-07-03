@@ -539,7 +539,7 @@ class BaseGraph(abc.ABC):
         return graph
 
     @classmethod
-    def from_numpy_array(
+    def from_array(
         cls: type[T],
         positions: ArrayLike,
         track_ids: ArrayLike | None = None,
@@ -556,8 +556,6 @@ class BaseGraph(abc.ABC):
         positions : np.ndarray
             (N, 4 or 3) dimensional array of positions.
             Defined by (T, (Z), Y, X) coordinates.
-        graph : BaseGraph
-            The graph to load the data into.
         track_ids : np.ndarray | None
             Track ids of the nodes if available.
         track_id_graph : dict[int, int] | None

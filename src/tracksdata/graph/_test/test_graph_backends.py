@@ -1035,7 +1035,7 @@ def test_from_numpy_array_basic(graph_backend: BaseGraph) -> None:
 
     if isinstance(graph_backend, RustWorkXGraph):
         # for RustWorkXGraph we validate if the OOP API is working
-        graph_backend = RustWorkXGraph.from_numpy_array(positions, radius=radius, rx_graph=None)
+        graph_backend = RustWorkXGraph.from_array(positions, radius=radius, rx_graph=None)
     else:
         load_array(positions, graph_backend, radius=radius)
 
@@ -1069,7 +1069,7 @@ def test_from_numpy_array_3d(graph_backend: BaseGraph) -> None:
 
     if isinstance(graph_backend, RustWorkXGraph):
         # for RustWorkXGraph we validate if the OOP API is working
-        graph_backend = RustWorkXGraph.from_numpy_array(
+        graph_backend = RustWorkXGraph.from_array(
             positions,
             track_ids=track_ids,
             track_id_graph=track_id_graph,
@@ -1111,19 +1111,19 @@ def test_from_numpy_array_validation_errors() -> None:
     # Test invalid position dimensions
     invalid_positions = np.array([[0, 10]])  # Only 2 columns, need 3 or 4
     with pytest.raises(ValueError, match="Expected 4 or 5 dimensions"):
-        RustWorkXGraph.from_numpy_array(invalid_positions)
+        RustWorkXGraph.from_array(invalid_positions)
 
     # Test radius length mismatch
     positions = np.array([[0, 10, 20], [1, 15, 25]])
     invalid_radius = np.array([1, 2, 3])  # Length 3, positions length 2
     with pytest.raises(ValueError, match="must be a scalar or have the same length"):
-        RustWorkXGraph.from_numpy_array(positions, radius=invalid_radius)
+        RustWorkXGraph.from_array(positions, radius=invalid_radius)
 
     # Test track_id_graph without track_ids
     with pytest.raises(ValueError, match="must be provided if"):
-        RustWorkXGraph.from_numpy_array(positions, track_id_graph={2: 1})
+        RustWorkXGraph.from_array(positions, track_id_graph={2: 1})
 
     # Test track_ids length mismatch
     track_ids = np.array([1, 2, 3])  # Length 3, positions length 2
     with pytest.raises(ValueError, match="must have the same length"):
-        RustWorkXGraph.from_numpy_array(positions, track_ids=track_ids)
+        RustWorkXGraph.from_array(positions, track_ids=track_ids)
