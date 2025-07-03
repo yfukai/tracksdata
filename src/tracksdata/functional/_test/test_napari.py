@@ -27,7 +27,7 @@ def test_napari_conversion() -> None:
     graph.add_node_attr_key(DEFAULT_ATTR_KEYS.SOLUTION, True)
     graph.add_edge_attr_key(DEFAULT_ATTR_KEYS.SOLUTION, True)
 
-    array_view, tracks_df, dict_graph = to_napari_format(graph, (2, *image_shape), reset_track_ids=False)
+    array_view, tracks_df, dict_graph = to_napari_format(graph, (2, *image_shape))
 
     assert dict_graph == track_id_graph
 
