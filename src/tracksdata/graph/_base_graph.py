@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, TypeVar, overload
 
 import polars as pl
+from numpy.typing import ArrayLike
 
 from tracksdata.attrs import AttrComparison
 from tracksdata.constants import DEFAULT_ATTR_KEYS
@@ -535,6 +536,53 @@ class BaseGraph(abc.ABC):
 
         graph = cls(**kwargs)
         load_ctc(data_dir, graph)
+        return graph
+
+    @classmethod
+    def from_array(
+        cls: type[T],
+        positions: ArrayLike,
+        track_ids: ArrayLike | None = None,
+        track_id_graph: dict[int, int] | None = None,
+        radius: ArrayLike = 1,
+        image_shape: tuple[int, ...] | None = None,
+        **kwargs,
+    ) -> T:
+        """
+        Create a graph from a numpy array.
+
+        Parameters
+        ----------
+        positions : np.ndarray
+            (N, 4 or 3) dimensional array of positions.
+            Defined by (T, (Z), Y, X) coordinates.
+        track_ids : np.ndarray | None
+            Track ids of the nodes if available.
+        track_id_graph : dict[int, int] | None
+            Mapping of division as child track id (key) to parent track id (value) relationships.
+        radius : ArrayLike
+            Integer or N-dimensional array of radii.
+        image_shape : tuple[int, ...] | None
+            Shape of the image if available masks are cropped to fit the image.
+        **kwargs : Any
+            Additional arguments to pass to the graph constructor.
+
+        Returns
+        -------
+        BaseGraph
+            A graph with the nodes and edges from the numpy array.
+        """
+        from tracksdata.io._numpy_array import load_array
+
+        graph = cls(**kwargs)
+        load_array(
+            positions=positions,
+            graph=graph,
+            track_ids=track_ids,
+            track_id_graph=track_id_graph,
+            radius=radius,
+            image_shape=image_shape,
+        )
         return graph
 
     @abc.abstractmethod

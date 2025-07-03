@@ -1,10 +1,29 @@
-from functools import cached_property
+from functools import cached_property, lru_cache
 
 import blosc2
 import numpy as np
-from numpy.typing import NDArray
+import skimage.morphology as morph
+from numpy.typing import ArrayLike, NDArray
 
 from tracksdata.functional._iou import fast_intersection_with_bbox, fast_iou_with_bbox
+
+
+@lru_cache(maxsize=5)
+def _spherical_mask(
+    radius: int,
+    ndim: int,
+) -> NDArray[np.bool_]:
+    """
+    Get a spherical mask of a given radius and dimension.
+    """
+
+    if ndim == 2:
+        return morph.disk(radius)
+
+    if ndim == 3:
+        return morph.ball(radius)
+
+    raise ValueError(f"Spherical is only implemented for 2D and 3D, got ndim={ndim}")
 
 
 class Mask:
@@ -29,20 +48,10 @@ class Mask:
     def __init__(
         self,
         mask: NDArray[np.bool_],
-        bbox: np.ndarray,
+        bbox: ArrayLike,
     ):
-        bbox = np.asarray(bbox, dtype=np.int64)
-
-        if mask.ndim != bbox.shape[0] // 2:
-            raise ValueError(f"Mask dimension {mask.ndim} does not match bbox dimension {bbox.shape[0]} // 2")
-
-        bbox_size = bbox[mask.ndim :] - bbox[: mask.ndim]
-
-        if np.any(mask.shape != bbox_size):
-            raise ValueError(f"Mask shape {mask.shape} does not match bbox size {bbox_size}")
-
         self._mask = mask
-        self._bbox = bbox
+        self.bbox = bbox
 
     def __getstate__(self) -> dict:
         data_dict = self.__dict__.copy()
@@ -58,8 +67,22 @@ class Mask:
         return self._mask
 
     @property
-    def bbox(self) -> np.ndarray:
+    def bbox(self) -> NDArray[np.int64]:
         return self._bbox
+
+    @bbox.setter
+    def bbox(self, bbox: ArrayLike) -> None:
+        bbox = np.asarray(bbox, dtype=np.int64)
+
+        if self._mask.ndim != bbox.shape[0] // 2:
+            raise ValueError(f"Mask dimension {self._mask.ndim} does not match bbox dimension {bbox.shape[0]} // 2")
+
+        bbox_size = bbox[self._mask.ndim :] - bbox[: self._mask.ndim]
+
+        if np.any(self._mask.shape != bbox_size):
+            raise ValueError(f"Mask shape {self._mask.shape} does not match bbox size {bbox_size}")
+
+        self._bbox: NDArray[np.int64] = bbox
 
     def crop(
         self,
@@ -193,3 +216,52 @@ class Mask:
             )
         )
         return f"Mask(bbox=[{slicing_str}])"
+
+    @classmethod
+    def from_coordinates(
+        cls,
+        center: NDArray,
+        radius: int,
+        image_shape: tuple[int, ...] | None = None,
+    ) -> "Mask":
+        """
+        Create a mask from a center and a radius.
+        Regions outside the image are cropped.
+
+        Parameters
+        ----------
+        center : NDArray
+            The center of the mask.
+        radius : int
+            The radius of the mask.
+        image_shape : tuple[int, ...] | None
+            The shape of the image.
+            When provided crops regions outside the image.
+
+        Returns
+        -------
+        Mask
+            The mask.
+        """
+        mask = _spherical_mask(radius, len(center))
+        center = np.round(center)
+
+        start = center - np.asarray(mask.shape) // 2
+        end = start + mask.shape
+
+        if image_shape is None:
+            bbox = np.concatenate([start, end])
+        else:
+            processed_start = np.maximum(start, 0)
+            processed_end = np.minimum(end, image_shape)
+
+            start_overhang = processed_start - start
+            end_overhang = end - processed_end
+
+            mask = mask[
+                tuple(slice(s, -e if e > 0 else None) for s, e in zip(start_overhang, end_overhang, strict=True))
+            ]
+
+            bbox = np.concatenate([processed_start, processed_end])
+
+        return cls(mask, bbox)

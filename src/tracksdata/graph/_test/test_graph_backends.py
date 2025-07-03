@@ -6,8 +6,9 @@ import pytest
 
 from tracksdata.attrs import EdgeAttr, NodeAttr
 from tracksdata.constants import DEFAULT_ATTR_KEYS
-from tracksdata.graph import SQLGraph
+from tracksdata.graph import RustWorkXGraph, SQLGraph
 from tracksdata.graph._base_graph import BaseGraph
+from tracksdata.io._numpy_array import load_array
 from tracksdata.nodes._mask import Mask
 
 
@@ -1017,3 +1018,112 @@ def test_overlaps_edge_cases(graph_backend: BaseGraph) -> None:
 
     overlaps = graph_backend.overlaps([node, 999])
     assert len(overlaps) == 0
+
+
+def test_from_numpy_array_basic(graph_backend: BaseGraph) -> None:
+    """Test basic functionality of from_numpy_array with 2D positions."""
+    # Test 2D positions (T, Y, X)
+    positions = np.array(
+        [
+            [0, 10, 20],  # t=0, y=10, x=20
+            [1, 15, 25],  # t=1, y=15, x=25
+            [2, 20, 30],  # t=2, y=20, x=30
+        ]
+    )
+
+    radius = 2
+
+    if isinstance(graph_backend, RustWorkXGraph):
+        # for RustWorkXGraph we validate if the OOP API is working
+        graph_backend = RustWorkXGraph.from_array(positions, radius=radius, rx_graph=None)
+    else:
+        load_array(positions, graph_backend, radius=radius)
+
+    assert graph_backend.num_nodes == 3
+    assert graph_backend.num_edges == 0  # No track_ids, so no edges
+
+    # Check node attributes
+    nodes_df = graph_backend.node_attrs(attr_keys=["t", "y", "x"])
+
+    np.testing.assert_array_equal(nodes_df.to_numpy(), positions)
+
+    # Check that mask attribute was added
+    assert DEFAULT_ATTR_KEYS.MASK in graph_backend.node_attr_keys
+
+
+def test_from_numpy_array_3d(graph_backend: BaseGraph) -> None:
+    """Test from_numpy_array with 3D positions (T, Z, Y, X)."""
+    # Test 3D positions (T, Z, Y, X)
+    positions = np.asarray(
+        [
+            [0, 5, 10, 20],  # t=0, z=5, y=10, x=20
+            [1, 6, 15, 25],  # t=1, z=6, y=15, x=25
+            [2, 7, 20, 30],  # t=2, z=7, y=20, x=30
+        ]
+    )
+
+    track_ids = np.asarray([1, 2, 3])
+    track_id_graph = {3: 1, 2: 1}
+
+    radius = np.asarray([1, 3, 5])
+
+    if isinstance(graph_backend, RustWorkXGraph):
+        # for RustWorkXGraph we validate if the OOP API is working
+        graph_backend = RustWorkXGraph.from_array(
+            positions,
+            track_ids=track_ids,
+            track_id_graph=track_id_graph,
+            radius=radius,
+            rx_graph=None,
+        )
+    else:
+        load_array(
+            positions,
+            graph_backend,
+            track_ids=track_ids,
+            track_id_graph=track_id_graph,
+            radius=radius,
+        )
+
+    assert graph_backend.num_nodes == 3
+    assert graph_backend.num_edges == 2
+
+    edges_df = graph_backend.edge_attrs()
+    assert len(edges_df) == 2
+
+    nodes_df = graph_backend.node_attrs()
+    node_ids = nodes_df[DEFAULT_ATTR_KEYS.NODE_ID].to_list()
+
+    edges = edges_df.select([DEFAULT_ATTR_KEYS.EDGE_SOURCE, DEFAULT_ATTR_KEYS.EDGE_TARGET]).to_numpy().tolist()
+    assert [node_ids[0], node_ids[1]] in edges
+    assert [node_ids[0], node_ids[2]] in edges
+
+    np.testing.assert_array_equal(nodes_df.select(["t", "z", "y", "x"]).to_numpy(), positions)
+
+    masks = [m.bbox[3] - m.bbox[0] for m in nodes_df[DEFAULT_ATTR_KEYS.MASK].to_list()]
+    np.testing.assert_array_equal(masks, [r * 2 + 1 for r in radius])
+
+    np.testing.assert_array_equal(nodes_df[DEFAULT_ATTR_KEYS.TRACK_ID].to_list(), track_ids)
+
+
+def test_from_numpy_array_validation_errors() -> None:
+    """Test from_numpy_array validation errors."""
+    # Test invalid position dimensions
+    invalid_positions = np.array([[0, 10]])  # Only 2 columns, need 3 or 4
+    with pytest.raises(ValueError, match="Expected 4 or 5 dimensions"):
+        RustWorkXGraph.from_array(invalid_positions)
+
+    # Test radius length mismatch
+    positions = np.array([[0, 10, 20], [1, 15, 25]])
+    invalid_radius = np.array([1, 2, 3])  # Length 3, positions length 2
+    with pytest.raises(ValueError, match="must be a scalar or have the same length"):
+        RustWorkXGraph.from_array(positions, radius=invalid_radius)
+
+    # Test track_id_graph without track_ids
+    with pytest.raises(ValueError, match="must be provided if"):
+        RustWorkXGraph.from_array(positions, track_id_graph={2: 1})
+
+    # Test track_ids length mismatch
+    track_ids = np.array([1, 2, 3])  # Length 3, positions length 2
+    with pytest.raises(ValueError, match="must have the same length"):
+        RustWorkXGraph.from_array(positions, track_ids=track_ids)
