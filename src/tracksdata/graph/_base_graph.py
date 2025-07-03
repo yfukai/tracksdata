@@ -87,7 +87,7 @@ class BaseGraph(abc.ABC):
     def bulk_add_nodes(
         self,
         nodes: list[dict[str, Any]],
-    ) -> None:
+    ) -> list[int]:
         """
         Faster method to add multiple nodes to the graph with less overhead and fewer checks.
 
@@ -97,10 +97,14 @@ class BaseGraph(abc.ABC):
             The data of the nodes to be added.
             The keys of the data will be used as the attributes of the nodes.
             Must have "t" key.
+
+        Returns
+        -------
+        list[int]
+            The IDs of the added nodes.
         """
         # this method benefits the SQLGraph backend
-        for node in nodes:
-            self.add_node(node, validate_keys=False)
+        return [self.add_node(node, validate_keys=False) for node in nodes]
 
     @abc.abstractmethod
     def add_edge(
@@ -159,8 +163,84 @@ class BaseGraph(abc.ABC):
                 validate_keys=False,
             )
 
+    def add_overlap(
+        self,
+        source_id: int,
+        target_id: int,
+    ) -> int:
+        """
+        Add a new overlap to the graph.
+        Overlapping nodes are mutually exclusive.
+
+        Parameters
+        ----------
+        source_id : int
+            The ID of the source node.
+        target_id : int
+            The ID of the target node.
+
+        Returns
+        -------
+        int
+            The ID of the added overlap.
+        """
+        raise NotImplementedError(f"{self.__class__.__name__} backend does not support overlaps.")
+
+    def bulk_add_overlaps(
+        self,
+        overlaps: list[list[int, 2]],
+    ) -> None:
+        """
+        Add multiple overlaps to the graph.
+        Overlapping nodes are mutually exclusive.
+
+        Parameters
+        ----------
+        overlaps : list[list[int, 2]]
+            The IDs of the nodes to add the overlaps for.
+
+        See Also
+        --------
+        [add_overlap][tracksdata.graph.BaseGraph.add_overlap]:
+            Add a single overlap to the graph.
+        """
+        for source_id, target_id in overlaps:
+            self.add_overlap(source_id, target_id)
+
+    def overlaps(
+        self,
+        node_ids: list[int] | None = None,
+    ) -> list[list[int, 2]]:
+        """
+        Get the overlaps between the nodes in `node_ids`.
+        If `node_ids` is None, all nodes are used.
+
+        Parameters
+        ----------
+        node_ids : list[int] | None
+            The IDs of the nodes to get the overlaps for.
+            If None, all nodes are used.
+
+        Returns
+        -------
+        list[list[int, 2]]
+            The overlaps between the nodes in `node_ids`.
+        """
+        return []
+
+    def has_overlaps(self) -> bool:
+        """
+        Check if the graph has any overlaps.
+
+        Returns
+        -------
+        bool
+            True if the graph has any overlaps, False otherwise.
+        """
+        return False
+
     @abc.abstractmethod
-    def sucessors(
+    def successors(
         self,
         node_ids: list[int] | int,
         attr_keys: Sequence[str] | str | None = None,
@@ -301,7 +381,7 @@ class BaseGraph(abc.ABC):
         Parameters
         ----------
         node_ids : list[int] | None
-            The IDs of the nodes to get the attributesfor.
+            The IDs of the nodes to get the attributes for.
             If None, all nodes are used.
         attr_keys : Sequence[str] | str | None
             The attribute keys to get.
