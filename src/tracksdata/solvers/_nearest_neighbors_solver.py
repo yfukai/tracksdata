@@ -83,6 +83,16 @@ def _build_constraint_dict(
 ) -> dict[int, list[int]]:
     """
     Build a dictionary of constraints for the nearest neighbor solver.
+
+    Parameters
+    ----------
+    overlaps : np.ndarray
+        (N, 2) array of overlaps.
+
+    Returns
+    -------
+    dict[int, list[int]]
+        Dictionary of overlapping sets from reference node id (key) and its overlapping nodes (values).
     """
     overlapping_sets = {}
 
