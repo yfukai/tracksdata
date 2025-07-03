@@ -257,7 +257,7 @@ class RustWorkXGraph(BaseGraph):
             return self._overlaps
 
         node_ids = np.asarray(node_ids, dtype=int)
-        overlaps_arr = np.asarray(self._overlaps, order="F", dtype=int)
+        overlaps_arr = np.asarray(self._overlaps, dtype=int)
 
         is_in_source = np.isin(overlaps_arr[:, 0], node_ids)
         is_in_target = np.isin(overlaps_arr[:, 1], node_ids)
