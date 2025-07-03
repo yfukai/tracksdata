@@ -1054,7 +1054,7 @@ def test_from_numpy_array_basic(graph_backend: BaseGraph) -> None:
 def test_from_numpy_array_3d(graph_backend: BaseGraph) -> None:
     """Test from_numpy_array with 3D positions (T, Z, Y, X)."""
     # Test 3D positions (T, Z, Y, X)
-    positions = np.array(
+    positions = np.asarray(
         [
             [0, 5, 10, 20],  # t=0, z=5, y=10, x=20
             [1, 6, 15, 25],  # t=1, z=6, y=15, x=25
