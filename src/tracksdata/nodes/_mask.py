@@ -255,8 +255,8 @@ class Mask:
             processed_start = np.maximum(start, 0)
             processed_end = np.minimum(end, image_shape)
 
-            start_overhang = start - processed_start
-            end_overhang = processed_end - end
+            start_overhang = processed_start - start
+            end_overhang = end - processed_end
 
             mask = mask[
                 tuple(slice(s, -e if e > 0 else None) for s, e in zip(start_overhang, end_overhang, strict=True))
