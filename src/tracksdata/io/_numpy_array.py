@@ -38,16 +38,29 @@ def _add_edges_from_track_ids(
     else:
         track_id_to_last_node = {}  # for completeness, it won't be used if this is true
 
+    edges = []
     for (track_id,), group in nodes_by_track_id:
         node_ids = group.sort(DEFAULT_ATTR_KEYS.T)[DEFAULT_ATTR_KEYS.NODE_ID].to_list()
 
         first_node = node_ids[0]
         if track_id in track_id_graph:
             parent_node = track_id_to_last_node[track_id_graph[track_id]]
-            graph.add_edge(parent_node, first_node, {})
+            edges.append(
+                {
+                    DEFAULT_ATTR_KEYS.EDGE_SOURCE: parent_node,
+                    DEFAULT_ATTR_KEYS.EDGE_TARGET: first_node,
+                }
+            )
 
         for i in range(len(node_ids) - 1):
-            graph.add_edge(node_ids[i], node_ids[i + 1], {})
+            edges.append(
+                {
+                    DEFAULT_ATTR_KEYS.EDGE_SOURCE: node_ids[i],
+                    DEFAULT_ATTR_KEYS.EDGE_TARGET: node_ids[i + 1],
+                }
+            )
+
+    graph.bulk_add_edges(edges)
 
 
 def load_array(
