@@ -1,0 +1,57 @@
+# Auto-labeling configuration for PRs and issues
+
+# Documentation changes
+documentation:
+  - '**/*.md'
+  - 'docs/**/*'
+  - 'mkdocs.yml'
+
+# Tests
+tests:
+  - '**/*test*.py'
+  - 'tests/**/*'
+  - '**/_test/**/*'
+
+# CI/CD
+ci:
+  - '.github/**/*'
+  - '**/*ci*'
+  - '**/*workflow*'
+
+# Dependencies
+dependencies:
+  - 'pyproject.toml'
+  - 'requirements*.txt'
+  - 'uv.lock'
+  - 'Pipfile*'
+
+# Core functionality
+core:
+  - 'src/tracksdata/graph/**/*'
+  - 'src/tracksdata/nodes/**/*'
+  - 'src/tracksdata/edges/**/*'
+  - 'src/tracksdata/solvers/**/*'
+
+# Array operations
+array:
+  - 'src/tracksdata/array/**/*'
+
+# I/O operations
+io:
+  - 'src/tracksdata/io/**/*'
+
+# Metrics
+metrics:
+  - 'src/tracksdata/metrics/**/*'
+
+# Utilities
+utils:
+  - 'src/tracksdata/utils/**/*'
+
+# Examples
+examples:
+  - 'examples/**/*'
+
+# Benchmarks
+benchmarks:
+  - 'benchmarks/**/*'

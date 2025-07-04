@@ -89,4 +89,27 @@ jobs:
           files: dist/*
           generate_release_notes: true
           draft: false
-          prerelease: false
+          prerelease: ${{ contains(github.ref, 'alpha') || contains(github.ref, 'beta') || contains(github.ref, 'rc') }}
+          body: |
+            ## 🎉 What's New in ${{ github.ref_name }}
+
+            > **Install**: `pip install tracksdata==${{ github.ref_name }}`
+
+            ### 📋 Changes in this release:
+
+            ${{ steps.release_notes.outputs.changelog }}
+
+            ---
+
+            ### 📦 Package Information
+            - **Version**: `${{ github.ref_name }}`
+            - **Python Support**: 3.10+
+            - **Dependencies**: See [requirements](https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/pyproject.toml)
+
+            ### 🔗 Useful Links
+            - 📖 [Documentation](https://github.com/${{ github.repository }}#readme)
+            - 🐛 [Report Issues](https://github.com/${{ github.repository }}/issues)
+            - 💬 [Discussions](https://github.com/${{ github.repository }}/discussions)
+
+            ---
+            *This release was automatically generated* 🤖
