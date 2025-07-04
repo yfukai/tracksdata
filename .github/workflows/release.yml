@@ -6,10 +6,11 @@ on:
       - "v*"
   workflow_dispatch:
     inputs:
-      version:
-        description: 'Version to release (e.g., v1.0.0)'
-        required: true
-        type: string
+      test_release:
+        description: 'Test release (skips PyPI publish)'
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: write
@@ -55,6 +56,8 @@ jobs:
   release:
     needs: build
     runs-on: ubuntu-latest
+    # Only run on main repo and not for test releases
+    if: github.repository == 'jookuma/tracksdata' && github.event.inputs.test_release != 'true'
     environment:
       name: pypi
       url: https://pypi.org/p/tracksdata
@@ -70,9 +73,29 @@ jobs:
         with:
           attestations: true
 
+  test-release:
+    needs: build
+    runs-on: ubuntu-latest
+    # Only run for test releases or on forks
+    if: github.event.inputs.test_release == 'true' || github.repository != 'jookuma/tracksdata'
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Test PyPI upload (dry run)
+        run: |
+          echo "🧪 This would upload to PyPI:"
+          ls -la dist/
+          echo "✅ Test release completed successfully!"
+
   github-release:
     needs: build
     runs-on: ubuntu-latest
+    # Only create GitHub releases on main repo and not for test releases
+    if: github.repository == 'jookuma/tracksdata' && github.event.inputs.test_release != 'true'
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -90,26 +113,3 @@ jobs:
           generate_release_notes: true
           draft: false
           prerelease: ${{ contains(github.ref, 'alpha') || contains(github.ref, 'beta') || contains(github.ref, 'rc') }}
-          body: |
-            ## 🎉 What's New in ${{ github.ref_name }}
-
-            > **Install**: `pip install tracksdata==${{ github.ref_name }}`
-
-            ### 📋 Changes in this release:
-
-            ${{ steps.release_notes.outputs.changelog }}
-
-            ---
-
-            ### 📦 Package Information
-            - **Version**: `${{ github.ref_name }}`
-            - **Python Support**: 3.10+
-            - **Dependencies**: See [requirements](https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/pyproject.toml)
-
-            ### 🔗 Useful Links
-            - 📖 [Documentation](https://github.com/${{ github.repository }}#readme)
-            - 🐛 [Report Issues](https://github.com/${{ github.repository }}/issues)
-            - 💬 [Discussions](https://github.com/${{ github.repository }}/discussions)
-
-            ---
-            *This release was automatically generated* 🤖
