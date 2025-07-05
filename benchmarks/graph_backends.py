@@ -125,10 +125,9 @@ def main() -> None:
                         n_time_points=n_time_points,
                         n_nodes_per_tp=(n_nodes_per_tp * 0.95, n_nodes_per_tp * 1.05),
                         n_dim=3,
-                        show_progress=False,
                     ).add_nodes,
                 ),
-                ("distance_edges", DistanceEdges(distance_threshold=10, n_neighbors=5, show_progress=False).add_edges),
+                ("distance_edges", DistanceEdges(distance_threshold=10, n_neighbors=5).add_edges),
                 (
                     "nearest_neighbors_solver",
                     NearestNeighborsSolver(

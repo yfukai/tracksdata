@@ -5,6 +5,7 @@ from typing import Any
 from tqdm import tqdm
 
 from tracksdata.graph._base_graph import BaseGraph
+from tracksdata.options import get_options
 
 
 class BaseNodeAttrsOperator(abc.ABC):
@@ -16,10 +17,8 @@ class BaseNodeAttrsOperator(abc.ABC):
     def __init__(
         self,
         output_key: Sequence[str] | str,
-        show_progress: bool = True,
     ) -> None:
         self.output_key = output_key
-        self.show_progress = show_progress
 
     def add_node_attrs(
         self,
@@ -41,7 +40,7 @@ class BaseNodeAttrsOperator(abc.ABC):
             Additional keyword arguments to pass to the `_add_node_attrs_per_time` method.
         """
         if t is None:
-            for t in tqdm(graph.time_points(), disable=not self.show_progress, desc="Adding node attributes"):
+            for t in tqdm(graph.time_points(), disable=not get_options().show_progress, desc="Adding node attributes"):
                 self._add_node_attrs_per_time(
                     graph,
                     t=t,

@@ -1,5 +1,7 @@
 """Tests for the options system."""
 
+import pytest
+
 from tracksdata.options import Options, get_options, options_context, set_options
 
 
@@ -28,6 +30,33 @@ def test_set_options() -> None:
     # Restore original
     set_options(original_options)
     assert get_options().show_progress is True
+
+
+def test_set_options_with_kwargs() -> None:
+    """Test setting options using keyword arguments."""
+    original_options = get_options()
+
+    # Set options using kwargs
+    set_options(show_progress=False)
+    assert get_options().show_progress is False
+
+    # Restore original
+    set_options(original_options)
+    assert get_options().show_progress is True
+
+
+def test_set_options_error_both_provided() -> None:
+    """Test that providing both options and kwargs raises an error."""
+
+    with pytest.raises(ValueError, match="Cannot provide both 'options' and keyword arguments"):
+        set_options(Options(show_progress=False), show_progress=True)
+
+
+def test_set_options_error_neither_provided() -> None:
+    """Test that providing neither options nor kwargs raises an error."""
+
+    with pytest.raises(ValueError, match="Must provide either 'options' or keyword arguments"):
+        set_options()
 
 
 def test_options_context_manager() -> None:

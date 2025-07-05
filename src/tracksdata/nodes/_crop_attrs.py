@@ -31,8 +31,6 @@ class CropFuncAttrs(BaseNodeAttrsOperator):
         Key of the new attribute to add.
     attr_keys : Sequence[str], optional
         Additional attributes to pass to the `func` as keyword arguments.
-    show_progress : bool, optional
-        Whether to show a progress bar.
 
     Examples
     --------
@@ -63,9 +61,8 @@ class CropFuncAttrs(BaseNodeAttrsOperator):
         func: Callable[[Mask, NDArray, R], T] | Callable[[Mask, R], T],
         output_key: str,
         attr_keys: Sequence[str] = (),
-        show_progress: bool = True,
     ) -> None:
-        super().__init__(output_key, show_progress)
+        super().__init__(output_key)
         self.func = func
         self.attr_keys = attr_keys
 

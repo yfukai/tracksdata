@@ -35,8 +35,6 @@ class GenericNodeFunctionEdgeAttrs(BaseEdgeAttrsOperator):
         The keys of the attributes to pass to the function.
     output_key : str
         The key to store the output of the function.
-    show_progress : bool
-        Whether to show a progress bar.
     """
 
     def __init__(
@@ -44,9 +42,8 @@ class GenericNodeFunctionEdgeAttrs(BaseEdgeAttrsOperator):
         func: Callable[[dict[str, Any] | Any, dict[str, Any] | Any], Any],
         attr_keys: Sequence[str] | str,
         output_key: str,
-        show_progress: bool = True,
     ) -> None:
-        super().__init__(output_key=output_key, show_progress=show_progress)
+        super().__init__(output_key=output_key)
         self.attr_keys = attr_keys
         self.func = func
 

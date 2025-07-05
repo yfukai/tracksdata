@@ -55,17 +55,45 @@ def get_options() -> Options:
     return _options_stack[-1] if _options_stack else _default_options
 
 
-def set_options(options: Options) -> None:
+def set_options(options: Options | None = None, **kwargs: Any) -> None:
     """
     Set the global options.
 
     Parameters
     ----------
-    options : Options
-        The options to set as global.
+    options : Options | None, optional
+        The options object to set as global. If None, kwargs will be used to create a new Options object.
+    **kwargs : Any
+        Individual option parameters to set. Only used if options is None.
+
+    Examples
+    --------
+    Set options using an Options object:
+
+    >>> from tracksdata.options import Options, set_options
+    >>> set_options(Options(show_progress=False))
+
+    Set options using keyword arguments:
+
+    >>> set_options(show_progress=False)
+
+    Raises
+    ------
+    ValueError
+        If both options and kwargs are provided, or if neither are provided.
     """
     global _default_options
-    _default_options = options
+
+    if options is not None and kwargs:
+        raise ValueError("Cannot provide both 'options' and keyword arguments")
+
+    if options is None and not kwargs:
+        raise ValueError("Must provide either 'options' or keyword arguments")
+
+    if options is not None:
+        _default_options = options
+    else:
+        _default_options = Options(**kwargs)
 
 
 @contextmanager

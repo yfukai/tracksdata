@@ -5,6 +5,7 @@ from tqdm import tqdm
 
 from tracksdata.graph._base_graph import BaseGraph
 from tracksdata.nodes._base_nodes import BaseNodesOperator
+from tracksdata.options import get_options
 
 
 class RandomNodes(BaseNodesOperator):
@@ -30,8 +31,6 @@ class RandomNodes(BaseNodesOperator):
         - 3: generates (x, y, z) coordinates
     random_state : int, default 0
         Random seed for reproducible results.
-    show_progress : bool, default False
-        Whether to display progress bars during node generation.
 
     Attributes
     ----------
@@ -91,9 +90,8 @@ class RandomNodes(BaseNodesOperator):
         n_nodes_per_tp: tuple[int, int],
         n_dim: Literal[2, 3] = 3,
         random_state: int = 0,
-        show_progress: bool = False,
     ):
-        super().__init__(show_progress=show_progress)
+        super().__init__()
         if isinstance(n_nodes_per_tp, int):
             raise ValueError("`n_nodes_per_tp` must be a tuple of two integers")
 
@@ -123,7 +121,7 @@ class RandomNodes(BaseNodesOperator):
         When t is specified, uses the base implementation.
         """
         if t is None:
-            for t in tqdm(range(self.n_time_points), disable=not self.show_progress, desc="Adding nodes"):
+            for t in tqdm(range(self.n_time_points), disable=not get_options().show_progress, desc="Adding nodes"):
                 self._add_nodes_per_time(
                     graph,
                     t=t,
