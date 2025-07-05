@@ -5,6 +5,7 @@ from typing import Any
 from tqdm import tqdm
 
 from tracksdata.graph._base_graph import BaseGraph
+from tracksdata.options import get_options
 
 
 class BaseEdgesOperator(abc.ABC):
@@ -13,9 +14,8 @@ class BaseEdgesOperator(abc.ABC):
     It will interact with a `BaseGraph` to do so.
     """
 
-    def __init__(self, output_key: Sequence[str] | str, show_progress: bool = True):
+    def __init__(self, output_key: Sequence[str] | str):
         self.output_key = output_key
-        self.show_progress = show_progress
 
     def add_edges(
         self,
@@ -38,7 +38,7 @@ class BaseEdgesOperator(abc.ABC):
             Additional keyword arguments to pass to the `add_edges` method.
         """
         if t is None:
-            for t in tqdm(graph.time_points(), disable=not self.show_progress, desc="Adding edges"):
+            for t in tqdm(graph.time_points(), disable=not get_options().show_progress, desc="Adding edges"):
                 self._add_edges_per_time(
                     graph,
                     t=t,

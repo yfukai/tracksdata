@@ -13,16 +13,14 @@ def test_regionprops_init_default() -> None:
 
     assert operator._extra_properties == []
     assert operator._spacing is None
-    assert operator.show_progress is True
 
 
 def test_regionprops_init_custom() -> None:
     """Test RegionPropsNodes initialization with custom parameters."""
-    operator = RegionPropsNodes(extra_properties=["area", "perimeter"], spacing=(1.0, 2.0), show_progress=False)
+    operator = RegionPropsNodes(extra_properties=["area", "perimeter"], spacing=(1.0, 2.0))
 
     assert operator._extra_properties == ["area", "perimeter"]
     assert operator._spacing == (1.0, 2.0)
-    assert operator.show_progress is False
 
 
 def test_regionprops_attrs_keys() -> None:
@@ -50,7 +48,7 @@ def test_regionprops_add_nodes_2d() -> None:
     # Create simple 2D labels
     labels = np.array([[[1, 1, 0], [1, 0, 2], [0, 2, 2]]], dtype=np.int32)
 
-    operator = RegionPropsNodes(extra_properties=["area"], show_progress=False)
+    operator = RegionPropsNodes(extra_properties=["area"])
 
     operator.add_nodes(graph, labels=labels)
 
@@ -83,7 +81,7 @@ def test_regionprops_add_nodes_3d() -> None:
 
     assert labels.shape == (2, 1, 3, 3)
 
-    operator = RegionPropsNodes(extra_properties=["area"], show_progress=False)
+    operator = RegionPropsNodes(extra_properties=["area"])
 
     operator.add_nodes(graph, labels=labels)
 
@@ -114,7 +112,7 @@ def test_regionprops_add_nodes_with_intensity() -> None:
 
     assert intensity.ndim == 3
 
-    operator = RegionPropsNodes(extra_properties=["mean_intensity"], show_progress=False)
+    operator = RegionPropsNodes(extra_properties=["mean_intensity"])
 
     operator.add_nodes(graph, labels=labels, intensity_image=intensity)
 
@@ -139,7 +137,7 @@ def test_regionprops_add_nodes_timelapse() -> None:
 
     assert labels.ndim == 3
 
-    operator = RegionPropsNodes(extra_properties=["area"], show_progress=False)
+    operator = RegionPropsNodes(extra_properties=["area"])
 
     operator.add_nodes(graph, labels=labels)
 
@@ -163,7 +161,7 @@ def test_regionprops_add_nodes_timelapse_with_intensity() -> None:
 
     intensity = np.array([[[10, 20], [0, 0]], [[0, 30], [40, 50]]], dtype=np.float32)  # t=0  # t=1
 
-    operator = RegionPropsNodes(extra_properties=["mean_intensity"], show_progress=False)
+    operator = RegionPropsNodes(extra_properties=["mean_intensity"])
 
     operator.add_nodes(graph, labels=labels, intensity_image=intensity)
 
@@ -188,7 +186,7 @@ def test_regionprops_custom_properties() -> None:
     def double_area(region: RegionProperties) -> float:
         return region.area * 2
 
-    operator = RegionPropsNodes(extra_properties=[double_area, "area"], show_progress=False)
+    operator = RegionPropsNodes(extra_properties=[double_area, "area"])
 
     operator.add_nodes(graph, labels=labels, t=0)
 
@@ -210,7 +208,7 @@ def test_regionprops_invalid_dimensions() -> None:
     # Create 1D labels (invalid)
     labels = np.array([1, 2, 3], dtype=np.int32)
 
-    operator = RegionPropsNodes(show_progress=False)
+    operator = RegionPropsNodes()
 
     with pytest.raises(ValueError, match="`labels` must be 2D or 3D"):
         operator.add_nodes(graph, labels=labels)
@@ -223,7 +221,7 @@ def test_regionprops_mask_creation() -> None:
     # Create simple labels
     labels = np.array([[1, 1, 0], [1, 0, 0], [0, 0, 2]], dtype=np.int32)
 
-    operator = RegionPropsNodes(show_progress=False)
+    operator = RegionPropsNodes()
 
     operator.add_nodes(graph, labels=labels, t=0)
 
@@ -245,7 +243,7 @@ def test_regionprops_spacing() -> None:
     # Create simple labels
     labels = np.array([[1, 1], [1, 1]], dtype=np.int32)
 
-    operator = RegionPropsNodes(extra_properties=["area"], spacing=(2.0, 3.0), show_progress=False)  # Custom spacing
+    operator = RegionPropsNodes(extra_properties=["area"], spacing=(2.0, 3.0))  # Custom spacing
 
     operator.add_nodes(graph, labels=labels, t=0)
 
@@ -263,7 +261,7 @@ def test_regionprops_empty_labels() -> None:
     # Create labels with no regions
     labels = np.zeros((3, 3), dtype=np.int32)
 
-    operator = RegionPropsNodes(show_progress=False)
+    operator = RegionPropsNodes()
 
     operator.add_nodes(graph, labels=labels, t=0)
 

@@ -11,6 +11,7 @@ from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.graph._base_graph import BaseGraph
 from tracksdata.nodes._base_nodes import BaseNodesOperator
 from tracksdata.nodes._mask import Mask
+from tracksdata.options import get_options
 from tracksdata.utils._logging import LOG
 
 
@@ -34,8 +35,6 @@ class RegionPropsNodes(BaseNodesOperator):
         Physical spacing between pixels. If provided, affects distance-based
         measurements. Should be (row_spacing, col_spacing) for 2D or
         (depth_spacing, row_spacing, col_spacing) for 3D.
-    show_progress : bool, default True
-        Whether to display progress bars during node addition.
 
     Attributes
     ----------
@@ -91,9 +90,8 @@ class RegionPropsNodes(BaseNodesOperator):
         self,
         extra_properties: list[str | Callable[[RegionProperties], Any]] | None = None,
         spacing: tuple[float, float] | None = None,
-        show_progress: bool = True,
     ):
-        super().__init__(show_progress=show_progress)
+        super().__init__()
         self._extra_properties = extra_properties or []
         self._spacing = spacing
 
@@ -185,7 +183,7 @@ class RegionPropsNodes(BaseNodesOperator):
         ```
         """
         if t is None:
-            for t in tqdm(range(labels.shape[0]), disable=not self.show_progress, desc="Adding nodes"):
+            for t in tqdm(range(labels.shape[0]), disable=not get_options().show_progress, desc="Adding nodes"):
                 if intensity_image is not None:
                     self._add_nodes_per_time(
                         graph=graph,

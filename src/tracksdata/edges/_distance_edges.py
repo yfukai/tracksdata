@@ -37,8 +37,6 @@ class DistanceEdges(BaseEdgesOperator):
     attr_keys : Sequence[str] | None, optional
         The node attribute keys to use for distance calculation. If None,
         defaults to ["z", "y", "x"] if "z" exists, otherwise ["y", "x"].
-    show_progress : bool, default True
-        Whether to display progress information during edge addition.
 
     Attributes
     ----------
@@ -93,12 +91,11 @@ class DistanceEdges(BaseEdgesOperator):
         delta_t: int = 1,
         output_key: str = DEFAULT_ATTR_KEYS.EDGE_WEIGHT,
         attr_keys: Sequence[str] | None = None,
-        show_progress: bool = True,
     ):
         if delta_t < 1:
             raise ValueError(f"'delta_t' must be at least 1, got {delta_t}")
 
-        super().__init__(output_key=output_key, show_progress=show_progress)
+        super().__init__(output_key=output_key)
         self.distance_threshold = distance_threshold
         self.n_neighbors = n_neighbors
         self.delta_t = delta_t

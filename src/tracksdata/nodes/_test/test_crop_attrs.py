@@ -21,7 +21,6 @@ def test_crop_func_attrs_init_default() -> None:
     assert operator.func == dummy_func
     assert operator.output_key == "test_output"
     assert operator.attr_keys == ()
-    assert operator.show_progress is True
 
 
 def test_crop_func_attrs_init_with_attr_keys() -> None:
@@ -34,13 +33,11 @@ def test_crop_func_attrs_init_with_attr_keys() -> None:
         func=dummy_func,
         output_key="test_output",
         attr_keys=["multiplier"],
-        show_progress=False,
     )
 
     assert operator.func == dummy_func
     assert operator.output_key == "test_output"
     assert operator.attr_keys == ["multiplier"]
-    assert operator.show_progress is False
 
 
 def test_crop_func_attrs_init_with_sequence_output_key() -> None:
@@ -84,7 +81,6 @@ def test_crop_func_attrs_simple_function_no_frames() -> None:
         func=double_value,
         output_key="doubled_value",
         attr_keys=["value"],
-        show_progress=False,
     )
 
     operator.add_node_attrs(graph)
@@ -132,7 +128,6 @@ def test_crop_func_attrs_function_with_frames() -> None:
     operator = CropFuncAttrs(
         func=intensity_sum,
         output_key="intensity_sum",
-        show_progress=False,
     )
 
     operator.add_node_attrs(graph, t=0, frames=frames)
@@ -187,7 +182,6 @@ def test_crop_func_attrs_function_with_frames_and_attrs() -> None:
         func=intensity_sum_times_multiplier,
         output_key="weighted_intensity",
         attr_keys=["multiplier"],
-        show_progress=False,
     )
 
     operator.add_node_attrs(graph, t=0, frames=frames)
@@ -236,7 +230,6 @@ def test_crop_func_attrs_function_returns_different_types() -> None:
     operator_str = CropFuncAttrs(
         func=return_string,
         output_key="string_result",
-        show_progress=False,
     )
     operator_str.add_node_attrs(graph)
 
@@ -244,7 +237,6 @@ def test_crop_func_attrs_function_returns_different_types() -> None:
     operator_list = CropFuncAttrs(
         func=return_list,
         output_key="list_result",
-        show_progress=False,
     )
     operator_list.add_node_attrs(graph)
 
@@ -252,7 +244,6 @@ def test_crop_func_attrs_function_returns_different_types() -> None:
     operator_dict = CropFuncAttrs(
         func=return_dict,
         output_key="dict_result",
-        show_progress=False,
     )
     operator_dict.add_node_attrs(graph)
 
@@ -260,7 +251,6 @@ def test_crop_func_attrs_function_returns_different_types() -> None:
     operator_array = CropFuncAttrs(
         func=return_array,
         output_key="array_result",
-        show_progress=False,
     )
     operator_array.add_node_attrs(graph)
 
@@ -295,7 +285,6 @@ def test_crop_func_attrs_error_handling_missing_attr_key() -> None:
         func=use_value,
         output_key="result",
         attr_keys=["value"],
-        show_progress=False,
     )
 
     # Should raise an error when trying to access missing attribute
@@ -316,7 +305,6 @@ def test_crop_func_attrs_empty_graph() -> None:
     operator = CropFuncAttrs(
         func=dummy_func,
         output_key="result",
-        show_progress=False,
     )
 
     # Should not raise an error, just do nothing
