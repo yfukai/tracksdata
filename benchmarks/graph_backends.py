@@ -11,6 +11,7 @@ from tracksdata.edges import DistanceEdges
 from tracksdata.graph import RustWorkXGraph, SQLGraph
 from tracksdata.graph._base_graph import BaseGraph
 from tracksdata.nodes import RandomNodes
+from tracksdata.options import set_options
 from tracksdata.solvers import NearestNeighborsSolver
 
 
@@ -114,6 +115,7 @@ def main() -> None:
     n_repeats = 3
     n_time_points = 50
     first_round = True
+    set_options(show_progress=False)
 
     for _ in range(n_repeats):
         for n_nodes in [1_000, 10_000, 100_000]:
