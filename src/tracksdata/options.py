@@ -21,19 +21,19 @@ class Options:
     ----------
     show_progress : bool, default True
         Whether to display progress bars during operations.
-    n_workers : int | None, default None
+    n_workers : int
         Number of worker processes to use for multiprocessing operations.
-        - None, 0 or 1: use default behavior (sequential)
+        - 0 or 1: use default behavior (sequential)
         - > 1: use exactly this many worker processes
-    multiprocessing_start_method : str, default "spawn"
+    mp_start_method : str, default "spawn"
         The multiprocessing start method to use. Options: "spawn", "fork", "forkserver".
         "spawn" is safest and works on all platforms but has higher overhead.
         "fork" is faster but only available on Unix and can cause issues with certain libraries.
     """
 
     show_progress: bool = True
-    n_workers: int | None = None
-    multiprocessing_start_method: str = "spawn"
+    n_workers: int = 1
+    mp_start_method: str = "spawn"
 
     def __enter__(self) -> "Options":
         """Enter the context manager."""
@@ -46,6 +46,11 @@ class Options:
         # Pop this options from stack
         if _options_stack:
             _options_stack.pop()
+
+    def update(self, **kwargs: Any) -> None:
+        """Update the options with the given keyword arguments."""
+        for key, value in kwargs.items():
+            setattr(self, key, value)
 
 
 # Default options - always at the bottom of the stack
@@ -103,7 +108,7 @@ def set_options(options: Options | None = None, **kwargs: Any) -> None:
     if options is not None:
         _default_options = options
     else:
-        _default_options = Options(**kwargs)
+        get_options().update(**kwargs)
 
 
 @contextmanager
