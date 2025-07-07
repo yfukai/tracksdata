@@ -10,7 +10,6 @@ def test_default_options() -> None:
     options = Options()
     assert options.show_progress is True
     assert options.n_workers == 1
-    assert options.mp_start_method == "spawn"
 
 
 def test_get_options() -> None:

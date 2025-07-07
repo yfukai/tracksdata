@@ -25,15 +25,10 @@ class Options:
         Number of worker processes to use for multiprocessing operations.
         - 0 or 1: use default behavior (sequential)
         - > 1: use exactly this many worker processes
-    mp_start_method : str, default "spawn"
-        The multiprocessing start method to use. Options: "spawn", "fork", "forkserver".
-        "spawn" is safest and works on all platforms but has higher overhead.
-        "fork" is faster but only available on Unix and can cause issues with certain libraries.
     """
 
     show_progress: bool = True
     n_workers: int = 1
-    mp_start_method: str = "spawn"
 
     def __enter__(self) -> "Options":
         """Enter the context manager."""
