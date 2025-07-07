@@ -42,12 +42,17 @@ def test_iou_edges_add_weights(n_workers: int) -> None:
     mask2_data = np.array([[True, False], [False, False]], dtype=bool)
     mask2 = Mask(mask2_data, bbox=np.array([0, 0, 2, 2]))
 
+    mask3_data = np.array([[True, True], [True, True]], dtype=bool)
+    mask3 = Mask(mask3_data, bbox=np.array([0, 0, 2, 2]))
+
     # Add nodes with masks
     node1 = graph.add_node({DEFAULT_ATTR_KEYS.T: 0, DEFAULT_ATTR_KEYS.MASK: mask1})
-    node2 = graph.add_node({DEFAULT_ATTR_KEYS.T: 0, DEFAULT_ATTR_KEYS.MASK: mask2})
+    node2 = graph.add_node({DEFAULT_ATTR_KEYS.T: 1, DEFAULT_ATTR_KEYS.MASK: mask2})
+    node3 = graph.add_node({DEFAULT_ATTR_KEYS.T: 2, DEFAULT_ATTR_KEYS.MASK: mask3})
 
     # Add edge
-    edge_id = graph.add_edge(node1, node2, {DEFAULT_ATTR_KEYS.EDGE_WEIGHT: 0.0})
+    edge_id_1 = graph.add_edge(node1, node2, {DEFAULT_ATTR_KEYS.EDGE_WEIGHT: 0.0})
+    edge_id_2 = graph.add_edge(node2, node3, {DEFAULT_ATTR_KEYS.EDGE_WEIGHT: 0.0})
 
     # Create operator and add weights
     operator = IoUEdgeAttr(output_key="iou_score")
@@ -62,12 +67,14 @@ def test_iou_edges_add_weights(n_workers: int) -> None:
     assert DEFAULT_ATTR_KEYS.EDGE_SOURCE in edges_df.columns
     assert DEFAULT_ATTR_KEYS.EDGE_TARGET in edges_df.columns
     assert DEFAULT_ATTR_KEYS.EDGE_ID in edges_df.columns
-    assert len(edges_df) == 1
+    assert len(edges_df) == 2
 
     # Calculate expected IoU: intersection = 1, union = 3, IoU = 1/3
-    expected_iou = 1.0 / 3.0
-    edge_iou = dict(zip(edges_df[DEFAULT_ATTR_KEYS.EDGE_ID], edges_df["iou_score"], strict=False))
-    assert abs(edge_iou[edge_id] - expected_iou) < 1e-6
+    expected_iou_1 = 1.0 / 3.0
+    expected_iou_2 = 1.0 / 4.0
+    edge_iou = dict(zip(edges_df[DEFAULT_ATTR_KEYS.EDGE_ID], edges_df["iou_score"], strict=True))
+    assert abs(edge_iou[edge_id_1] - expected_iou_1) < 1e-6
+    assert abs(edge_iou[edge_id_2] - expected_iou_2) < 1e-6
 
 
 def test_iou_edges_no_overlap() -> None:
