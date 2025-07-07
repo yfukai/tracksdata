@@ -11,7 +11,7 @@ from tracksdata.options import get_options, options_context
 def test_crop_func_attrs_init_default() -> None:
     """Test CropFuncAttrs initialization with default parameters."""
 
-    def dummy_func(mask: Mask, value: float) -> float:
+    def dummy_func(value: float) -> float:
         return value * 2.0
 
     operator = GenericFuncNodeAttrs(
@@ -27,7 +27,7 @@ def test_crop_func_attrs_init_default() -> None:
 def test_crop_func_attrs_init_with_attr_keys() -> None:
     """Test CropFuncAttrs initialization with custom attr_keys."""
 
-    def dummy_func(mask: Mask, value: float, multiplier: int) -> float:
+    def dummy_func(value: float, multiplier: int) -> float:
         return value * multiplier
 
     operator = GenericFuncNodeAttrs(
@@ -44,7 +44,7 @@ def test_crop_func_attrs_init_with_attr_keys() -> None:
 def test_crop_func_attrs_init_with_sequence_output_key() -> None:
     """Test CropFuncAttrs initialization with sequence output_key."""
 
-    def dummy_func(mask: Mask, value: float) -> float:
+    def dummy_func(value: float) -> float:
         return value * 2.0
 
     operator = GenericFuncNodeAttrs(
