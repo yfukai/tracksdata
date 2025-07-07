@@ -222,13 +222,12 @@ class RegionPropsNodes(BaseNodesOperator):
             time_points = [t]
 
         node_ids = []
-
         for nodes_data in multiprocessing_apply(
             func=curry(self._nodes_per_time, labels=labels, intensity_image=intensity_image),
             sequence=time_points,
             desc="Adding region properties nodes",
         ):
-            node_ids += graph.bulk_add_nodes(nodes_data)
+            node_ids.extend(graph.bulk_add_nodes(nodes_data))
 
     def _nodes_per_time(
         self,
