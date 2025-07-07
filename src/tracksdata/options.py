@@ -25,6 +25,7 @@ class Options:
         Number of worker processes to use for multiprocessing operations.
         - 0 or 1: use default behavior (sequential)
         - > 1: use exactly this many worker processes
+        NOTE: Overhead of multiprocessing is significant, experiment with 1 before increasing.
     """
 
     show_progress: bool = True
