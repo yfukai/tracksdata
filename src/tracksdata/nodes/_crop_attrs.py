@@ -1,6 +1,5 @@
 from collections.abc import Callable, Sequence
-from enum import Enum
-from typing import TypeVar
+from typing import Any, TypeVar
 
 import numpy as np
 from numpy.typing import NDArray
@@ -12,8 +11,8 @@ from tracksdata.nodes._base_node_attrs import BaseNodeAttrsOperator
 from tracksdata.nodes._mask import Mask
 from tracksdata.utils._logging import LOG
 
-R = TypeVar("R")
 T = TypeVar("T")
+R = TypeVar("R")
 
 
 class CropFuncAttrs(BaseNodeAttrsOperator):
@@ -22,7 +21,7 @@ class CropFuncAttrs(BaseNodeAttrsOperator):
 
     Parameters
     ----------
-    func : Callable[[Mask, NDArray, R], T] | Callable[[Mask, R], T]
+    func : Callable[[Mask, NDArray, T], R] | Callable[[Mask, T], R]
         Function to apply to the node.
         If `frames` is provided when calling `add_node_attrs`,
         the function must accept a single argument for the frame.
@@ -31,6 +30,9 @@ class CropFuncAttrs(BaseNodeAttrsOperator):
         Key of the new attribute to add.
     attr_keys : Sequence[str], optional
         Additional attributes to pass to the `func` as keyword arguments.
+    default_value : Any, optional
+        Default value to use for the new attribute.
+        TODO: this should be replaced by a more advanced typing that takes default values.
 
     Examples
     --------
@@ -56,15 +58,25 @@ class CropFuncAttrs(BaseNodeAttrsOperator):
 
     """
 
+    output_key: str
+
     def __init__(
         self,
-        func: Callable[[Mask, NDArray, R], T] | Callable[[Mask, R], T],
+        func: Callable[[Mask, NDArray, T], R] | Callable[[Mask, T], R],
         output_key: str,
+        default_value: Any = None,
         attr_keys: Sequence[str] = (),
     ) -> None:
         super().__init__(output_key)
         self.func = func
         self.attr_keys = attr_keys
+        self.default_value = default_value
+
+    def _init_node_attrs(self, graph: BaseGraph) -> None:
+        """
+        Initialize the node attributes for the graph.
+        """
+        graph.add_node_attr_key(self.output_key, default_value=self.default_value)
 
     def add_node_attrs(
         self,
@@ -88,22 +100,22 @@ class CropFuncAttrs(BaseNodeAttrsOperator):
         """
         super().add_node_attrs(graph, t=t, frames=frames)
 
-    def _add_node_attrs_per_time(
+    def _node_attrs_per_time(
         self,
-        graph: BaseGraph,
-        *,
         t: int,
+        *,
+        graph: BaseGraph,
         frames: NDArray | None = None,
-    ) -> None:
+    ) -> tuple[list[int], dict[str, list[Any]]]:
         """
         Add attributes to nodes of a graph.
 
         Parameters
         ----------
-        graph : BaseGraph
-            The graph to add attributes to.
         t : int
             The time point to add attributes for.
+        graph : BaseGraph
+            The graph to add attributes to.
         frames : NDArray | None
             The frames to index by time point to pass to the `func` function.
             Such that, when provided, `frames[t]` will be passed to the `func` function.
@@ -113,7 +125,7 @@ class CropFuncAttrs(BaseNodeAttrsOperator):
 
         if len(node_ids) == 0:
             LOG.warning(f"No nodes at time point {t}")
-            return  # No nodes at this time point
+            return []
 
         # Get attributes for these nodes
         columns = [DEFAULT_ATTR_KEYS.NODE_ID, DEFAULT_ATTR_KEYS.MASK, *self.attr_keys]
@@ -128,18 +140,4 @@ class CropFuncAttrs(BaseNodeAttrsOperator):
             result = self.func(data_dict.pop(DEFAULT_ATTR_KEYS.MASK), *args, **data_dict)
             results.append(result)
 
-        # Add output key as node attribute key and guessing the type
-        if self.output_key not in graph.node_attr_keys:
-            sample_result = results[0]
-            #  if is scalar, add as float, otherwise add as object
-            if isinstance(sample_result, int | float | bool | str | Enum):
-                default_value = type(sample_result)(-9999)
-            else:
-                default_value = None
-
-            graph.add_node_attr_key(self.output_key, default_value)
-
-        graph.update_node_attrs(
-            attrs={self.output_key: results},
-            node_ids=node_attrs[DEFAULT_ATTR_KEYS.NODE_ID],
-        )
+        return node_ids, {self.output_key: results}
