@@ -104,6 +104,9 @@ class BaseGraph(abc.ABC):
         list[int]
             The IDs of the added nodes.
         """
+        if len(nodes) == 0:
+            return []
+
         # this method benefits the SQLGraph backend
         return [self.add_node(node, validate_keys=False) for node in nodes]
 
@@ -155,6 +158,9 @@ class BaseGraph(abc.ABC):
             graph.bulk_add_edges([dict(source_id=0, target_id=1, weight=1.0)])
             ```
         """
+        if len(edges) == 0:
+            return
+
         # this method benefits the SQLGraph backend
         for edge in edges:
             self.add_edge(

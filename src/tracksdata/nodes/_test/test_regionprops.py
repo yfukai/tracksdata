@@ -180,7 +180,7 @@ def test_regionprops_custom_properties() -> None:
     graph = RustWorkXGraph()
 
     # Create simple labels
-    labels = np.array([[1, 1, 0], [1, 0, 0], [0, 0, 0]], dtype=np.int32)
+    labels = np.array([[[1, 1, 0], [1, 0, 0], [0, 0, 0]]], dtype=np.int32)
 
     # Define custom property function
     def double_area(region: RegionProperties) -> float:
@@ -205,12 +205,12 @@ def test_regionprops_invalid_dimensions() -> None:
     """Test error handling for invalid label dimensions."""
     graph = RustWorkXGraph()
 
-    # Create 1D labels (invalid)
-    labels = np.array([1, 2, 3], dtype=np.int32)
+    # Create 2D labels (invalid)
+    labels = np.array([[1, 2, 3], [4, 5, 6]], dtype=np.int32)
 
     operator = RegionPropsNodes()
 
-    with pytest.raises(ValueError, match="`labels` must be 2D or 3D"):
+    with pytest.raises(ValueError, match=r"`labels` must be 't \+ 2D' or 't \+ 3D'"):
         operator.add_nodes(graph, labels=labels)
 
 
@@ -219,7 +219,7 @@ def test_regionprops_mask_creation() -> None:
     graph = RustWorkXGraph()
 
     # Create simple labels
-    labels = np.array([[1, 1, 0], [1, 0, 0], [0, 0, 2]], dtype=np.int32)
+    labels = np.array([[[1, 1, 0], [1, 0, 0], [0, 0, 2]]], dtype=np.int32)
 
     operator = RegionPropsNodes()
 
@@ -241,7 +241,7 @@ def test_regionprops_spacing() -> None:
     graph = RustWorkXGraph()
 
     # Create simple labels
-    labels = np.array([[1, 1], [1, 1]], dtype=np.int32)
+    labels = np.array([[[1, 1], [1, 1]]], dtype=np.int32)
 
     operator = RegionPropsNodes(extra_properties=["area"], spacing=(2.0, 3.0))  # Custom spacing
 
@@ -259,7 +259,7 @@ def test_regionprops_empty_labels() -> None:
     graph = RustWorkXGraph()
 
     # Create labels with no regions
-    labels = np.zeros((3, 3), dtype=np.int32)
+    labels = np.zeros((1, 3, 3), dtype=np.int32)
 
     operator = RegionPropsNodes()
 

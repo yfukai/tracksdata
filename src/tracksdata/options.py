@@ -45,8 +45,15 @@ class Options:
 
     def update(self, **kwargs: Any) -> None:
         """Update the options with the given keyword arguments."""
+        valid_keys = set(self.__dict__.keys())
         for key, value in kwargs.items():
+            if key not in valid_keys:
+                raise ValueError(f"Invalid option: {key}. Expected one of {valid_keys}")
             setattr(self, key, value)
+
+    def copy(self) -> "Options":
+        """Return a copy of the options."""
+        return Options(**self.__dict__)
 
 
 # Default options - always at the bottom of the stack
@@ -68,7 +75,7 @@ def get_options() -> Options:
 
 def set_options(options: Options | None = None, **kwargs: Any) -> None:
     """
-    Set the global options.
+    Set the global options pushing a new Options object to the stack.
 
     Parameters
     ----------
@@ -93,18 +100,17 @@ def set_options(options: Options | None = None, **kwargs: Any) -> None:
     ValueError
         If both options and kwargs are provided, or if neither are provided.
     """
-    global _default_options
-
     if options is not None and kwargs:
         raise ValueError("Cannot provide both 'options' and keyword arguments")
 
     if options is None and not kwargs:
         raise ValueError("Must provide either 'options' or keyword arguments")
 
-    if options is not None:
-        _default_options = options
-    else:
-        get_options().update(**kwargs)
+    if options is None:
+        options = get_options().copy()
+        options.update(**kwargs)
+
+    _options_stack.append(options)
 
 
 @contextmanager
