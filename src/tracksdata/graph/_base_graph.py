@@ -104,6 +104,9 @@ class BaseGraph(abc.ABC):
         list[int]
             The IDs of the added nodes.
         """
+        if len(nodes) == 0:
+            return []
+
         # this method benefits the SQLGraph backend
         return [self.add_node(node, validate_keys=False) for node in nodes]
 

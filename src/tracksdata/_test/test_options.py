@@ -9,6 +9,7 @@ def test_default_options() -> None:
     """Test that default options are created with expected values."""
     options = Options()
     assert options.show_progress is True
+    assert options.n_workers == 1
 
 
 def test_get_options() -> None:
@@ -37,12 +38,14 @@ def test_set_options_with_kwargs() -> None:
     original_options = get_options()
 
     # Set options using kwargs
-    set_options(show_progress=False)
+    set_options(show_progress=False, n_workers=4)
     assert get_options().show_progress is False
+    assert get_options().n_workers == 4
 
     # Restore original
     set_options(original_options)
     assert get_options().show_progress is True
+    assert get_options().n_workers == 1
 
 
 def test_set_options_error_both_provided() -> None:

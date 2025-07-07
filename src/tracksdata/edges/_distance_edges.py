@@ -1,4 +1,5 @@
 from collections.abc import Sequence
+from typing import Any
 
 import numpy as np
 from scipy.spatial import KDTree
@@ -84,6 +85,8 @@ class DistanceEdges(BaseEdgesOperator):
     ```
     """
 
+    output_key: str
+
     def __init__(
         self,
         distance_threshold: float,
@@ -99,15 +102,20 @@ class DistanceEdges(BaseEdgesOperator):
         self.distance_threshold = distance_threshold
         self.n_neighbors = n_neighbors
         self.delta_t = delta_t
-        self.output_key = output_key
         self.attr_keys = attr_keys
+
+    def _init_edge_attrs(self, graph: BaseGraph) -> None:
+        """
+        Initialize the edge attributes for the graph.
+        """
+        graph.add_edge_attr_key(self.output_key, default_value=-99999.0)
 
     def _add_edges_per_time(
         self,
-        graph: BaseGraph,
-        *,
         t: int,
-    ) -> None:
+        *,
+        graph: BaseGraph,
+    ) -> list[dict[str, Any]]:
         """
         Add distance-based edges between nodes at consecutive time points.
 
@@ -117,16 +125,13 @@ class DistanceEdges(BaseEdgesOperator):
 
         Parameters
         ----------
-        graph : BaseGraph
-            The graph to add edges to.
         t : int
             The current time point. Edges will be created from nodes at
             time t-1 to nodes at time t.
+        graph : BaseGraph
+            The current time point. Edges will be created from nodes at
+            time t-1 to nodes at time t.
         """
-        if self.output_key not in graph.edge_attr_keys:
-            # negative value to indicate that the edge is not valid
-            graph.add_edge_attr_key(self.output_key, -99999.0)
-
         if self.attr_keys is None:
             if "z" in graph.node_attr_keys:
                 attr_keys = ["z", "y", "x"]
@@ -151,14 +156,14 @@ class DistanceEdges(BaseEdgesOperator):
                 t - self.delta_t,
                 t,
             )
-            return
+            return []
 
         if len(cur_node_ids) == 0:
             LOG.warning(
                 "No nodes found for time point %d",
                 t,
             )
-            return
+            return []
 
         prev_attrs = graph.node_attrs(node_ids=prev_node_ids, attr_keys=attr_keys)
         cur_attrs = graph.node_attrs(node_ids=cur_node_ids, attr_keys=attr_keys)
@@ -190,7 +195,7 @@ class DistanceEdges(BaseEdgesOperator):
                     }
                 )
 
-        if len(edges_data) > 0:
-            graph.bulk_add_edges(edges_data)
-        else:
+        if len(edges_data) == 0:
             LOG.warning("No valid edges found for the pair of time point (%d, %d)", t, t - 1)
+
+        return edges_data

@@ -4,6 +4,7 @@ import pytest
 from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.graph import RustWorkXGraph
 from tracksdata.nodes import RandomNodes
+from tracksdata.options import get_options, options_context
 
 
 def test_random_nodes_init_2d() -> None:
@@ -98,8 +99,9 @@ def test_random_nodes_add_nodes_single_time_point_3d() -> None:
     assert all(0 <= z <= 1 for z in nodes_df["z"])
 
 
-def test_random_nodes_add_nodes_all_time_points() -> None:
-    """Test adding nodes for all time points when t=None."""
+@pytest.mark.parametrize("n_workers", [1, 2])
+def test_random_nodes_add_nodes_all_time_points(n_workers: int) -> None:
+    """Test adding nodes for all time points when t=None with different worker counts."""
     graph = RustWorkXGraph()
 
     operator = RandomNodes(
@@ -110,7 +112,8 @@ def test_random_nodes_add_nodes_all_time_points() -> None:
     )
 
     # Add nodes for all time points
-    operator.add_nodes(graph)
+    with options_context(n_workers=n_workers):
+        operator.add_nodes(graph)
 
     # Check that nodes were added for all time points
     nodes_df = graph.node_attrs()
@@ -253,3 +256,9 @@ def test_random_nodes_empty_time_points() -> None:
 
     # Graph should remain empty
     assert graph.num_nodes == 0
+
+
+def test_random_nodes_multiprocessing_isolation() -> None:
+    """Test that multiprocessing options don't affect subsequent tests."""
+    # Verify default n_workers is 1
+    assert get_options().n_workers == 1

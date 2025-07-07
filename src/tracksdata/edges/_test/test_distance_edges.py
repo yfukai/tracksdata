@@ -1,6 +1,9 @@
+import pytest
+
 from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.edges import DistanceEdges
 from tracksdata.graph import RustWorkXGraph
+from tracksdata.options import get_options, options_context
 
 
 def test_distance_edges_init_default_params() -> None:
@@ -177,8 +180,9 @@ def test_distance_edges_add_edges_distance_threshold() -> None:
     assert graph.num_edges == 0
 
 
-def test_distance_edges_add_edges_multiple_timepoints() -> None:
-    """Test adding edges for multiple timepoints."""
+@pytest.mark.parametrize("n_workers", [1, 2])
+def test_distance_edges_add_edges_multiple_timepoints(n_workers: int) -> None:
+    """Test adding edges for multiple timepoints with different worker counts."""
     graph = RustWorkXGraph()
 
     # Register attribute keys
@@ -193,7 +197,8 @@ def test_distance_edges_add_edges_multiple_timepoints() -> None:
     operator = DistanceEdges(distance_threshold=5.0, n_neighbors=2)
 
     # Add edges for all timepoints
-    operator.add_edges(graph)
+    with options_context(n_workers=n_workers):
+        operator.add_edges(graph)
 
     # Should have some edges
     assert graph.num_edges >= 0
@@ -253,7 +258,8 @@ def test_distance_edges_n_neighbors_limit() -> None:
     assert graph.num_edges == 2
 
 
-def test_distance_edges_add_edges_with_delta_t() -> None:
+@pytest.mark.parametrize("n_workers", [1, 2])
+def test_distance_edges_add_edges_with_delta_t(n_workers: int) -> None:
     """Test adding edges with delta_t=2 connecting nodes across multiple timepoints."""
     graph = RustWorkXGraph()
 
@@ -269,7 +275,8 @@ def test_distance_edges_add_edges_with_delta_t() -> None:
 
     operator = DistanceEdges(distance_threshold=5.0, n_neighbors=2, delta_t=2)
 
-    operator.add_edges(graph)
+    with options_context(n_workers=n_workers):
+        operator.add_edges(graph)
 
     edges_df = graph.edge_attrs()
     edge_list = {
@@ -299,3 +306,9 @@ def test_distance_edges_invalid_delta_t() -> None:
 
     with pytest.raises(ValueError, match="'delta_t' must be at least 1"):
         DistanceEdges(distance_threshold=10.0, n_neighbors=3, delta_t=-1)
+
+
+def test_distance_edges_multiprocessing_isolation() -> None:
+    """Test that multiprocessing options don't affect subsequent tests."""
+    # Verify default n_workers is 1
+    assert get_options().n_workers == 1
