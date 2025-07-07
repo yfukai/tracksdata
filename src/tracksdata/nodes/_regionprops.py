@@ -250,8 +250,6 @@ class RegionPropsNodes(BaseNodesOperator):
         ----------
         t : int
             The time point to assign to the created nodes.
-        graph : BaseGraph
-            The graph to add nodes to.
         labels : NDArray[np.integer]
             2D or 3D labeled image for a single time point.
         intensity_image : NDArray | None, optional
