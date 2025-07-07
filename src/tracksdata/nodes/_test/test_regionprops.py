@@ -5,6 +5,7 @@ from skimage.measure._regionprops import RegionProperties
 from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.graph import RustWorkXGraph
 from tracksdata.nodes import Mask, RegionPropsNodes
+from tracksdata.options import get_options, options_context
 
 
 def test_regionprops_init_default() -> None:
@@ -128,8 +129,9 @@ def test_regionprops_add_nodes_with_intensity() -> None:
     assert abs(mean_intensities[1] - 50.0) < 1e-6
 
 
-def test_regionprops_add_nodes_timelapse() -> None:
-    """Test adding nodes from timelapse (t=None)."""
+@pytest.mark.parametrize("n_workers", [1, 2])
+def test_regionprops_add_nodes_timelapse(n_workers: int) -> None:
+    """Test adding nodes from timelapse (t=None) with different worker counts."""
     graph = RustWorkXGraph()
 
     # Create timelapse labels (time x height x width)
@@ -139,7 +141,8 @@ def test_regionprops_add_nodes_timelapse() -> None:
 
     operator = RegionPropsNodes(extra_properties=["area"])
 
-    operator.add_nodes(graph, labels=labels)
+    with options_context(n_workers=n_workers):
+        operator.add_nodes(graph, labels=labels)
 
     # Check that nodes were added for both time points
     nodes_df = graph.node_attrs()
@@ -267,3 +270,9 @@ def test_regionprops_empty_labels() -> None:
 
     # No nodes should be added
     assert graph.num_nodes == 0
+
+
+def test_regionprops_multiprocessing_isolation() -> None:
+    """Test that multiprocessing options don't affect subsequent tests."""
+    # Verify default n_workers is 1
+    assert get_options().n_workers == 1

@@ -5,6 +5,7 @@ from numpy.typing import NDArray
 from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.graph import RustWorkXGraph
 from tracksdata.nodes import CropFuncAttrs, Mask
+from tracksdata.options import get_options, options_context
 
 
 def test_crop_func_attrs_init_default() -> None:
@@ -292,6 +293,58 @@ def test_crop_func_attrs_error_handling_missing_attr_key() -> None:
         operator.add_node_attrs(graph)
 
 
+@pytest.mark.parametrize("n_workers", [1, 2])
+def test_crop_func_attrs_function_with_frames_multiprocessing(n_workers: int) -> None:
+    """Test applying a function with frames using different worker counts."""
+    graph = RustWorkXGraph()
+
+    # Register attribute keys
+    graph.add_node_attr_key(DEFAULT_ATTR_KEYS.MASK, None)
+
+    # Create test masks for multiple time points
+    mask1_data = np.array([[True, True], [True, False]], dtype=bool)
+    mask1 = Mask(mask1_data, bbox=np.array([0, 0, 2, 2]))
+
+    mask2_data = np.array([[True, False], [False, False]], dtype=bool)
+    mask2 = Mask(mask2_data, bbox=np.array([0, 0, 2, 2]))
+
+    # Add nodes with masks at different time points
+    node1 = graph.add_node({DEFAULT_ATTR_KEYS.T: 0, DEFAULT_ATTR_KEYS.MASK: mask1})
+    node2 = graph.add_node({DEFAULT_ATTR_KEYS.T: 1, DEFAULT_ATTR_KEYS.MASK: mask2})
+
+    # Create test frames for multiple time points
+    frames = np.array(
+        [
+            np.array([[100, 200], [300, 400]]),  # Frame 0
+            np.array([[10, 20], [30, 40]]),  # Frame 1
+        ]
+    )
+
+    def intensity_sum(mask: Mask, frame: NDArray) -> float:
+        cropped = mask.crop(frame)
+        return float(np.sum(cropped[mask.mask]))
+
+    # Create operator and add attributes
+    operator = CropFuncAttrs(
+        func=intensity_sum,
+        output_key="intensity_sum",
+    )
+
+    with options_context(n_workers=n_workers):
+        operator.add_node_attrs(graph, frames=frames)
+
+    # Check that attributes were added
+    nodes_df = graph.node_attrs()
+    assert "intensity_sum" in nodes_df.columns
+
+    # Check results
+    intensity_sums = dict(zip(nodes_df[DEFAULT_ATTR_KEYS.NODE_ID], nodes_df["intensity_sum"], strict=False))
+
+    # Expected calculations based on masks and frames
+    assert intensity_sums[node1] == 600.0  # mask1 with frame 0
+    assert intensity_sums[node2] == 10.0  # mask2 with frame 1
+
+
 def test_crop_func_attrs_empty_graph() -> None:
     """Test behavior with an empty graph."""
     graph = RustWorkXGraph()
@@ -313,3 +366,9 @@ def test_crop_func_attrs_empty_graph() -> None:
     # Check that no attributes were added
     nodes_df = graph.node_attrs()
     assert len(nodes_df) == 0
+
+
+def test_crop_func_attrs_multiprocessing_isolation() -> None:
+    """Test that multiprocessing options don't affect subsequent tests."""
+    # Verify default n_workers is 1
+    assert get_options().n_workers == 1

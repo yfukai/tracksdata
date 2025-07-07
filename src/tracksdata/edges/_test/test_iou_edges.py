@@ -1,9 +1,11 @@
 import numpy as np
+import pytest
 
 from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.edges import IoUEdgeAttr
 from tracksdata.graph import RustWorkXGraph
 from tracksdata.nodes import Mask
+from tracksdata.options import get_options, options_context
 
 
 def test_iou_edges_init_default() -> None:
@@ -24,8 +26,9 @@ def test_iou_edges_init_custom() -> None:
     assert operator.func == Mask.iou
 
 
-def test_iou_edges_add_weights() -> None:
-    """Test adding IoU weights to edges."""
+@pytest.mark.parametrize("n_workers", [1, 2])
+def test_iou_edges_add_weights(n_workers: int) -> None:
+    """Test adding IoU weights to edges with different worker counts."""
     graph = RustWorkXGraph()
 
     # Register attribute keys
@@ -48,7 +51,8 @@ def test_iou_edges_add_weights() -> None:
 
     # Create operator and add weights
     operator = IoUEdgeAttr(output_key="iou_score")
-    operator.add_edge_attrs(graph)
+    with options_context(n_workers=n_workers):
+        operator.add_edge_attrs(graph)
 
     # Check that IoU weights were added
     edges_df = graph.edge_attrs()
@@ -181,3 +185,9 @@ def test_iou_edges_custom_mask_key() -> None:
     expected_iou = 0.5
     edge_iou = dict(zip(edges_df[DEFAULT_ATTR_KEYS.EDGE_ID], edges_df["iou_score"], strict=False))
     assert abs(edge_iou[edge_id] - expected_iou) < 1e-6
+
+
+def test_iou_edges_multiprocessing_isolation() -> None:
+    """Test that multiprocessing options don't affect subsequent tests."""
+    # Verify default n_workers is 1
+    assert get_options().n_workers == 1
