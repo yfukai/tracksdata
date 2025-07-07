@@ -27,6 +27,7 @@ def multiprocessing_apply(
     func: Callable[[T], R],
     sequence: Sequence[T],
     desc: str | None = None,
+    sorted: bool = False,
 ) -> Generator[R, None, None]:
     """Applies `func` for each item in `sequence`.
 
@@ -38,6 +39,9 @@ def multiprocessing_apply(
         Sequence of parameters.
     desc : Optional[str], optional
         Description to tqdm progress bar, by default None
+    sorted : bool, optional
+        Whether to keep the order of the returned results.
+        Sorted output is a bit slower.
 
     Returns
     -------
@@ -51,8 +55,9 @@ def multiprocessing_apply(
         ctx = mp.get_context("spawn")
         chunksize = max(1, length // (options.n_workers * 2))
         with ctx.Pool(min(options.n_workers, length)) as pool:
+            map_func = pool.imap if sorted else pool.imap_unordered
             for result in tqdm(
-                pool.imap(func, sequence, chunksize=chunksize),
+                map_func(func, sequence, chunksize=chunksize),
                 desc=desc,
                 total=length,
                 disable=disable_tqdm,
