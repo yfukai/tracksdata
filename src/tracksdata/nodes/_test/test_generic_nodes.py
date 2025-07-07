@@ -454,7 +454,7 @@ def test_crop_func_attrs_batch_processing_with_frames() -> None:
         batch_size=2,
     )
 
-    operator.add_node_attrs(graph, t=0, frames=frames)
+    operator.add_node_attrs(graph, frames=frames)
 
     # Check that attributes were added
     nodes_df = graph.node_attrs()
