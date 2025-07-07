@@ -158,9 +158,6 @@ class BaseGraph(abc.ABC):
             graph.bulk_add_edges([dict(source_id=0, target_id=1, weight=1.0)])
             ```
         """
-        if len(edges) == 0:
-            return
-
         # this method benefits the SQLGraph backend
         for edge in edges:
             self.add_edge(
