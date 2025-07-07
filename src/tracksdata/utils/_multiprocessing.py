@@ -51,7 +51,12 @@ def multiprocessing_apply(
     length = len(sequence)
     options = get_options()
     disable_tqdm = not options.show_progress
-    if options.n_workers > 1 and length > 1:
+
+    if length == 1:
+        # skipping iteration overhead
+        yield func(sequence[0])
+
+    elif options.n_workers > 1:
         ctx = mp.get_context("spawn")
         chunksize = max(1, length // (options.n_workers * 2))
         with ctx.Pool(min(options.n_workers, length)) as pool:
@@ -63,6 +68,7 @@ def multiprocessing_apply(
                 disable=disable_tqdm,
             ):
                 yield result
+
     else:
         for result in tqdm(sequence, desc=desc, disable=disable_tqdm):
             yield func(result)
