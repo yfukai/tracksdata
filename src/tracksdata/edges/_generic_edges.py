@@ -10,7 +10,7 @@ from tracksdata.graph._base_graph import BaseGraph
 from tracksdata.utils._logging import LOG
 
 
-class GenericNodeFunctionEdgeAttrs(BaseEdgeAttrsOperator):
+class GenericFuncEdgeAttrs(BaseEdgeAttrsOperator):
     """
     Add weights to the edges of the graph based on the output of a function.
 
