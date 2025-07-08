@@ -5,6 +5,7 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, TypeVar, overload
 
+import numpy as np
 import polars as pl
 from numpy.typing import ArrayLike
 
@@ -738,3 +739,56 @@ class BaseGraph(abc.ABC):
             edge_ids=edge_ids,
             attrs={matched_edge_mask_key: True},
         )
+
+    @classmethod
+    def from_other(cls: type[T], other: "BaseGraph", **kwargs) -> T:
+        """
+        Create a graph from another graph.
+
+        Parameters
+        ----------
+        other : BaseGraph
+            The other graph to create a new graph from.
+        **kwargs : Any
+            Additional arguments to pass to the graph constructor.
+
+        Returns
+        -------
+        BaseGraph
+            A graph with the nodes and edges from the other graph.
+        """
+        # add node attributes
+        node_attrs = other.node_attrs()
+        other_node_ids = node_attrs[DEFAULT_ATTR_KEYS.NODE_ID]
+        node_attrs = node_attrs.drop(DEFAULT_ATTR_KEYS.NODE_ID)
+
+        graph = cls(**kwargs)
+
+        for col in node_attrs.columns:
+            if col != DEFAULT_ATTR_KEYS.T:
+                graph.add_node_attr_key(col, node_attrs[col].first())
+
+        new_node_ids = graph.bulk_add_nodes(list(node_attrs.rows(named=True)))
+        # mapping from old node ids to new node ids
+        node_map = dict(zip(other_node_ids, new_node_ids, strict=True))
+
+        # add edge attributes
+        edge_attrs = other.edge_attrs()
+        edge_attrs = edge_attrs.drop(DEFAULT_ATTR_KEYS.EDGE_ID)
+
+        for col in edge_attrs.columns:
+            if col not in [DEFAULT_ATTR_KEYS.EDGE_SOURCE, DEFAULT_ATTR_KEYS.EDGE_TARGET]:
+                graph.add_edge_attr_key(col, edge_attrs[col].first())
+
+        edge_attrs = edge_attrs.with_columns(
+            edge_attrs[col].map_elements(node_map.get, return_dtype=pl.Int64).alias(col)
+            for col in [DEFAULT_ATTR_KEYS.EDGE_SOURCE, DEFAULT_ATTR_KEYS.EDGE_TARGET]
+        )
+        graph.bulk_add_edges(list(edge_attrs.rows(named=True)))
+
+        if other.has_overlaps():
+            overlaps = other.overlaps()
+            overlaps = np.vectorize(node_map.get)(np.asarray(overlaps, dtype=int))
+            graph.bulk_add_overlaps(overlaps.tolist())
+
+        return graph
