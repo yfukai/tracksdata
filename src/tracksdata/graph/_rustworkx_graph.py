@@ -229,7 +229,7 @@ class RustWorkXGraph(BaseGraph):
         attrs[DEFAULT_ATTR_KEYS.EDGE_ID] = edge_id
         return edge_id
 
-    def bulk_add_edges(self, edges: list[dict[str, Any]]) -> None:
+    def bulk_add_edges(self, edges: list[dict[str, Any]]) -> list[int]:
         """
         Faster method to add multiple edges to the graph with less overhead and fewer checks.
 
@@ -243,11 +243,17 @@ class RustWorkXGraph(BaseGraph):
             ```python
             graph.bulk_add_edges([dict(source_id=0, target_id=1, weight=1.0)])
             ```
+
+        Returns
+        -------
+        list[int]
+            The IDs of the added edges.
         """
         edges_data = [(d.pop(DEFAULT_ATTR_KEYS.EDGE_SOURCE), d.pop(DEFAULT_ATTR_KEYS.EDGE_TARGET), d) for d in edges]
         indices = self.rx_graph.add_edges_from(edges_data)
         for i, d in zip(indices, edges, strict=True):
             d[DEFAULT_ATTR_KEYS.EDGE_ID] = i
+        return indices
 
     def add_overlap(
         self,
