@@ -5,6 +5,7 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, TypeVar, overload
 
+import numpy as np
 import polars as pl
 from numpy.typing import ArrayLike
 
@@ -741,5 +742,10 @@ class BaseGraph(abc.ABC):
             for col in [DEFAULT_ATTR_KEYS.EDGE_SOURCE, DEFAULT_ATTR_KEYS.EDGE_TARGET]
         )
         graph.bulk_add_edges(list(edge_attrs.rows(named=True)))
+
+        if other.has_overlaps():
+            overlaps = other.overlaps()
+            overlaps = np.vectorize(node_map.get)(np.asarray(overlaps, dtype=int))
+            graph.bulk_add_overlaps(overlaps.tolist())
 
         return graph

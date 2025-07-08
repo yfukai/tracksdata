@@ -1144,6 +1144,8 @@ def test_from_other_with_edges(graph_backend: BaseGraph) -> None:
     graph_backend.add_edge(node2, node3, {"weight": 0.8, "type": "forward"})
     graph_backend.add_edge(node1, node3, {"weight": 0.3, "type": "skip"})
 
+    graph_backend.add_overlap(node1, node3)
+
     new_graph = RustWorkXGraph.from_other(graph_backend)
 
     # Verify the new graph has the same structure
@@ -1174,3 +1176,8 @@ def test_from_other_with_edges(graph_backend: BaseGraph) -> None:
     source_in_degrees = sorted(graph_backend.in_degree())
     new_in_degrees = sorted(new_graph.in_degree())
     assert source_in_degrees == new_in_degrees
+
+    new_node_ids = new_graph.node_ids()
+
+    assert len(new_graph.overlaps()) == len(graph_backend.overlaps())
+    assert new_graph.overlaps()[0] == [new_node_ids[0], new_node_ids[2]]
