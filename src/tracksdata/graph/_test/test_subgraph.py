@@ -890,7 +890,7 @@ def test_bulk_add_edges_returned_ids(graph_backend: BaseGraph, use_subgraph: boo
     ]
 
     initial_edge_count = graph_with_data.num_edges
-    returned_ids = graph_with_data.bulk_add_edges(deepcopy(edges_to_add))
+    returned_ids = graph_with_data.bulk_add_edges(deepcopy(edges_to_add), return_ids=True)
 
     # Test return type and length
     assert isinstance(returned_ids, list)
@@ -918,6 +918,6 @@ def test_bulk_add_edges_returned_ids(graph_backend: BaseGraph, use_subgraph: boo
         assert edge_id >= 0
 
     # Test empty input
-    empty_result = graph_with_data.bulk_add_edges([])
+    empty_result = graph_with_data.bulk_add_edges([], return_ids=True)
     assert empty_result == []
     assert graph_with_data.num_edges == initial_edge_count + len(edges_to_add)  # No change

@@ -143,7 +143,8 @@ class BaseGraph(abc.ABC):
     def bulk_add_edges(
         self,
         edges: list[dict[str, Any]],
-    ) -> list[int]:
+        return_ids: bool = False,
+    ) -> list[int] | None:
         """
         Faster method to add multiple edges to the graph with less overhead and fewer checks.
 
@@ -153,14 +154,23 @@ class BaseGraph(abc.ABC):
             The data of the edges to be added.
             The keys of the data will be used as the attributes of the edges.
             Must have "source_id" and "target_id" keys.
-            For example:
-            ```python
-            graph.bulk_add_edges([dict(source_id=0, target_id=1, weight=1.0)])
-            ```
+        return_ids : bool
+            Whether to return the IDs of the added edges.
+            If False, the edges are added and the method returns None.
+
+        Examples
+        --------
+        ```python
+        edges = [
+            {"source_id": 1, "target_id": 2, "weight": 0.8},
+            {"source_id": 2, "target_id": 3, "weight": 0.9"},
+        ]
+        graph.bulk_add_edges(edges)
+        ```
 
         Returns
         -------
-        list[int]
+        list[int] | None
             The IDs of the added edges.
         """
         # this method benefits the SQLGraph backend
@@ -174,7 +184,9 @@ class BaseGraph(abc.ABC):
                     validate_keys=False,
                 )
             )
-        return edge_ids
+        if return_ids:
+            return edge_ids
+        return None
 
     def add_overlap(
         self,

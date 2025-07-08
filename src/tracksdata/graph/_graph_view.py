@@ -322,8 +322,8 @@ class GraphView(RustWorkXGraph):
 
         return parent_edge_id
 
-    def bulk_add_edges(self, edges: list[dict[str, Any]]) -> list[int]:
-        return BaseGraph.bulk_add_edges(self, edges)
+    def bulk_add_edges(self, edges: list[dict[str, Any]], return_ids: bool = False) -> list[int] | None:
+        return BaseGraph.bulk_add_edges(self, edges, return_ids=return_ids)
 
     def _get_neighbors(
         self,
