@@ -249,11 +249,13 @@ class RustWorkXGraph(BaseGraph):
         list[int]
             The IDs of the added edges.
         """
-        edges_data = [(d.pop(DEFAULT_ATTR_KEYS.EDGE_SOURCE), d.pop(DEFAULT_ATTR_KEYS.EDGE_TARGET), d) for d in edges]
-        indices = self.rx_graph.add_edges_from(edges_data)
-        for i, d in zip(indices, edges, strict=True):
-            d[DEFAULT_ATTR_KEYS.EDGE_ID] = i
-        return indices
+        # saving for historical reasons, iterating over edges is faster than using rx.add_edges_from
+        # edges_data = [(d.pop(DEFAULT_ATTR_KEYS.EDGE_SOURCE), d.pop(DEFAULT_ATTR_KEYS.EDGE_TARGET), d) for d in edges]
+        # indices = self.rx_graph.add_edges_from(edges_data)
+        # for i, d in zip(indices, edges, strict=True):
+        #     d[DEFAULT_ATTR_KEYS.EDGE_ID] = i
+        # return indices
+        return super().bulk_add_edges(edges)
 
     def add_overlap(
         self,

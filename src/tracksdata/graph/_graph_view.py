@@ -323,16 +323,7 @@ class GraphView(RustWorkXGraph):
         return parent_edge_id
 
     def bulk_add_edges(self, edges: list[dict[str, Any]]) -> list[int]:
-        if not self.sync:
-            indices = self._root.bulk_add_edges(edges)
-            self._out_of_sync = True
-        else:
-            # in sync
-            sources = map_ids(self._node_map_from_root, [d[DEFAULT_ATTR_KEYS.EDGE_SOURCE] for d in edges])
-            targets = map_ids(self._node_map_from_root, [d[DEFAULT_ATTR_KEYS.EDGE_TARGET] for d in edges])
-            indices = self._root.bulk_add_edges(edges)
-            self.rx_graph.add_edges_from(zip(sources, targets, edges, strict=True))
-        return list(indices)
+        return BaseGraph.bulk_add_edges(self, edges)
 
     def _get_neighbors(
         self,

@@ -168,8 +168,8 @@ class BaseGraph(abc.ABC):
         for edge in edges:
             edge_ids.append(
                 self.add_edge(
-                    edge.pop("source_id"),
-                    edge.pop("target_id"),
+                    edge.pop(DEFAULT_ATTR_KEYS.EDGE_SOURCE),
+                    edge.pop(DEFAULT_ATTR_KEYS.EDGE_TARGET),
                     edge,
                     validate_keys=False,
                 )
