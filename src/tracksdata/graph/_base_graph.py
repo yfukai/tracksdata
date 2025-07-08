@@ -188,19 +188,27 @@ class BaseGraph(abc.ABC):
             The IDs of the added edges.
         """
         # this method benefits the SQLGraph backend
-        edge_ids = []
-        for edge in edges:
-            edge_ids.append(
-                self.add_edge(
-                    edge.pop(DEFAULT_ATTR_KEYS.EDGE_SOURCE),
-                    edge.pop(DEFAULT_ATTR_KEYS.EDGE_TARGET),
-                    edge,
-                    validate_keys=False,
-                )
-            )
         if return_ids:
+            edge_ids = []
+            for edge in edges:
+                edge_ids.append(
+                    self.add_edge(
+                        edge.pop(DEFAULT_ATTR_KEYS.EDGE_SOURCE),
+                        edge.pop(DEFAULT_ATTR_KEYS.EDGE_TARGET),
+                        edge,
+                        validate_keys=False,
+                    )
+                )
             return edge_ids
-        return None
+
+        # avoiding many ifs and appends
+        for edge in edges:
+            self.add_edge(
+                edge.pop(DEFAULT_ATTR_KEYS.EDGE_SOURCE),
+                edge.pop(DEFAULT_ATTR_KEYS.EDGE_TARGET),
+                edge,
+                validate_keys=False,
+            )
 
     def add_overlap(
         self,
