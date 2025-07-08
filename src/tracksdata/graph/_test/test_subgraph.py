@@ -1,4 +1,5 @@
 from collections.abc import Callable
+from copy import deepcopy
 
 import polars as pl
 import pytest
@@ -889,7 +890,7 @@ def test_bulk_add_edges_returned_ids(graph_backend: BaseGraph, use_subgraph: boo
     ]
 
     initial_edge_count = graph_with_data.num_edges
-    returned_ids = graph_with_data.bulk_add_edges(edges_to_add)
+    returned_ids = graph_with_data.bulk_add_edges(deepcopy(edges_to_add))
 
     # Test return type and length
     assert isinstance(returned_ids, list)
@@ -901,6 +902,14 @@ def test_bulk_add_edges_returned_ids(graph_backend: BaseGraph, use_subgraph: boo
 
     # Test that edge count increased correctly
     assert graph_with_data.num_edges == initial_edge_count + len(edges_to_add)
+
+    edge_attrs = graph_with_data.edge_attrs()
+    edge_attr_0 = edge_attrs.filter(pl.col(DEFAULT_ATTR_KEYS.EDGE_ID) == returned_ids[0]).rows(named=True)[0]
+    del edge_attr_0[DEFAULT_ATTR_KEYS.EDGE_ID]
+    assert edge_attr_0 == edges_to_add[0]
+    edge_attr_1 = edge_attrs.filter(pl.col(DEFAULT_ATTR_KEYS.EDGE_ID) == returned_ids[1]).rows(named=True)[0]
+    del edge_attr_1[DEFAULT_ATTR_KEYS.EDGE_ID]
+    assert edge_attr_1 == edges_to_add[1]
 
     # Test that returned IDs are valid integers (main requirement)
     # We validate that the IDs are non-negative integers
