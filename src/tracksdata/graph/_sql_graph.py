@@ -460,7 +460,7 @@ class SQLGraph(BaseGraph):
 
         Return
         ------
-        list[int]
+        list[int] | None
             The IDs of the added edges.
         """
         if len(edges) == 0:
