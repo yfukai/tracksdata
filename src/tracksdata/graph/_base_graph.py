@@ -719,13 +719,22 @@ class BaseGraph(abc.ABC):
         node_attrs = node_attrs.drop(DEFAULT_ATTR_KEYS.NODE_ID)
 
         graph = cls(**kwargs)
+
+        for col in node_attrs.columns:
+            if col != DEFAULT_ATTR_KEYS.T:
+                graph.add_node_attr_key(col, node_attrs[col].first())
+
         new_node_ids = graph.bulk_add_nodes(list(node_attrs.rows(named=True)))
         # mapping from old node ids to new node ids
         node_map = dict(zip(other_node_ids, new_node_ids, strict=True))
 
         # add edge attributes
         edge_attrs = other.edge_attrs()
-        edge_attrs.drop(DEFAULT_ATTR_KEYS.EDGE_ID)
+        edge_attrs = edge_attrs.drop(DEFAULT_ATTR_KEYS.EDGE_ID)
+
+        for col in edge_attrs.columns:
+            if col not in [DEFAULT_ATTR_KEYS.EDGE_SOURCE, DEFAULT_ATTR_KEYS.EDGE_TARGET]:
+                graph.add_edge_attr_key(col, edge_attrs[col].first())
 
         edge_attrs = edge_attrs.with_columns(
             edge_attrs[col].map_elements(node_map.get, return_dtype=pl.Int64).alias(col)
