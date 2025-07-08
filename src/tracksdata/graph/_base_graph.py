@@ -3,7 +3,7 @@ import functools
 import operator
 from collections.abc import Sequence
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, TypeVar, overload
+from typing import TYPE_CHECKING, Any, Literal, TypeVar, overload
 
 import polars as pl
 from numpy.typing import ArrayLike
@@ -139,6 +139,20 @@ class BaseGraph(abc.ABC):
         int
             The ID of the added edge.
         """
+
+    @overload
+    def bulk_add_edges(
+        self,
+        edges: list[dict[str, Any]],
+        return_ids: Literal[False],
+    ) -> None: ...
+
+    @overload
+    def bulk_add_edges(
+        self,
+        edges: list[dict[str, Any]],
+        return_ids: Literal[True],
+    ) -> list[int]: ...
 
     def bulk_add_edges(
         self,
