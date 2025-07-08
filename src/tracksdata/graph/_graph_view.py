@@ -583,3 +583,13 @@ class GraphView(RustWorkXGraph):
         subgraph._replace_parent_graph_with_root()
 
         return subgraph
+
+    def detach(self) -> RustWorkXGraph:
+        """
+        Detach the graph view from the root graph, returning a new graph with the same nodes and edges
+        without the view's mapping and indenpendent ids.
+        """
+        if self._out_of_sync:
+            return RustWorkXGraph.from_other(self)
+        else:
+            raise NotImplementedError("TODO")
