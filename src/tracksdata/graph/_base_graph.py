@@ -3,7 +3,7 @@ import functools
 import operator
 from collections.abc import Sequence
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, TypeVar, overload
+from typing import TYPE_CHECKING, Any, Literal, TypeVar, overload
 
 import polars as pl
 from numpy.typing import ArrayLike
@@ -140,10 +140,25 @@ class BaseGraph(abc.ABC):
             The ID of the added edge.
         """
 
+    @overload
     def bulk_add_edges(
         self,
         edges: list[dict[str, Any]],
-    ) -> None:
+        return_ids: Literal[False],
+    ) -> None: ...
+
+    @overload
+    def bulk_add_edges(
+        self,
+        edges: list[dict[str, Any]],
+        return_ids: Literal[True],
+    ) -> list[int]: ...
+
+    def bulk_add_edges(
+        self,
+        edges: list[dict[str, Any]],
+        return_ids: bool = False,
+    ) -> list[int] | None:
         """
         Faster method to add multiple edges to the graph with less overhead and fewer checks.
 
@@ -153,16 +168,44 @@ class BaseGraph(abc.ABC):
             The data of the edges to be added.
             The keys of the data will be used as the attributes of the edges.
             Must have "source_id" and "target_id" keys.
-            For example:
-            ```python
-            graph.bulk_add_edges([dict(source_id=0, target_id=1, weight=1.0)])
-            ```
+        return_ids : bool
+            Whether to return the IDs of the added edges.
+            If False, the edges are added and the method returns None.
+
+        Examples
+        --------
+        ```python
+        edges = [
+            {"source_id": 1, "target_id": 2, "weight": 0.8},
+            {"source_id": 2, "target_id": 3, "weight": 0.9"},
+        ]
+        graph.bulk_add_edges(edges)
+        ```
+
+        Returns
+        -------
+        list[int] | None
+            The IDs of the added edges.
         """
         # this method benefits the SQLGraph backend
+        if return_ids:
+            edge_ids = []
+            for edge in edges:
+                edge_ids.append(
+                    self.add_edge(
+                        edge.pop(DEFAULT_ATTR_KEYS.EDGE_SOURCE),
+                        edge.pop(DEFAULT_ATTR_KEYS.EDGE_TARGET),
+                        edge,
+                        validate_keys=False,
+                    )
+                )
+            return edge_ids
+
+        # avoiding many ifs and appends
         for edge in edges:
             self.add_edge(
-                edge.pop("source_id"),
-                edge.pop("target_id"),
+                edge.pop(DEFAULT_ATTR_KEYS.EDGE_SOURCE),
+                edge.pop(DEFAULT_ATTR_KEYS.EDGE_TARGET),
                 edge,
                 validate_keys=False,
             )
