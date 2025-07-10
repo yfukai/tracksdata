@@ -1026,8 +1026,11 @@ class IndexedRXGraph(RustWorkXGraph):
         rx_graph: rx.PyDiGraph | None = None,
         node_id_map: dict[int, int] | None = None,
     ) -> None:
-        if rx_graph is None and node_id_map is None:
-            raise ValueError("`rx_graph` or `node_id_map` must be provided")
+        if rx_graph is not None and node_id_map is None:
+            raise ValueError("`node_id_map` must be provided when `rx_graph` is provided")
+
+        if rx_graph is None and node_id_map is not None:
+            raise ValueError("`rx_graph` must be provided when `node_id_map` is provided")
 
         if rx_graph is None:
             self._graph = rx.PyDiGraph()
@@ -1039,6 +1042,10 @@ class IndexedRXGraph(RustWorkXGraph):
             self._graph_to_world_id = UniqueDict()
             for world_id, graph_id in self._world_to_graph_id.items():
                 self._graph_to_world_id[graph_id] = world_id
+
+        else:
+            self._world_to_graph_id = UniqueDict()
+            self._graph_to_world_id = UniqueDict()
 
         super().__init__()
 
@@ -1052,7 +1059,9 @@ class IndexedRXGraph(RustWorkXGraph):
     def _from_world_id(self, world_id: list[int]) -> list[int]: ...
 
     def _from_world_id(self, world_id: int | list[int] | None) -> int | list[int] | None:
-        vec_map = np.vectorize(self._world_to_graph_id.__getitem__)
+        if world_id is None:
+            return None
+        vec_map = np.vectorize(self._world_to_graph_id.__getitem__, otypes=[int])
         return vec_map(np.asarray(world_id, dtype=int)).tolist()
 
     @overload
@@ -1065,14 +1074,17 @@ class IndexedRXGraph(RustWorkXGraph):
     def _to_world_id(self, graph_id: list[int]) -> list[int]: ...
 
     def _to_world_id(self, graph_id: int | list[int] | None) -> int | list[int] | None:
-        vec_map = np.vectorize(self._graph_to_world_id.__getitem__)
+        if graph_id is None:
+            return None
+        vec_map = np.vectorize(self._graph_to_world_id.__getitem__, otypes=[int])
         return vec_map(np.asarray(graph_id, dtype=int)).tolist()
 
     def _df_to_world_id(self, df: pl.DataFrame, columns: Sequence[str]) -> pl.DataFrame:
         for col in columns:
-            df = df.with_columns(
-                pl.col(col).map_elements(self._graph_to_world_id.get),
-            )
+            if col in df.columns:
+                df = df.with_columns(
+                    pl.col(col).map_elements(self._graph_to_world_id.get, return_dtype=pl.Int64),
+                )
         return df
 
     def add_node(
@@ -1167,17 +1179,27 @@ class IndexedRXGraph(RustWorkXGraph):
         attrs: dict[str, Any],
         validate_keys: bool = True,
     ) -> int:
-        source_id = self._world_to_graph_id[source_id]
-        target_id = self._world_to_graph_id[target_id]
+        try:
+            source_id = self._world_to_graph_id[source_id]
+            target_id = self._world_to_graph_id[target_id]
+        except KeyError as e:
+            raise ValueError(f"`source_id` {source_id} or `target_id` {target_id} not found in index map.") from e
         return super().add_edge(source_id, target_id, attrs, validate_keys)
 
     def add_overlap(self, source_id: int, target_id: int) -> int:
-        source_id = self._world_to_graph_id[source_id]
-        target_id = self._world_to_graph_id[target_id]
+        try:
+            source_id = self._world_to_graph_id[source_id]
+            target_id = self._world_to_graph_id[target_id]
+        except KeyError as e:
+            raise ValueError(f"`source_id` {source_id} or `target_id` {target_id} not found in index map.") from e
         return super().add_overlap(source_id, target_id)
 
     def overlaps(self, node_ids: list[int] | int | None = None) -> list[list[int, 2]]:
-        node_ids = self._from_world_id(node_ids)
+        try:
+            node_ids = self._from_world_id(node_ids)
+        except KeyError:
+            LOG.warning(f"`node_ids` {node_ids} not found in index map.")
+            return []
         overlaps = self._to_world_id(super().overlaps(node_ids))
         return overlaps
 

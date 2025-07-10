@@ -7,9 +7,10 @@ import requests
 
 from tracksdata.graph import RustWorkXGraph, SQLGraph
 from tracksdata.graph._base_graph import BaseGraph
+from tracksdata.graph._rustworkx_graph import IndexedRXGraph
 
 
-@pytest.fixture(params=[RustWorkXGraph, SQLGraph])
+@pytest.fixture(params=[RustWorkXGraph, SQLGraph, IndexedRXGraph])
 def graph_backend(request) -> BaseGraph:
     """Fixture that provides all implementations of BaseGraph."""
     graph_class: BaseGraph = request.param
