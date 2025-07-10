@@ -48,7 +48,13 @@ Inherit from :class:`tracksdata.edges.BaseEdgesOperator` or :class:`tracksdata.n
 import tracksdata as td
 
 class CustomNodes(td.nodes.BaseNodesOperator):
-    def add_nodes(self, graph, *, t) -> None:
+    def add_nodes(
+        self,
+        graph: td.graph.BaseGraph,
+        *,
+        t: int | None = None,
+        **kwargs: Any,
+    ) -> None:
         # Your custom logic here to add nodes to the graph
         pass
 ```

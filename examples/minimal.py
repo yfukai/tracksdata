@@ -9,14 +9,6 @@ from tifffile import imread
 
 import tracksdata as td
 
-# from tracksdata.attrs import EdgeAttr
-# from tracksdata.edges import DistanceEdges, IoUEdgeAttr
-# from tracksdata.functional._napari import to_napari_format
-# from tracksdata.graph import RustWorkXGraph, SQLGraph
-# from tracksdata.nodes import RegionPropsNodes
-# from tracksdata.options import set_options
-# from tracksdata.solvers import ILPSolver, NearestNeighborsSolver
-
 
 def _minimal_example(show_napari_viewer: bool) -> None:
     # load from HeLa
