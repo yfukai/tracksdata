@@ -794,7 +794,7 @@ class BaseGraph(abc.ABC):
 
         return graph
 
-    def set_overlaps(self, iou_threshold: float = 0.0) -> None:
+    def compute_overlaps(self, iou_threshold: float = 0.0) -> None:
         """
         Find overlapping nodes within each frame and add them their overlap relation into the graph.
 

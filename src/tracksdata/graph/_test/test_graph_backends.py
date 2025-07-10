@@ -1181,3 +1181,100 @@ def test_from_other_with_edges(graph_backend: BaseGraph) -> None:
 
     assert len(new_graph.overlaps()) == len(graph_backend.overlaps())
     assert new_graph.overlaps()[0] == [new_node_ids[0], new_node_ids[2]]
+
+
+def test_compute_overlaps_basic(graph_backend: BaseGraph) -> None:
+    """Test basic compute_overlaps functionality."""
+    graph_backend.add_node_attr_key(DEFAULT_ATTR_KEYS.MASK, None)
+
+    # Create overlapping masks at time 0
+    mask1_data = np.array([[True, True], [True, True]], dtype=bool)
+    mask1 = Mask(mask1_data, bbox=np.array([0, 0, 2, 2]))
+
+    mask2_data = np.array([[True, True], [False, False]], dtype=bool)
+    mask2 = Mask(mask2_data, bbox=np.array([0, 0, 2, 2]))
+
+    node1 = graph_backend.add_node({"t": 0, DEFAULT_ATTR_KEYS.MASK: mask1})
+    node2 = graph_backend.add_node({"t": 0, DEFAULT_ATTR_KEYS.MASK: mask2})
+
+    graph_backend.compute_overlaps(iou_threshold=0.3)
+
+    assert graph_backend.has_overlaps()
+    overlaps = graph_backend.overlaps()
+    assert len(overlaps) == 1
+    assert [node1, node2] in overlaps
+
+
+def test_compute_overlaps_with_threshold(graph_backend: BaseGraph) -> None:
+    """Test compute_overlaps with different IoU thresholds."""
+    graph_backend.add_node_attr_key(DEFAULT_ATTR_KEYS.MASK, None)
+
+    # Create masks with different overlap levels
+    mask1_data = np.array([[True, True], [True, True]], dtype=bool)
+    mask1 = Mask(mask1_data, bbox=np.array([0, 0, 2, 2]))
+
+    # Partially overlapping mask (IoU = 0.5)
+    mask2_data = np.array([[True, True], [False, False]], dtype=bool)
+    mask2 = Mask(mask2_data, bbox=np.array([0, 0, 2, 2]))
+
+    # Non-overlapping mask
+    mask3_data = np.array([[True, True], [True, True]], dtype=bool)
+    mask3 = Mask(mask3_data, bbox=np.array([10, 10, 12, 12]))
+
+    node1 = graph_backend.add_node({"t": 0, DEFAULT_ATTR_KEYS.MASK: mask1})
+    node2 = graph_backend.add_node({"t": 0, DEFAULT_ATTR_KEYS.MASK: mask2})
+    graph_backend.add_node({"t": 0, DEFAULT_ATTR_KEYS.MASK: mask3})
+
+    # With threshold 0.7, no overlaps should be found (IoU = 0.5 < 0.7)
+    graph_backend.compute_overlaps(iou_threshold=0.7)
+    overlaps = graph_backend.overlaps()
+    valid_overlaps = [o for o in overlaps if None not in o]
+    assert len(valid_overlaps) == 0
+
+    # With threshold 0.3, mask1 and mask2 should overlap
+    graph_backend.compute_overlaps(iou_threshold=0.3)
+    overlaps = graph_backend.overlaps()
+    valid_overlaps = [o for o in overlaps if None not in o]
+    assert len(valid_overlaps) == 1
+    assert [node1, node2] in valid_overlaps
+
+
+def test_compute_overlaps_multiple_timepoints(graph_backend: BaseGraph) -> None:
+    """Test compute_overlaps across multiple time points."""
+    graph_backend.add_node_attr_key(DEFAULT_ATTR_KEYS.MASK, None)
+
+    # Time 0: overlapping masks
+    mask1_t0 = Mask(np.array([[True, True], [True, True]], dtype=bool), bbox=np.array([0, 0, 2, 2]))
+    mask2_t0 = Mask(np.array([[True, True], [False, False]], dtype=bool), bbox=np.array([0, 0, 2, 2]))
+
+    # Time 1: non-overlapping masks
+    mask1_t1 = Mask(np.array([[True, True], [True, True]], dtype=bool), bbox=np.array([0, 0, 2, 2]))
+    mask2_t1 = Mask(np.array([[True, True], [True, True]], dtype=bool), bbox=np.array([10, 10, 12, 12]))
+
+    node1_t0 = graph_backend.add_node({"t": 0, DEFAULT_ATTR_KEYS.MASK: mask1_t0})
+    node2_t0 = graph_backend.add_node({"t": 0, DEFAULT_ATTR_KEYS.MASK: mask2_t0})
+    graph_backend.add_node({"t": 1, DEFAULT_ATTR_KEYS.MASK: mask1_t1})
+    graph_backend.add_node({"t": 1, DEFAULT_ATTR_KEYS.MASK: mask2_t1})
+
+    graph_backend.compute_overlaps(iou_threshold=0.3)
+
+    overlaps = graph_backend.overlaps()
+    valid_overlaps = [o for o in overlaps if None not in o]
+    assert len(valid_overlaps) == 1
+    assert [node1_t0, node2_t0] in valid_overlaps
+
+
+def test_compute_overlaps_invalid_threshold(graph_backend: BaseGraph) -> None:
+    """Test compute_overlaps with invalid threshold values."""
+    with pytest.raises(ValueError, match="iou_threshold must be between 0.0 and 1.0"):
+        graph_backend.compute_overlaps(iou_threshold=-0.1)
+
+    with pytest.raises(ValueError, match="iou_threshold must be between 0.0 and 1.0"):
+        graph_backend.compute_overlaps(iou_threshold=1.1)
+
+
+def test_compute_overlaps_empty_graph(graph_backend: BaseGraph) -> None:
+    """Test compute_overlaps on empty graph."""
+    graph_backend.compute_overlaps(iou_threshold=0.5)
+    assert not graph_backend.has_overlaps()
+    assert graph_backend.overlaps() == []
