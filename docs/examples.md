@@ -10,45 +10,12 @@ Here's a complete basic example that demonstrates the core workflow of TracksDat
 --8<-- "docs/examples/basic.py"
 ```
 
-### Alternative: ILP Solver
-
-For more sophisticated tracking, you can replace the NearestNeighborsSolver with the ILPSolver:
-
-```python
-# Alternative solver with more parameters
-from tracksdata.solvers import ILPSolver
-
-dist_weight = 1 / dist_operator.distance_threshold
-solver = ILPSolver(
-    edge_weight=-td.EdgeAttr("iou") + td.EdgeAttr("weight") * dist_weight,
-    node_weight=0.0,
-    appearance_weight=10.0,
-    disappearance_weight=10.0,
-    division_weight=1.0,
-)
-solver.solve(graph)
-```
-
-### Visualization with Napari
-
-To visualize the tracking results:
-
-```python
-import napari
-
-# After running the tracking example above
-viewer = napari.Viewer()
-viewer.add_labels(labels)
-viewer.add_tracks(tracks_df, graph=track_graph)
-napari.run()
-```
-
 ## Key Components Explained
 
 - **Graph**: The core data structure holding nodes (objects) and edges (connections)
 - **Nodes Operators**: Extract object features from segmented images (RegionPropsNodes, MaskNodes, etc.)
 - **Edges Operators**: Create temporal connections between objects (DistanceEdges, IoUEdges, etc.)
-- **Solvers**: Optimize tracking assignments (NearestNeighborsSolver, ILPSolver)
+- **Solvers**: Optimize a minimization problem to find the best tracking assignments (NearestNeighborsSolver, ILPSolver)
 - **Functional**: Utilities for format conversion and visualization
 
 ## Next Steps
