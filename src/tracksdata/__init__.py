@@ -17,11 +17,16 @@ import tracksdata.nodes as nodes
 import tracksdata.options as options
 import tracksdata.solvers as solvers
 import tracksdata.utils._logging as logging
+from tracksdata.attrs import EdgeAttr, NodeAttr
+from tracksdata.constants import DEFAULT_ATTR_KEYS
 
 # import tracksdata.io as io  # not included as other interfaces are preferred
 
 
 __all__ = [
+    "DEFAULT_ATTR_KEYS",
+    "EdgeAttr",
+    "NodeAttr",
     "array",
     "attrs",
     "constants",

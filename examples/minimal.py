@@ -7,13 +7,15 @@ import numpy as np
 from profilehooks import profile as profile_hook
 from tifffile import imread
 
-from tracksdata.attrs import EdgeAttr
-from tracksdata.edges import DistanceEdges, IoUEdgeAttr
-from tracksdata.functional._napari import to_napari_format
-from tracksdata.graph import RustWorkXGraph, SQLGraph  # noqa: F401
-from tracksdata.nodes import RegionPropsNodes
-from tracksdata.options import set_options
-from tracksdata.solvers import ILPSolver, NearestNeighborsSolver  # noqa: F401
+import tracksdata as td
+
+# from tracksdata.attrs import EdgeAttr
+# from tracksdata.edges import DistanceEdges, IoUEdgeAttr
+# from tracksdata.functional._napari import to_napari_format
+# from tracksdata.graph import RustWorkXGraph, SQLGraph
+# from tracksdata.nodes import RegionPropsNodes
+# from tracksdata.options import set_options
+# from tracksdata.solvers import ILPSolver, NearestNeighborsSolver
 
 
 def _minimal_example(show_napari_viewer: bool) -> None:
@@ -25,25 +27,25 @@ def _minimal_example(show_napari_viewer: bool) -> None:
         [imread(p) for p in sorted(data_dir.glob("*.tif"))],
     )
 
-    set_options(show_progress=False)
+    td.options.set_options(show_progress=False)
 
     print("starting tracking ...")
-    graph = RustWorkXGraph()
+    graph = td.graph.InMemoryGraph()
 
-    nodes_operator = RegionPropsNodes()
+    nodes_operator = td.nodes.RegionPropsNodes()
     nodes_operator.add_nodes(graph, labels=labels)
     print(f"Number of nodes: {graph.num_nodes}")
 
-    dist_operator = DistanceEdges(distance_threshold=30.0, n_neighbors=5)
+    dist_operator = td.edges.DistanceEdges(distance_threshold=30.0, n_neighbors=5)
     dist_operator.add_edges(graph)
     print(f"Number of edges: {graph.num_edges}")
 
-    iou_operator = IoUEdgeAttr(output_key="iou")
+    iou_operator = td.edges.IoUEdgeAttr(output_key="iou")
     iou_operator.add_edge_attrs(graph)
 
     dist_weight = 1 / dist_operator.distance_threshold
-    solver = NearestNeighborsSolver(
-        edge_weight=-EdgeAttr("iou") + EdgeAttr("weight") * dist_weight,
+    solver = td.solvers.NearestNeighborsSolver(
+        edge_weight=-td.EdgeAttr("iou") + td.EdgeAttr("weight") * dist_weight,
         max_children=2,
     )
     # solver = ILPSolver(
@@ -56,7 +58,7 @@ def _minimal_example(show_napari_viewer: bool) -> None:
     solver.solve(graph)
 
     print("Converting to napari format ...")
-    labels, tracks_df, track_graph = to_napari_format(graph, labels.shape)
+    labels, tracks_df, track_graph = td.functional.to_napari_format(graph, labels.shape)
 
     print("Opening napari viewer ...")
 
