@@ -5,8 +5,11 @@ This example demonstrates the complete workflow for tracking objects across time
 1. Load segmented image data
 2. Extract object features (nodes) from each frame
 3. Create temporal connections (edges) between objects
-4. Solve the tracking optimization problem
-5. Visualize results
+4. Compute additional attributes to edges (e.g. IoU)
+5. Solve the tracking optimization problem
+6. Convert results to napari format
+7. Visualize results
+
 
 Requirements:
 - Set CTC_DIR environment variable pointing to Cell Tracking Challenge data
