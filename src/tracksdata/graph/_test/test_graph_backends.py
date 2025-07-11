@@ -822,16 +822,16 @@ def test_match_method(graph_backend: BaseGraph) -> None:
 
     # Add nodes to reference graph
     ref_node1 = other_graph.add_node({"t": 0, "x": 1.1, "y": 1.1, DEFAULT_ATTR_KEYS.MASK: ref_mask1})
-    ref_node2 = other_graph.add_node({"t": 1, "x": 2.1, "y": 2.1, DEFAULT_ATTR_KEYS.MASK: ref_mask3})
-    ref_node3 = other_graph.add_node({"t": 2, "x": 3.1, "y": 3.1, DEFAULT_ATTR_KEYS.MASK: ref_mask2})
+    ref_node2 = other_graph.add_node({"t": 2, "x": 3.1, "y": 3.1, DEFAULT_ATTR_KEYS.MASK: ref_mask2})
+    ref_node3 = other_graph.add_node({"t": 1, "x": 2.1, "y": 2.1, DEFAULT_ATTR_KEYS.MASK: ref_mask3})
     ref_node4 = other_graph.add_node({"t": 2, "x": 3.1, "y": 3.1, DEFAULT_ATTR_KEYS.MASK: ref_mask4})
 
     # Add edges to reference graph - matching structure with first graph
     other_graph.add_edge_attr_key("weight", 0.0)
-    other_graph.add_edge(ref_node1, ref_node2, {"weight": 0.6})  # ref_node1 -> ref_node2
-    other_graph.add_edge(ref_node1, ref_node3, {"weight": 0.4})  # ref_node1 -> ref_node3
-    other_graph.add_edge(ref_node2, ref_node3, {"weight": 0.7})  # ref_node2 -> ref_node3
-    other_graph.add_edge(ref_node2, ref_node4, {"weight": 0.5})  # ref_node3 -> ref_node4
+    other_graph.add_edge(ref_node1, ref_node3, {"weight": 0.6})  # ref_node1 -> ref_node2
+    other_graph.add_edge(ref_node1, ref_node2, {"weight": 0.4})  # ref_node1 -> ref_node3
+    other_graph.add_edge(ref_node3, ref_node2, {"weight": 0.7})  # ref_node2 -> ref_node3
+    other_graph.add_edge(ref_node3, ref_node4, {"weight": 0.5})  # ref_node3 -> ref_node4
 
     # Test the match method
     match_node_id_key = "matched_node_id"
@@ -878,9 +878,9 @@ def test_match_method(graph_backend: BaseGraph) -> None:
     msg = f"node2 match score should be 0.0, got {node_matches[node2]['score']}"
     assert node_matches[node2]["score"] == 0.0, msg
 
-    # node3 (mask3) should match ref_node3 (ref_mask3) - high IoU
-    msg = f"node3 should match ref_node3, got {node_matches[node3]['matched_id']}"
-    assert node_matches[node3]["matched_id"] == ref_node3, msg
+    # node3 (mask3) should match ref_node2 (ref_mask2) - high IoU
+    msg = f"node3 should match ref_node2, got {node_matches[node3]['matched_id']}"
+    assert node_matches[node3]["matched_id"] == ref_node2, msg
     msg = f"node3 match score should be > 0.5, got {node_matches[node3]['score']}"
     assert node_matches[node3]["score"] > 0.5, msg
 
