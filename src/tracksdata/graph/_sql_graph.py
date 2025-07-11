@@ -260,9 +260,7 @@ class SQLGraph(BaseGraph):
         pl.DataFrame
             The DataFrame with the bytes columns unpickled.
         """
-        for col in df.columns:
-            if df[col].dtype == pl.Binary:
-                df = df.with_columns(pl.col(col).map_elements(cloudpickle.loads, return_dtype=pl.Object).alias(col))
+        df = df.with_columns(pl.col(pl.Binary).map_elements(cloudpickle.loads, return_dtype=pl.Object))
         return df
 
     def _update_max_id_per_time(self) -> None:
