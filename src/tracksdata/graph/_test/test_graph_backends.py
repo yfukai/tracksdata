@@ -783,12 +783,12 @@ def test_match_method(graph_backend: BaseGraph) -> None:
     node2 = graph_backend.add_node({"t": 1, "x": 2.0, "y": 2.0, DEFAULT_ATTR_KEYS.MASK: mask2})
     node3 = graph_backend.add_node({"t": 2, "x": 3.0, "y": 3.0, DEFAULT_ATTR_KEYS.MASK: mask3})
 
-    # Add edges to first graph
     graph_backend.add_edge_attr_key("weight", 0.0)
+    # this will not be matched
     graph_backend.add_edge(node1, node2, {"weight": 0.5})
     graph_backend.add_edge(node2, node3, {"weight": 0.3})
 
-    # this edge won't be matched
+    # this will be matched
     graph_backend.add_edge(node1, node3, {"weight": 0.3})
 
     # Create second graph (other/reference) with overlapping masks
@@ -807,28 +807,29 @@ def test_match_method(graph_backend: BaseGraph) -> None:
     ref_mask1_data = np.array([[True, True], [True, False]], dtype=bool)
     ref_mask1 = Mask(ref_mask1_data, bbox=np.array([0, 0, 2, 2]))
 
-    # This mask should NOT overlap with mask2 (IoU < 0.5, should not match)
-    ref_mask2_data = np.array([[True]], dtype=bool)
-    ref_mask2 = Mask(ref_mask2_data, bbox=np.array([15, 15, 16, 16]))  # Different location
-
     # This mask overlaps significantly with mask3 (IoU > 0.5)
-    ref_mask3_data = np.array([[True, True, True, True]], dtype=bool)
-    ref_mask3 = Mask(ref_mask3_data, bbox=np.array([20, 20, 21, 24]))
+    ref_mask2_data = np.array([[True, True, True, True]], dtype=bool)
+    ref_mask2 = Mask(ref_mask2_data, bbox=np.array([20, 20, 21, 24]))
 
-    # This mask also overlaps significantly with mask3 (IoU > 0.5) but less than `ref_mask3`
+    # This mask should NOT overlap with other masks (IoU < 0.5, should not match)
+    ref_mask3_data = np.array([[True]], dtype=bool)
+    ref_mask3 = Mask(ref_mask3_data, bbox=np.array([15, 15, 16, 16]))  # Different location
+
+    # This mask also overlaps significantly with mask3 (IoU > 0.5) but less than `ref_mask2`
     # therefore it should not match
     ref_mask4_data = np.array([[True, True, True]], dtype=bool)
     ref_mask4 = Mask(ref_mask4_data, bbox=np.array([20, 21, 21, 24]))
 
     # Add nodes to reference graph
     ref_node1 = other_graph.add_node({"t": 0, "x": 1.1, "y": 1.1, DEFAULT_ATTR_KEYS.MASK: ref_mask1})
-    ref_node2 = other_graph.add_node({"t": 1, "x": 2.1, "y": 2.1, DEFAULT_ATTR_KEYS.MASK: ref_mask2})
-    ref_node3 = other_graph.add_node({"t": 2, "x": 3.1, "y": 3.1, DEFAULT_ATTR_KEYS.MASK: ref_mask3})
+    ref_node2 = other_graph.add_node({"t": 1, "x": 2.1, "y": 2.1, DEFAULT_ATTR_KEYS.MASK: ref_mask3})
+    ref_node3 = other_graph.add_node({"t": 2, "x": 3.1, "y": 3.1, DEFAULT_ATTR_KEYS.MASK: ref_mask2})
     ref_node4 = other_graph.add_node({"t": 2, "x": 3.1, "y": 3.1, DEFAULT_ATTR_KEYS.MASK: ref_mask4})
 
     # Add edges to reference graph - matching structure with first graph
     other_graph.add_edge_attr_key("weight", 0.0)
     other_graph.add_edge(ref_node1, ref_node2, {"weight": 0.6})  # ref_node1 -> ref_node2
+    other_graph.add_edge(ref_node1, ref_node3, {"weight": 0.4})  # ref_node1 -> ref_node3
     other_graph.add_edge(ref_node2, ref_node3, {"weight": 0.7})  # ref_node2 -> ref_node3
     other_graph.add_edge(ref_node2, ref_node4, {"weight": 0.5})  # ref_node3 -> ref_node4
 
@@ -894,7 +895,7 @@ def test_match_method(graph_backend: BaseGraph) -> None:
 
     # After your bug fixes, both edges are matching
     edge_matches = edges_df[edge_match_key].to_list()
-    expected_matches = np.array([True, True, False])
+    expected_matches = np.array([False, False, True])
 
     np.testing.assert_array_equal(edge_matches, expected_matches)
 
