@@ -1050,7 +1050,7 @@ class IndexedRXGraph(RustWorkXGraph):
         super().__init__()
 
     @overload
-    def _from_world_id(self, world_id: None) -> None: ...
+    def _from_world_id(self, world_id: None) -> list[int]: ...
 
     @overload
     def _from_world_id(self, world_id: int) -> int: ...
@@ -1058,9 +1058,9 @@ class IndexedRXGraph(RustWorkXGraph):
     @overload
     def _from_world_id(self, world_id: list[int]) -> list[int]: ...
 
-    def _from_world_id(self, world_id: int | list[int] | None) -> int | list[int] | None:
+    def _from_world_id(self, world_id: int | list[int] | None) -> int | list[int]:
         if world_id is None:
-            return None
+            return list(self.rx_graph.node_indices())
         vec_map = np.vectorize(self._world_to_graph_id.__getitem__, otypes=[int])
         return vec_map(np.asarray(world_id, dtype=int)).tolist()
 
