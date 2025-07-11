@@ -726,16 +726,14 @@ class BaseGraph(abc.ABC):
             attrs={matched_node_id_key: other_ids, match_score_key: ious},
         )
 
-        other_to_node_ids = dict(zip(other_ids, node_ids, strict=False))
+        other_to_node_ids = dict(zip(other_ids, node_ids, strict=True))
 
         self_edges_df = self.edge_attrs(attr_keys=[])
         other_edges_df = other.edge_attrs(attr_keys=[])
 
         other_edges_df = other_edges_df.with_columns(
-            *{
-                col: other_edges_df[col].map_elements(other_to_node_ids.get, return_dtype=pl.Int64).alias(col)
-                for col in [DEFAULT_ATTR_KEYS.EDGE_SOURCE, DEFAULT_ATTR_KEYS.EDGE_TARGET]
-            }
+            other_edges_df[col].map_elements(other_to_node_ids.get, return_dtype=pl.Int64).alias(col)
+            for col in [DEFAULT_ATTR_KEYS.EDGE_SOURCE, DEFAULT_ATTR_KEYS.EDGE_TARGET]
         )
 
         edge_ids = self_edges_df.join(
