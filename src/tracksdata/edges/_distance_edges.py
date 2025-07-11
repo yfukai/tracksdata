@@ -145,7 +145,7 @@ class DistanceEdges(BaseEdgesOperator):
             # faster than the range filter
             prev_filter = graph.filter(NodeAttr(DEFAULT_ATTR_KEYS.T) == t - 1)
         else:
-            prev_filter = graph.filter_nodes_by_attrs(
+            prev_filter = graph.filter(
                 NodeAttr(DEFAULT_ATTR_KEYS.T) >= t - self.delta_t,
                 NodeAttr(DEFAULT_ATTR_KEYS.T) < t,
             )

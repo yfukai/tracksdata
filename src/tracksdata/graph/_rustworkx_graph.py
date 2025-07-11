@@ -122,11 +122,6 @@ class RXFilter(BaseFilter):
     def _edge_attrs(self) -> pl.DataFrame:
         node_ids = self._current_node_ids()
 
-        # only edges are filtered return nodes that pass edge filters
-        sources = []
-        targets = []
-        data = []
-
         _filter_func = _create_filter_func(self._edge_attr_comps)
         neigh_funcs = []
         if self._include_targets:
@@ -135,13 +130,20 @@ class RXFilter(BaseFilter):
         if self._include_sources:
             neigh_funcs.append(self._graph.rx_graph.in_edges)
 
+        # only edges are filtered return nodes that pass edge filters
+        sources = []
+        targets = []
+        data = {k: [] for k in self._graph.edge_attr_keys}
+        data[DEFAULT_ATTR_KEYS.EDGE_ID] = []
+
         for node_id in node_ids:
             for nf in neigh_funcs:
                 for src, tgt, attr in nf(node_id):
-                    if not _filter_func(attr):
+                    if _filter_func(attr):
                         sources.append(src)
                         targets.append(tgt)
-                        data.append(data)
+                        for k in data.keys():
+                            data[k].append(attr[k])
 
         df = pl.DataFrame(data).with_columns(
             pl.Series(sources, dtype=pl.Int64).alias(DEFAULT_ATTR_KEYS.EDGE_SOURCE),
@@ -151,7 +153,7 @@ class RXFilter(BaseFilter):
 
     @cache_method
     def edge_ids(self) -> list[int]:
-        return self._edges_attrs()[DEFAULT_ATTR_KEYS.EDGE_ID].to_list()
+        return self._edge_attrs()[DEFAULT_ATTR_KEYS.EDGE_ID].to_list()
 
     @cache_method
     def node_attrs(
@@ -167,7 +169,22 @@ class RXFilter(BaseFilter):
         attr_keys: list[str] | None = None,
         unpack: bool = False,
     ) -> pl.DataFrame:
-        df = self._edges_attrs().select(attr_keys)
+        df = self._edge_attrs()
+        if df.is_empty():
+            return df
+
+        if attr_keys is None:
+            attr_keys = self._graph.edge_attr_keys
+
+        attr_keys = [
+            DEFAULT_ATTR_KEYS.EDGE_ID,
+            DEFAULT_ATTR_KEYS.EDGE_SOURCE,
+            DEFAULT_ATTR_KEYS.EDGE_TARGET,
+            *attr_keys,
+        ]
+        attr_keys = list(dict.fromkeys(attr_keys))
+
+        df = df.select(attr_keys)
         if unpack:
             df = unpack_array_attrs(df, attr_keys, unpack_array_attrs)
         return df
