@@ -11,6 +11,7 @@ from sqlalchemy.sql.type_api import TypeEngine
 
 from tracksdata.attrs import AttrComparison, split_attr_comps
 from tracksdata.constants import DEFAULT_ATTR_KEYS
+from tracksdata.graph._base_filter import BaseFilter
 from tracksdata.graph._base_graph import BaseGraph
 from tracksdata.utils._dataframe import unpack_array_attrs
 from tracksdata.utils._logging import LOG
@@ -64,6 +65,12 @@ def _filter_query(
         *[attr_filter.op(getattr(table, str(attr_filter.column)), attr_filter.other) for attr_filter in attr_filters]
     )
     return query
+
+
+class SQLFilter(BaseFilter):
+    def __init__(self, graph: "SQLGraph", *attr_filters: AttrComparison):
+        self._graph = graph
+        self._node_attr_comps, self._edge_attr_comps = split_attr_comps(attr_filters)
 
 
 class SQLGraph(BaseGraph):
