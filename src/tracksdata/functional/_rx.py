@@ -245,8 +245,8 @@ def _assign_track_ids(
     if len(long_edges_df) > 0:
         # assign long edges
         for src, tgt in zip(long_edges_df["source"].to_list(), long_edges_df["target"].to_list(), strict=True):
-            parent_track_id = first_to_track_id[src]
-            child_track_id = last_to_track_id[tgt]
+            child_track_id = first_to_track_id[tgt]
+            parent_track_id = last_to_track_id[src]
             tracks_graph.add_edge(parent_track_id, child_track_id, None)
 
     paths = np.concatenate(paths)
