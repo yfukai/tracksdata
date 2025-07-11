@@ -1126,7 +1126,7 @@ class IndexedRXGraph(RustWorkXGraph):
         return rx_graph, node_map
 
     def node_ids(self) -> list[int]:
-        return list(self._graph_to_world_id.keys())
+        return list(self._world_to_graph_id.keys())
 
     def node_attrs(
         self,

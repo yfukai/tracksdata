@@ -48,7 +48,7 @@ def graph_backend(request) -> BaseGraph:
             nodes: list[dict[str, Any]],
         ) -> list[int]:
             current_max = max(self.node_ids()) + 1
-            indices = rng.integers(current_max, current_max + len(nodes), size=len(nodes)).tolist()
+            indices = (rng.integers(current_max, max_index) + np.arange(len(nodes))).tolist()
             return orig_bulk_add_nodes(self, nodes, indices)
 
         obj.add_node = MethodType(_add_node_with_index, obj)
