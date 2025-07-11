@@ -1122,19 +1122,8 @@ class IndexedRXGraph(RustWorkXGraph):
     ) -> tuple[rx.PyDiGraph, rx.NodeMap]:
         node_ids = self._from_world_id(node_ids)
         rx_graph, node_map = super()._rx_subgraph_with_nodemap(node_ids)
+        node_map = {k: self._graph_to_world_id[v] for k, v in node_map.items()}
         return rx_graph, node_map
-
-    def subgraph(
-        self,
-        *attr_filters: AttrComparison,
-        node_ids: Sequence[int] | None = None,
-        node_attr_keys: Sequence[str] | str | None = None,
-        edge_attr_keys: Sequence[str] | str | None = None,
-    ) -> "GraphView":
-        node_ids = self._from_world_id(node_ids)
-        return super().subgraph(
-            *attr_filters, node_ids=node_ids, node_attr_keys=node_attr_keys, edge_attr_keys=edge_attr_keys
-        )
 
     def node_ids(self) -> list[int]:
         return list(self._graph_to_world_id.keys())
@@ -1214,8 +1203,10 @@ class IndexedRXGraph(RustWorkXGraph):
         if isinstance(dfs, pl.DataFrame):
             dfs = self._df_to_world_id(dfs, [DEFAULT_ATTR_KEYS.NODE_ID])
         else:
-            for node_id, df in dfs.items():
-                dfs[node_id] = self._df_to_world_id(df, [DEFAULT_ATTR_KEYS.NODE_ID])
+            dfs = {
+                self._graph_to_world_id[node_id]: self._df_to_world_id(df, [DEFAULT_ATTR_KEYS.NODE_ID])
+                for node_id, df in dfs.items()
+            }
         return dfs
 
     def update_node_attrs(
