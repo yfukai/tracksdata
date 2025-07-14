@@ -17,12 +17,12 @@ def test_napari_conversion() -> None:
     track_ids = np.asarray([1, 2, 3])
     track_id_graph = {3: 1, 2: 1}
 
-    radius = np.asarray([1, 3, 5])
-
     image_shape = (10, 22, 32)
 
     graph = RustWorkXGraph.from_array(
-        positions, track_ids=track_ids, track_id_graph=track_id_graph, radius=radius, image_shape=image_shape
+        positions,
+        track_ids=track_ids,
+        track_id_graph=track_id_graph,
     )
     graph.add_node_attr_key(DEFAULT_ATTR_KEYS.SOLUTION, True)
     graph.add_edge_attr_key(DEFAULT_ATTR_KEYS.SOLUTION, True)

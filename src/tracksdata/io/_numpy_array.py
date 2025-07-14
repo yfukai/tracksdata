@@ -1,11 +1,9 @@
 import numpy as np
 import polars as pl
-from numpy.typing import ArrayLike
 from tqdm import tqdm
 
 from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.graph._base_graph import BaseGraph
-from tracksdata.nodes._mask import Mask
 
 
 def _add_edges_from_track_ids(
@@ -68,8 +66,6 @@ def load_array(
     graph: BaseGraph,
     track_ids: np.ndarray | None = None,
     track_id_graph: dict[int, int] | None = None,
-    radius: ArrayLike = 1,
-    image_shape: tuple[int, ...] | None = None,
 ) -> None:
     """
     Load a numpy array content into a graph.
@@ -85,10 +81,6 @@ def load_array(
         Track ids of the nodes if available.
     track_id_graph : dict[int, int] | None
         Mapping of division as child track id (key) to parent track id (value) relationships.
-    radius : ArrayLike
-        Integer or N-dimensional array of radii.
-    image_shape : tuple[int, ...] | None
-        Shape of the image if available masks are cropped to fit the image.
 
     See Also
     --------
@@ -105,22 +97,6 @@ def load_array(
         spatial_cols = ["x", "y", "z"]
     else:
         raise ValueError(f"Expected 4 or 5 dimensions, got {positions.shape[1]}.")
-
-    if image_shape is not None and len(image_shape) != ndim:
-        raise ValueError(f"Expected {ndim} dimensions for `image_shape`, got {len(image_shape)}.")
-
-    add_mask = True
-    if np.isscalar(radius):
-        if radius == 0:
-            add_mask = False
-        # we still need to broadcast the radius to the number of positions
-        radius = np.broadcast_to(radius, (positions.shape[0],))
-
-    if len(radius) != positions.shape[0]:
-        raise ValueError(
-            "`radius` must be a scalar or have the same length as `positions`. "
-            f"Expected {positions.shape[0]}, got {len(radius)}."
-        )
 
     if track_id_graph is not None and track_ids is None:
         raise ValueError("`track_ids` must be provided if `tracks_graph` is provided.")
@@ -140,13 +116,10 @@ def load_array(
     for col in spatial_cols:
         graph.add_node_attr_key(col, -999_999)
 
-    if add_mask:
-        graph.add_node_attr_key(DEFAULT_ATTR_KEYS.MASK, None)
-
     node_attrs = []
 
-    for i, (position, rad) in tqdm(
-        enumerate(zip(positions.tolist(), radius.tolist(), strict=True)),
+    for i, position in tqdm(
+        enumerate(positions.tolist()),
         total=len(positions),
         desc="Generating node attributes",
     ):
@@ -158,10 +131,6 @@ def load_array(
 
         if ndim == 3:
             attr["z"] = position[1]
-
-        if add_mask:
-            mask = Mask.from_coordinates(position[1:], rad, image_shape=image_shape)
-            attr[DEFAULT_ATTR_KEYS.MASK] = mask
 
         if track_ids is not None:
             attr[DEFAULT_ATTR_KEYS.TRACK_ID] = track_ids[i]

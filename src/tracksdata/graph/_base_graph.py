@@ -592,8 +592,6 @@ class BaseGraph(abc.ABC):
         positions: ArrayLike,
         track_ids: ArrayLike | None = None,
         track_id_graph: dict[int, int] | None = None,
-        radius: ArrayLike = 0,
-        image_shape: tuple[int, ...] | None = None,
         **kwargs,
     ) -> T:
         """
@@ -608,10 +606,6 @@ class BaseGraph(abc.ABC):
             Track ids of the nodes if available.
         track_id_graph : dict[int, int] | None
             Mapping of division as child track id (key) to parent track id (value) relationships.
-        radius : ArrayLike
-            If greater than 0, a mask with a sphere of radius is created for each node.
-        image_shape : tuple[int, ...] | None
-            Shape of the image if available masks are cropped to fit the image.
         **kwargs : Any
             Additional arguments to pass to the graph constructor.
 
@@ -624,12 +618,10 @@ class BaseGraph(abc.ABC):
 
         graph = cls(**kwargs)
         load_array(
-            positions=positions,
+            positions=np.asarray(positions),
             graph=graph,
-            track_ids=track_ids,
+            track_ids=np.asarray(track_ids),
             track_id_graph=track_id_graph,
-            radius=radius,
-            image_shape=image_shape,
         )
         return graph
 

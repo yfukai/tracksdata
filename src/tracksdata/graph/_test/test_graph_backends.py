@@ -1066,15 +1066,12 @@ def test_from_numpy_array_3d(graph_backend: BaseGraph) -> None:
     track_ids = np.asarray([1, 2, 3])
     track_id_graph = {3: 1, 2: 1}
 
-    radius = np.asarray([1, 3, 5])
-
     if isinstance(graph_backend, RustWorkXGraph):
         # for RustWorkXGraph we validate if the OOP API is working
         graph_backend = RustWorkXGraph.from_array(
             positions,
             track_ids=track_ids,
             track_id_graph=track_id_graph,
-            radius=radius,
             rx_graph=None,
         )
     else:
@@ -1083,7 +1080,6 @@ def test_from_numpy_array_3d(graph_backend: BaseGraph) -> None:
             graph_backend,
             track_ids=track_ids,
             track_id_graph=track_id_graph,
-            radius=radius,
         )
 
     assert graph_backend.num_nodes == 3
@@ -1100,10 +1096,6 @@ def test_from_numpy_array_3d(graph_backend: BaseGraph) -> None:
     assert [node_ids[0], node_ids[2]] in edges
 
     np.testing.assert_array_equal(nodes_df.select(["t", "z", "y", "x"]).to_numpy(), positions)
-
-    masks = [m.bbox[3] - m.bbox[0] for m in nodes_df[DEFAULT_ATTR_KEYS.MASK].to_list()]
-    np.testing.assert_array_equal(masks, [r * 2 + 1 for r in radius])
-
     np.testing.assert_array_equal(nodes_df[DEFAULT_ATTR_KEYS.TRACK_ID].to_list(), track_ids)
 
 
