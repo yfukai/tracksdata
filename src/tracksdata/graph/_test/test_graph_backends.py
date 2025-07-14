@@ -1262,3 +1262,27 @@ def test_compute_overlaps_empty_graph(graph_backend: BaseGraph) -> None:
     graph_backend.compute_overlaps(iou_threshold=0.5)
     assert not graph_backend.has_overlaps()
     assert graph_backend.overlaps() == []
+
+
+def test_summary(graph_backend: BaseGraph) -> None:
+    """Test summary method."""
+    graph_backend.add_node_attr_key("x", 0.0)
+    graph_backend.add_edge_attr_key("weight", 0.0)
+    graph_backend.add_edge_attr_key("type", "good")
+
+    node1 = graph_backend.add_node({"t": 0, "x": 1.0})
+    node2 = graph_backend.add_node({"t": 1, "x": 2.0})
+    node3 = graph_backend.add_node({"t": 0, "x": 3.0})
+
+    graph_backend.add_edge(node1, node2, {"weight": 0.5, "type": "good"})
+    graph_backend.add_edge(node3, node2, {"weight": 0.5, "type": "bad"})
+
+    graph_backend.add_overlap(node1, node3)
+
+    summary = graph_backend.summary(attrs_stats=True, print_summary=True)
+    print(summary)
+
+    assert isinstance(summary, str)
+    assert "Graph summary" in summary
+    assert "Number of nodes" in summary
+    assert "Number of edges" in summary
