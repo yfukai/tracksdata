@@ -278,6 +278,8 @@ class MaskDiskAttrs(GenericFuncNodeAttrs):
     """
     Operator to create a disk mask for each node.
 
+    Masks are created in space, so temporal information should not be provided.
+
     Parameters
     ----------
     radius : int
