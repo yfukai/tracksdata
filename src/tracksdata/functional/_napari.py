@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, overload
 
 import polars as pl
 
@@ -10,11 +10,32 @@ if TYPE_CHECKING:
     from tracksdata.array._graph_array import GraphArrayView
 
 
+@overload
+def to_napari_format(
+    graph: BaseGraph,
+    shape: tuple[int, ...],
+    solution_key: str,
+    output_track_id_key: str,
+    mask_key: None,
+) -> tuple[pl.DataFrame, dict[int, int]]: ...
+
+
+@overload
+def to_napari_format(
+    graph: BaseGraph,
+    shape: tuple[int, ...],
+    solution_key: str,
+    output_track_id_key: str,
+    mask_key: str,
+) -> tuple[pl.DataFrame, dict[int, int], "GraphArrayView"]: ...
+
+
 def to_napari_format(
     graph: BaseGraph,
     shape: tuple[int, ...],
     solution_key: str = DEFAULT_ATTR_KEYS.SOLUTION,
     output_track_id_key: str = DEFAULT_ATTR_KEYS.TRACK_ID,
+    mask_key: str | None = None,
 ) -> (
     tuple[
         pl.DataFrame,
@@ -32,7 +53,7 @@ def to_napari_format(
     This includes:
     - a tracks layer with the solution tracks
     - a graph with the parent-child relationships for the solution tracks
-    - a labels layer with the solution nodes if the graph contains "mask" attributes.
+    - a labels layer with the solution nodes if `mask_key` is provided.
 
     IMPORTANT: This function will reset the track ids if they already exist.
 
@@ -46,13 +67,15 @@ def to_napari_format(
         The key of the solution attribute.
     output_track_id_key : str, optional
         The key of the output track id attribute.
+    mask_key : str | None, optional
+        The key of the mask attribute.
 
     Returns
     -------
     tuple[pl.DataFrame, dict[int, int], GraphArrayView] | tuple[pl.DataFrame, dict[int, int]]
         - tracks_data: The tracks data as a polars DataFrame.
         - dict_graph: A dictionary of parent -> child relationships.
-        - array_view: The array view of the solution graph if the graph contains "mask" attributes.
+        - array_view: The array view of the solution graph if `mask_key` is provided.
     """
     solution_graph = graph.subgraph(NodeAttr(solution_key) == True, EdgeAttr(solution_key) == True)
 
@@ -68,7 +91,7 @@ def to_napari_format(
     # sorting columns
     tracks_data = tracks_data.select([output_track_id_key, DEFAULT_ATTR_KEYS.T, *spatial_cols])
 
-    if DEFAULT_ATTR_KEYS.MASK in solution_graph.node_attr_keys:
+    if mask_key is not None:
         from tracksdata.array._graph_array import GraphArrayView
 
         array_view = GraphArrayView(

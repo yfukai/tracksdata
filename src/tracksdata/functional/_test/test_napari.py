@@ -27,7 +27,7 @@ def test_napari_conversion() -> None:
     graph.add_node_attr_key(DEFAULT_ATTR_KEYS.SOLUTION, True)
     graph.add_edge_attr_key(DEFAULT_ATTR_KEYS.SOLUTION, True)
 
-    array_view, tracks_df, dict_graph = to_napari_format(graph, (2, *image_shape))
+    tracks_df, dict_graph = to_napari_format(graph, shape=(2, *image_shape))
 
     assert dict_graph == track_id_graph
 
@@ -37,8 +37,3 @@ def test_napari_conversion() -> None:
         tracks_df.to_numpy()[:, 1:],
         positions,
     )
-
-    assert array_view.shape == (2, 10, 22, 32)
-
-    np.testing.assert_equal(np.unique(array_view[0]), [0, 1])
-    np.testing.assert_equal(np.unique(array_view[1]), [0, 2, 3])
