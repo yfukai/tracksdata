@@ -276,7 +276,7 @@ class Mask:
 
 class MaskDiskAttrs(GenericFuncNodeAttrs):
     """
-    Operator to a disk mask for each node.
+    Operator to create a disk mask for each node.
 
     Parameters
     ----------
