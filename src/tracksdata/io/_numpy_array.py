@@ -109,7 +109,11 @@ def load_array(
     if image_shape is not None and len(image_shape) != ndim:
         raise ValueError(f"Expected {ndim} dimensions for `image_shape`, got {len(image_shape)}.")
 
+    add_mask = True
     if np.isscalar(radius):
+        if radius == 0:
+            add_mask = False
+        # we still need to broadcast the radius to the number of positions
         radius = np.broadcast_to(radius, (positions.shape[0],))
 
     if len(radius) != positions.shape[0]:
@@ -136,7 +140,8 @@ def load_array(
     for col in spatial_cols:
         graph.add_node_attr_key(col, -999_999)
 
-    graph.add_node_attr_key(DEFAULT_ATTR_KEYS.MASK, None)
+    if add_mask:
+        graph.add_node_attr_key(DEFAULT_ATTR_KEYS.MASK, None)
 
     node_attrs = []
 
@@ -145,10 +150,7 @@ def load_array(
         total=len(positions),
         desc="Generating node attributes",
     ):
-        mask = Mask.from_coordinates(position[1:], rad, image_shape=image_shape)
-
         attr = {
-            DEFAULT_ATTR_KEYS.MASK: mask,
             DEFAULT_ATTR_KEYS.T: position[0],
             "x": position[-1],
             "y": position[-2],
@@ -156,6 +158,10 @@ def load_array(
 
         if ndim == 3:
             attr["z"] = position[1]
+
+        if add_mask:
+            mask = Mask.from_coordinates(position[1:], rad, image_shape=image_shape)
+            attr[DEFAULT_ATTR_KEYS.MASK] = mask
 
         if track_ids is not None:
             attr[DEFAULT_ATTR_KEYS.TRACK_ID] = track_ids[i]

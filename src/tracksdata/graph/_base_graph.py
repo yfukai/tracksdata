@@ -592,7 +592,7 @@ class BaseGraph(abc.ABC):
         positions: ArrayLike,
         track_ids: ArrayLike | None = None,
         track_id_graph: dict[int, int] | None = None,
-        radius: ArrayLike = 1,
+        radius: ArrayLike = 0,
         image_shape: tuple[int, ...] | None = None,
         **kwargs,
     ) -> T:
@@ -609,7 +609,7 @@ class BaseGraph(abc.ABC):
         track_id_graph : dict[int, int] | None
             Mapping of division as child track id (key) to parent track id (value) relationships.
         radius : ArrayLike
-            Integer or N-dimensional array of radii.
+            If greater than 0, a mask with a sphere of radius is created for each node.
         image_shape : tuple[int, ...] | None
             Shape of the image if available masks are cropped to fit the image.
         **kwargs : Any
