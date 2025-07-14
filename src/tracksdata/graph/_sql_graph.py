@@ -281,22 +281,22 @@ class SQLFilter(BaseFilter):
             node_query = session.execute(node_query)
             edge_query = session.execute(edge_query)
 
-        node_map_to_root = {}
-        node_map_from_root = {}
-        rx_graph = rx.PyDiGraph()
+            node_map_to_root = {}
+            node_map_from_root = {}
+            rx_graph = rx.PyDiGraph()
 
-        for row in node_query.scalars().all():
-            data = {k: v for k, v in row.__dict__.items() if not k.startswith("_")}
-            root_node_id = data.pop(DEFAULT_ATTR_KEYS.NODE_ID)
-            node_id = rx_graph.add_node(data)
-            node_map_to_root[node_id] = root_node_id
-            node_map_from_root[root_node_id] = node_id
+            for row in node_query.scalars().all():
+                data = {k: v for k, v in row.__dict__.items() if not k.startswith("_")}
+                root_node_id = data.pop(DEFAULT_ATTR_KEYS.NODE_ID)
+                node_id = rx_graph.add_node(data)
+                node_map_to_root[node_id] = root_node_id
+                node_map_from_root[root_node_id] = node_id
 
-        for row in edge_query.scalars().all():
-            data = {k: v for k, v in row.__dict__.items() if not k.startswith("_")}
-            source_id = node_map_from_root[data.pop(DEFAULT_ATTR_KEYS.EDGE_SOURCE)]
-            target_id = node_map_from_root[data.pop(DEFAULT_ATTR_KEYS.EDGE_TARGET)]
-            rx_graph.add_edge(source_id, target_id, data)
+            for row in edge_query.scalars().all():
+                data = {k: v for k, v in row.__dict__.items() if not k.startswith("_")}
+                source_id = node_map_from_root[data.pop(DEFAULT_ATTR_KEYS.EDGE_SOURCE)]
+                target_id = node_map_from_root[data.pop(DEFAULT_ATTR_KEYS.EDGE_TARGET)]
+                rx_graph.add_edge(source_id, target_id, data)
 
         graph = GraphView(
             rx_graph=rx_graph,

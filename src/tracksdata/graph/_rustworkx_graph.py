@@ -83,10 +83,6 @@ class RXFilter(BaseFilter):
         self._node_attr_comps, self._edge_attr_comps = split_attr_comps(attr_comps)
 
     @cache_method
-    def _edge_attrs(self) -> pl.DataFrame:
-        return self._graph.edge_attrs()
-
-    @cache_method
     def _current_node_ids(self) -> list[int]:
         """
         Get the node IDs without considering their `source` or `target` neighbors.
@@ -101,11 +97,12 @@ class RXFilter(BaseFilter):
 
     @cache_method
     def node_ids(self) -> list[int]:
-        # no nodes outside of the filtered nodes are allowed
-        if len(self._edge_attr_comps) == 0 and (not self._include_targets and not self._include_sources):
+        # if there are no edge filters, we can return the current node ids
+        if not self._edge_attr_comps and (not self._include_targets and not self._include_sources):
             return self._current_node_ids()
 
         # find nodes that are connected to edges that pass the edge filters
+        node_ids = []
         edge_node_ids = (
             self._edge_attrs()
             .select(
@@ -115,8 +112,14 @@ class RXFilter(BaseFilter):
             .to_numpy()
             .ravel()
         )
-        node_ids = np.unique(np.concatenate([edge_node_ids, self._current_node_ids()]))
-        return np.unique(node_ids).tolist()
+        node_ids.append(edge_node_ids)
+
+        if self._node_attr_comps:
+            # if there are node filters, we need to add the nodes that pass the node filters
+            node_ids.append(self._current_node_ids())
+
+        node_ids = np.unique(np.concatenate(node_ids, dtype=int))
+        return node_ids.tolist()
 
     @cache_method
     def _edge_attrs(self) -> pl.DataFrame:
@@ -275,7 +278,7 @@ class RustWorkXGraph(BaseGraph):
     Create subgraphs:
 
     ```python
-    subgraph = graph.subgraph(NodeAttr("t") == 0)
+    subgraph = graph.filter(NodeAttr("t") == 0).subgraph()
     ```
     """
 
