@@ -74,10 +74,10 @@ class GenericFuncEdgeAttrs(BaseEdgeAttrsOperator):
             The graph to add weights to.
         """
         graph_filter = graph.filter(NodeAttr(DEFAULT_ATTR_KEYS.T) == t, include_targets=True)
-        edges_df = graph_filter.edge_attrs()
+        edges_df = graph_filter.edge_attrs(attr_keys=[])
 
         if len(edges_df) == 0:
-            LOG.warning(f"No edges found for time point {t} to sucessors")
+            LOG.warning(f"No edges found for time point {t} to successors")
             return [], {}
 
         att_keys_list = self.attr_keys if isinstance(self.attr_keys, list) else [self.attr_keys]
