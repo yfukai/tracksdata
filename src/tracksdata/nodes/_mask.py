@@ -1,3 +1,4 @@
+from collections.abc import Sequence
 from functools import cached_property, lru_cache
 
 import blosc2
@@ -5,7 +6,9 @@ import numpy as np
 import skimage.morphology as morph
 from numpy.typing import ArrayLike, NDArray
 
+from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.functional._iou import fast_intersection_with_bbox, fast_iou_with_bbox
+from tracksdata.nodes._generic_nodes import GenericFuncNodeAttrs
 
 
 @lru_cache(maxsize=5)
@@ -269,3 +272,49 @@ class Mask:
             bbox = np.concatenate([processed_start, processed_end])
 
         return cls(mask, bbox)
+
+
+class MaskDiskAttrs(GenericFuncNodeAttrs):
+    """
+    Operator to a disk mask for each node.
+
+    Parameters
+    ----------
+    radius : int
+        The radius of the mask.
+    image_shape : tuple[int, ...]
+        The shape of the image.
+    attr_keys : Sequence[str] | None
+        The attributes for the center of the mask.
+        If not provided, "z", "y", "x" will be used.
+    output_key : str
+        The key of the attribute to store the mask.
+    """
+
+    def __init__(
+        self,
+        radius: int,
+        image_shape: tuple[int, ...],
+        attr_keys: Sequence[str] | None = None,
+        output_key: str = DEFAULT_ATTR_KEYS.MASK,
+    ):
+        if attr_keys is None:
+            default_columns = ["z", "y", "x"]
+            attr_keys = default_columns[-len(image_shape) :]
+
+        if len(attr_keys) != len(image_shape):
+            raise ValueError(
+                f"Expected image shape {image_shape} to have the same number of dimensions as attr_keys '{attr_keys}'."
+            )
+
+        super().__init__(
+            func=lambda **kwargs: Mask.from_coordinates(
+                center=np.asarray(list(kwargs.values())),
+                radius=radius,
+                image_shape=image_shape,
+            ),
+            output_key=output_key,
+            attr_keys=attr_keys,
+            default_value=None,
+            batch_size=0,
+        )
