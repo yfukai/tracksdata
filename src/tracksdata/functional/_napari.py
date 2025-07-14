@@ -15,18 +15,24 @@ def to_napari_format(
     shape: tuple[int, ...],
     solution_key: str = DEFAULT_ATTR_KEYS.SOLUTION,
     output_track_id_key: str = DEFAULT_ATTR_KEYS.TRACK_ID,
-) -> tuple[
-    "GraphArrayView",
-    pl.DataFrame,
-    dict[int, int],
-]:
+) -> (
+    tuple[
+        pl.DataFrame,
+        dict[int, int],
+        "GraphArrayView",
+    ]
+    | tuple[
+        pl.DataFrame,
+        dict[int, int],
+    ]
+):
     """
     Convert the subgraph of solution nodes to a napari-ready format.
 
     This includes:
-    - a labels layer with the solution nodes
     - a tracks layer with the solution tracks
     - a graph with the parent-child relationships for the solution tracks
+    - a labels layer with the solution nodes if the graph contains "mask" attributes.
 
     IMPORTANT: This function will reset the track ids if they already exist.
 
@@ -43,10 +49,10 @@ def to_napari_format(
 
     Returns
     -------
-    tuple[GraphArrayView, pl.DataFrame, dict[int, int]]
-        - array_view: The array view of the solution graph.
+    tuple[pl.DataFrame, dict[int, int], GraphArrayView] | tuple[pl.DataFrame, dict[int, int]]
         - tracks_data: The tracks data as a polars DataFrame.
         - dict_graph: A dictionary of parent -> child relationships.
+        - array_view: The array view of the solution graph if the graph contains "mask" attributes.
     """
     solution_graph = graph.subgraph(NodeAttr(solution_key) == True, EdgeAttr(solution_key) == True)
 
@@ -59,15 +65,18 @@ def to_napari_format(
         attr_keys=[output_track_id_key, DEFAULT_ATTR_KEYS.T, *spatial_cols],
     )
 
-    from tracksdata.array._graph_array import GraphArrayView
-
-    array_view = GraphArrayView(
-        solution_graph,
-        shape,
-        attr_key=output_track_id_key,
-    )
-
     # sorting columns
     tracks_data = tracks_data.select([output_track_id_key, DEFAULT_ATTR_KEYS.T, *spatial_cols])
 
-    return array_view, tracks_data, dict_graph
+    if DEFAULT_ATTR_KEYS.MASK in solution_graph.node_attr_keys:
+        from tracksdata.array._graph_array import GraphArrayView
+
+        array_view = GraphArrayView(
+            solution_graph,
+            shape,
+            attr_key=output_track_id_key,
+        )
+
+        return tracks_data, dict_graph, array_view
+
+    return tracks_data, dict_graph
