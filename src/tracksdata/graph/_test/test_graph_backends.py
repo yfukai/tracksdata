@@ -1032,13 +1032,11 @@ def test_from_numpy_array_basic(graph_backend: BaseGraph) -> None:
         ]
     )
 
-    radius = 2
-
     if isinstance(graph_backend, RustWorkXGraph):
         # for RustWorkXGraph we validate if the OOP API is working
-        graph_backend = RustWorkXGraph.from_array(positions, radius=radius, rx_graph=None)
+        graph_backend = RustWorkXGraph.from_array(positions, rx_graph=None)
     else:
-        load_array(positions, graph_backend, radius=radius)
+        load_array(positions, graph_backend)
 
     assert graph_backend.num_nodes == 3
     assert graph_backend.num_edges == 0  # No track_ids, so no edges
@@ -1047,9 +1045,6 @@ def test_from_numpy_array_basic(graph_backend: BaseGraph) -> None:
     nodes_df = graph_backend.node_attrs(attr_keys=["t", "y", "x"])
 
     np.testing.assert_array_equal(nodes_df.to_numpy(), positions)
-
-    # Check that mask attribute was added
-    assert DEFAULT_ATTR_KEYS.MASK in graph_backend.node_attr_keys
 
 
 def test_from_numpy_array_3d(graph_backend: BaseGraph) -> None:
@@ -1106,11 +1101,7 @@ def test_from_numpy_array_validation_errors() -> None:
     with pytest.raises(ValueError, match="Expected 4 or 5 dimensions"):
         RustWorkXGraph.from_array(invalid_positions)
 
-    # Test radius length mismatch
     positions = np.array([[0, 10, 20], [1, 15, 25]])
-    invalid_radius = np.array([1, 2, 3])  # Length 3, positions length 2
-    with pytest.raises(ValueError, match="must be a scalar or have the same length"):
-        RustWorkXGraph.from_array(positions, radius=invalid_radius)
 
     # Test track_id_graph without track_ids
     with pytest.raises(ValueError, match="must be provided if"):

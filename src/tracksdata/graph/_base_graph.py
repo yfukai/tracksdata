@@ -620,7 +620,7 @@ class BaseGraph(abc.ABC):
         load_array(
             positions=np.asarray(positions),
             graph=graph,
-            track_ids=np.asarray(track_ids),
+            track_ids=track_ids,
             track_id_graph=track_id_graph,
         )
         return graph
