@@ -21,7 +21,6 @@ def _vector_kwargs_defaults(vector_kwargs: dict | None) -> dict:
 
     default_kwargs = {
         "edge_width": 3,
-        "opacity": 1,
         "vector_style": "arrow",
     }
     for key, value in default_kwargs.items():
@@ -159,10 +158,10 @@ def visualize_matches(
 
     matched_ref_mask = ref_node_attrs[DEFAULT_ATTR_KEYS.NODE_ID].is_in(node_attrs[matched_node_id_key])
     # matched_ref_node_attrs = ref_node_attrs.filter(matched_ref_mask)
-    not_matched_ref_node_attrs = ref_node_attrs.filter(~matched_ref_mask)
+    unmatched_ref_node_attrs = ref_node_attrs.filter(~matched_ref_mask)
 
     viewer.add_points(
-        not_matched_ref_node_attrs[pos],
+        unmatched_ref_node_attrs[pos],
         name="missing objects",
         **points_kwargs,
     )
@@ -205,7 +204,7 @@ def visualize_matches(
     )
 
     matched_edge_arr = edge_arr[mask]
-    not_matched_edge_arr = edge_arr[~mask]
+    unmatched_edge_arr = edge_arr[~mask]
 
     vector_kwargs = _vector_kwargs_defaults(vector_kwargs)
 
@@ -214,37 +213,68 @@ def visualize_matches(
             matched_edge_arr,
             name="matched edges",
             edge_color="green",
+            opacity=1,
             **vector_kwargs,
         )
     else:
         LOG.warning("No edges matched to the reference graph")
 
-    if not_matched_edge_arr.shape[0] > 0:
+    if unmatched_edge_arr.shape[0] > 0:
         viewer.add_vectors(
-            not_matched_edge_arr,
-            name="not matched edges",
-            edge_color="red",
+            unmatched_edge_arr,
+            name="unmatched input edges",
+            edge_color="blue",
+            opacity=0.2,
             **vector_kwargs,
         )
     else:
         LOG.warning("All edges matched to the reference graph")
 
-    # # TODO: select a subset of attrs
-    # ref_edge_attrs = ref_graph.edge_attrs()
+    # TODO: select a subset of attrs
+    ref_edge_attrs = ref_graph.edge_attrs()
 
-    # ref_edge_attrs = ref_edge_attrs.join(
-    #     edge_attrs
-    #     .select(DEFAULT_ATTR_KEYS.EDGE_SOURCE, DEFAULT_ATTR_KEYS.EDGE_TARGET, matched_edge_mask_key),
-    #     left_on=[DEFAULT_ATTR_KEYS.EDGE_SOURCE, DEFAULT_ATTR_KEYS.EDGE_TARGET],
-    #     right_on=["matched_source", "matched_target"],
-    #     how="left",
-    # )
+    ref_edge_attrs = ref_edge_attrs.join(
+        edge_attrs.select(
+            matched_edge_mask_key,
+            "matched_source",
+            "matched_target",
+        ),
+        left_on=[DEFAULT_ATTR_KEYS.EDGE_SOURCE, DEFAULT_ATTR_KEYS.EDGE_TARGET],
+        right_on=["matched_source", "matched_target"],
+        how="left",
+    )
 
-    # unmatched_ref_edge_attrs = ref_edge_attrs.filter(ref_edge_attrs[matched_edge_mask_key].is_null())
+    unmatched_ref_edge_attrs = ref_edge_attrs.filter(ref_edge_attrs[matched_edge_mask_key].is_null())
 
-    # viewer.add_vectors(
-    #     unmatched_ref_edge_attrs[pos],
-    #     name="unmatched edges",
-    #     edge_color="red",
-    #     **vector_kwargs,
-    # )
+    # not necessary anymore
+    del source_mapping[matched_node_id_key]
+    del target_mapping[matched_node_id_key]
+
+    unmatched_ref_edge_attrs = unmatched_ref_edge_attrs.join(
+        ref_node_attrs.select(DEFAULT_ATTR_KEYS.NODE_ID, DEFAULT_ATTR_KEYS.T, *pos[1:]).rename(source_mapping),
+        left_on=DEFAULT_ATTR_KEYS.EDGE_SOURCE,
+        right_on=DEFAULT_ATTR_KEYS.NODE_ID,
+    ).join(
+        ref_node_attrs.select(DEFAULT_ATTR_KEYS.NODE_ID, *pos[1:]).rename(target_mapping),
+        left_on=DEFAULT_ATTR_KEYS.EDGE_TARGET,
+        right_on=DEFAULT_ATTR_KEYS.NODE_ID,
+    )
+
+    # same as above, target positions is just the difference between source and target
+    unmatched_ref_edge_attrs[target_pos] = unmatched_ref_edge_attrs[target_pos] - unmatched_ref_edge_attrs[source_pos]
+
+    unmatched_ref_edge_arr = np.stack(
+        [
+            unmatched_ref_edge_attrs.select(DEFAULT_ATTR_KEYS.T, *source_pos),
+            unmatched_ref_edge_attrs.select(DEFAULT_ATTR_KEYS.T, *target_pos),
+        ],
+        axis=1,
+    )
+
+    viewer.add_vectors(
+        unmatched_ref_edge_arr,
+        name="unmatched reference edges",
+        edge_color="yellow",
+        opacity=1,
+        **vector_kwargs,
+    )
