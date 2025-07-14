@@ -1,10 +1,34 @@
 from typing import TYPE_CHECKING, Optional
 
+import numpy as np
+
 from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.graph._base_graph import BaseGraph
+from tracksdata.utils._logging import LOG
 
 if TYPE_CHECKING:
     import napari
+
+
+def _vector_kwargs_defaults(vector_kwargs: dict | None) -> dict:
+    """
+    Set the default values for the vector kwargs.
+    """
+    if vector_kwargs is None:
+        vector_kwargs = {}
+    else:
+        vector_kwargs = vector_kwargs.copy()
+
+    default_kwargs = {
+        "edge_width": 3,
+        "opacity": 1,
+        "vector_style": "arrow",
+    }
+    for key, value in default_kwargs.items():
+        if key not in vector_kwargs:
+            vector_kwargs[key] = value
+
+    return vector_kwargs
 
 
 def _points_kwargs_defaults(points_kwargs: dict | None) -> dict:
@@ -69,8 +93,10 @@ def visualize_matches(
     ref_graph: BaseGraph,
     matched_node_id_key: str = DEFAULT_ATTR_KEYS.MATCHED_NODE_ID,
     match_score_key: str = DEFAULT_ATTR_KEYS.MATCH_SCORE,
+    matched_edge_mask_key: str = DEFAULT_ATTR_KEYS.MATCHED_EDGE_MASK,
     viewer: Optional["napari.Viewer"] = None,
     points_kwargs: dict | None = None,
+    vector_kwargs: dict | None = None,
 ) -> None:
     """
     Visualize the matches between the graph and the gt_graph.
@@ -87,10 +113,15 @@ def visualize_matches(
     match_score_key : str, optional
         The key of the attribute that contains the match scores.
         If not provided, the default key will be used.
+    matched_edge_mask_key : str, optional
+        The key of the attribute that contains the matched edge mask.
+        If not provided, the default key will be used.
     viewer : napari.Viewer, optional
         The napari viewer to use. If not provided, a new viewer will be created.
     points_kwargs : dict, optional
         Additional keyword arguments to the napari.Viewer.add_points method.
+    vector_kwargs : dict, optional
+        Additional keyword arguments to the napari.Viewer.add_vectors method.
     """
     try:
         import napari
@@ -132,9 +163,88 @@ def visualize_matches(
 
     viewer.add_points(
         not_matched_ref_node_attrs[pos],
-        name="Missing objects",
+        name="missing objects",
         **points_kwargs,
     )
 
     # TODO: select a subset of attrs
-    # edge_attrs = input_graph.edge_attrs()
+    edge_attrs = input_graph.edge_attrs()
+
+    source_pos = [f"source_{p}" for p in pos[1:]]
+    target_pos = [f"target_{p}" for p in pos[1:]]
+
+    source_mapping = dict(zip(pos[1:], source_pos, strict=False))
+    source_mapping[matched_node_id_key] = "matched_source"
+    target_mapping = dict(zip(pos[1:], target_pos, strict=False))
+    target_mapping[matched_node_id_key] = "matched_target"
+
+    edge_attrs = edge_attrs.join(
+        node_attrs.select(DEFAULT_ATTR_KEYS.NODE_ID, matched_node_id_key, DEFAULT_ATTR_KEYS.T, *pos[1:]).rename(
+            source_mapping
+        ),
+        left_on=DEFAULT_ATTR_KEYS.EDGE_SOURCE,
+        right_on=DEFAULT_ATTR_KEYS.NODE_ID,
+    ).join(
+        node_attrs.select(DEFAULT_ATTR_KEYS.NODE_ID, matched_node_id_key, *pos[1:]).rename(target_mapping),
+        left_on=DEFAULT_ATTR_KEYS.EDGE_TARGET,
+        right_on=DEFAULT_ATTR_KEYS.NODE_ID,
+    )
+
+    # target positions is just the difference between source and target
+    # not the actual target position
+    edge_attrs[target_pos] = edge_attrs[target_pos] - edge_attrs[source_pos]
+
+    mask = edge_attrs[matched_edge_mask_key].to_numpy().astype(bool)
+
+    edge_arr = np.stack(
+        [
+            edge_attrs.select(DEFAULT_ATTR_KEYS.T, *source_pos),
+            edge_attrs.select(DEFAULT_ATTR_KEYS.T, *target_pos),
+        ],
+        axis=1,
+    )
+
+    matched_edge_arr = edge_arr[mask]
+    not_matched_edge_arr = edge_arr[~mask]
+
+    vector_kwargs = _vector_kwargs_defaults(vector_kwargs)
+
+    if matched_edge_arr.shape[0] > 0:
+        viewer.add_vectors(
+            matched_edge_arr,
+            name="matched edges",
+            edge_color="green",
+            **vector_kwargs,
+        )
+    else:
+        LOG.warning("No edges matched to the reference graph")
+
+    if not_matched_edge_arr.shape[0] > 0:
+        viewer.add_vectors(
+            not_matched_edge_arr,
+            name="not matched edges",
+            edge_color="red",
+            **vector_kwargs,
+        )
+    else:
+        LOG.warning("All edges matched to the reference graph")
+
+    # # TODO: select a subset of attrs
+    # ref_edge_attrs = ref_graph.edge_attrs()
+
+    # ref_edge_attrs = ref_edge_attrs.join(
+    #     edge_attrs
+    #     .select(DEFAULT_ATTR_KEYS.EDGE_SOURCE, DEFAULT_ATTR_KEYS.EDGE_TARGET, matched_edge_mask_key),
+    #     left_on=[DEFAULT_ATTR_KEYS.EDGE_SOURCE, DEFAULT_ATTR_KEYS.EDGE_TARGET],
+    #     right_on=["matched_source", "matched_target"],
+    #     how="left",
+    # )
+
+    # unmatched_ref_edge_attrs = ref_edge_attrs.filter(ref_edge_attrs[matched_edge_mask_key].is_null())
+
+    # viewer.add_vectors(
+    #     unmatched_ref_edge_attrs[pos],
+    #     name="unmatched edges",
+    #     edge_color="red",
+    #     **vector_kwargs,
+    # )
