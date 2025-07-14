@@ -6,7 +6,7 @@ import numpy as np
 import polars as pl
 import rustworkx as rx
 import sqlalchemy as sa
-from sqlalchemy.orm import DeclarativeBase, Query, Session, aliased, load_only
+from sqlalchemy.orm import DeclarativeBase, Session, aliased, load_only
 from sqlalchemy.sql.type_api import TypeEngine
 
 from tracksdata.attrs import AttrComparison, split_attr_comps
@@ -40,16 +40,16 @@ def _data_numpy_to_native(data: dict[str, Any]) -> None:
 
 
 def _filter_query(
-    query: Query,
+    query: sa.Select,
     table: type[DeclarativeBase],
     attr_filters: list[AttrComparison],
-) -> Query:
+) -> sa.Select:
     """
     Filter a query by a list of attribute filters.
 
     Parameters
     ----------
-    query : Query
+    query : sa.Select
         The query to filter.
     table : type[DeclarativeBase]
         The table to filter.
@@ -58,7 +58,7 @@ def _filter_query(
 
     Returns
     -------
-    Query
+    sa.Select
         The filtered query.
     """
     query = query.filter(
@@ -1024,8 +1024,8 @@ class SQLGraph(BaseGraph):
             node_ids = node_ids.tolist()
 
         with Session(self._engine) as session:
-            node_query = session.query(self.Node)
-            edge_query = session.query(self.Edge)
+            node_query = sa.select(self.Node)
+            edge_query = sa.select(self.Edge)
 
             node_filtered = False
 
@@ -1040,7 +1040,8 @@ class SQLGraph(BaseGraph):
 
             if node_attr_comps:
                 node_query = _filter_query(node_query, self.Node, node_attr_comps)
-                node_ids = [i for (i,) in node_query.with_entities(self.Node.node_id).all()]
+
+                node_ids = list(session.execute(node_query.with_only_columns(self.Node.node_id)).scalars().all())
                 node_filtered = True
 
                 SourceNode = aliased(self.Node)
@@ -1060,8 +1061,13 @@ class SQLGraph(BaseGraph):
                 edge_query = _filter_query(edge_query, self.Edge, edge_attr_comps)
 
                 if not node_filtered:
-                    node_ids = edge_query.with_entities(self.Edge.source_id, self.Edge.target_id).all()
+                    node_ids = (
+                        session.execute(edge_query.with_only_columns(self.Edge.source_id, self.Edge.target_id))
+                        .scalars()
+                        .all()
+                    )
                     node_ids = np.unique(node_ids).tolist()
+                    print(node_ids)
                     node_query = node_query.filter(self.Node.node_id.in_(node_ids))
 
             if node_attr_keys is not None:
@@ -1092,15 +1098,20 @@ class SQLGraph(BaseGraph):
         node_map_from_root = {}
         rx_graph = rx.PyDiGraph()
 
-        for row in node_query.all():
+        node_query = session.execute(node_query)
+        edge_query = session.execute(edge_query)
+
+        for row in node_query.scalars().all():
             data = {k: v for k, v in row.__dict__.items() if not k.startswith("_")}
             root_node_id = data.pop(DEFAULT_ATTR_KEYS.NODE_ID)
             node_id = rx_graph.add_node(data)
             node_map_to_root[node_id] = root_node_id
             node_map_from_root[root_node_id] = node_id
 
-        for row in edge_query.all():
+        for row in edge_query.scalars().all():
             data = {k: v for k, v in row.__dict__.items() if not k.startswith("_")}
+            print(data)
+            print(node_map_from_root)
             source_id = node_map_from_root[data.pop(DEFAULT_ATTR_KEYS.EDGE_SOURCE)]
             target_id = node_map_from_root[data.pop(DEFAULT_ATTR_KEYS.EDGE_TARGET)]
             rx_graph.add_edge(source_id, target_id, data)
@@ -1337,12 +1348,13 @@ class SQLGraph(BaseGraph):
         id_key: str,
         attrs: dict[str, Any],
     ) -> None:
-        if len(ids) == 0:
-            LOG.info("No ids to update, skipping")
-            return
+        if ids is not None:
+            if len(ids) == 0:
+                LOG.info("No ids to update, skipping")
+                return
 
-        if hasattr(ids, "tolist"):
-            ids = ids.tolist()
+            if hasattr(ids, "tolist"):
+                ids = ids.tolist()
 
         # Handle array values with bulk_update_mappings
         attrs = attrs.copy()
