@@ -137,7 +137,6 @@ def visualize_matches(
     else:
         pos = ["t", "y", "x"]
 
-    # TODO: select a subset of attrs
     node_attrs = input_graph.node_attrs()
     ref_node_attrs = ref_graph.node_attrs()
 
@@ -166,9 +165,7 @@ def visualize_matches(
         **points_kwargs,
     )
 
-    # TODO: select a subset of attrs
-    edge_attrs = input_graph.edge_attrs()
-
+    edge_attrs = input_graph.edge_attrs(attr_keys=[matched_edge_mask_key])
     source_pos = [f"source_{p}" for p in pos[1:]]
     target_pos = [f"target_{p}" for p in pos[1:]]
 
@@ -230,8 +227,7 @@ def visualize_matches(
     else:
         LOG.warning("All edges matched to the reference graph")
 
-    # TODO: select a subset of attrs
-    ref_edge_attrs = ref_graph.edge_attrs()
+    ref_edge_attrs = ref_graph.edge_attrs(attr_keys=[])
 
     ref_edge_attrs = ref_edge_attrs.join(
         edge_attrs.select(
