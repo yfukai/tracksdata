@@ -283,7 +283,7 @@ class MaskDiskAttrs(GenericFuncNodeAttrs):
     radius : int
         The radius of the mask.
     image_shape : tuple[int, ...]
-        The shape of the image.
+        The shape of the image, must match the number of  of the attr_keys.
     attr_keys : Sequence[str] | None
         The attributes for the center of the mask.
         If not provided, "z", "y", "x" will be used.
