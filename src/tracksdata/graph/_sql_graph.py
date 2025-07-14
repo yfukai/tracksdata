@@ -121,8 +121,8 @@ class SQLFilter(BaseFilter):
             if not self._node_attr_comps:
                 self._node_query = self._node_query.filter(
                     sa.or_(
-                        self._graph.Node.node_id.in_(self._edge_query.subquery().c.source_id),
-                        self._graph.Node.node_id.in_(self._edge_query.subquery().c.target_id),
+                        self._graph.Node.node_id.in_(sa.select(self._edge_query.subquery().c.source_id)),
+                        self._graph.Node.node_id.in_(sa.select(self._edge_query.subquery().c.target_id)),
                     )
                 )
 
