@@ -820,3 +820,51 @@ class BaseGraph(abc.ABC):
             desc="Setting overlaps",
         ):
             self.bulk_add_overlaps(overlaps)
+
+    def summary(
+        self,
+        attrs_stats: bool = False,
+        print_summary: bool = True,
+    ) -> str:
+        """
+        Print a summary of the graph.
+
+        Parameters
+        ----------
+        attrs_stats : bool
+            If true it will print statistics about the attributes of the nodes and edges.
+        print_summary : bool
+            If true it will print the summary of the graph.
+
+        Returns
+        -------
+        str
+            A string with the summary of the graph.
+        """
+        summary = ""
+
+        summary += "Graph summary:\n"
+        summary += f"Number of nodes: {self.num_nodes}\n"
+        summary += f"Number of edges: {self.num_edges}\n"
+        summary += f"Number of overlaps: {len(self.overlaps())}\n"
+
+        time_points = self.time_points()
+        summary += f"Number of distinct time points: {len(time_points)}\n"
+        if len(time_points) > 0:
+            summary += f"Start time: {min(time_points)}\n"
+            summary += f"End time: {max(time_points)}\n"
+        else:
+            summary += "No time points found.\n"
+
+        if attrs_stats:
+            nodes_attrs = self.node_attrs()
+            edges_attrs = self.edge_attrs()
+            summary += "\nNodes attributes:\n"
+            summary += str(nodes_attrs.describe())
+            summary += "\nEdges attributes:\n"
+            summary += str(edges_attrs.describe())
+
+        if print_summary:
+            print(summary)
+
+        return summary
