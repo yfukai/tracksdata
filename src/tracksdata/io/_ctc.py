@@ -258,7 +258,7 @@ def to_ctc(
 
     tracks_table = compressed_tracks_table(graph)
 
-    np.savetxt(output_dir / "man_track.txt", tracks_table, fmt="%d")
+    np.savetxt(output_dir / "res_track.txt", tracks_table, fmt="%d")
 
     def _write_tiff(t: int) -> None:
         LOG.info(f"Saving label image for time point {t}")
