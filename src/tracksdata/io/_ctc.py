@@ -254,7 +254,7 @@ def to_ctc(
 
     view = GraphArrayView(graph, shape=shape, attr_key=track_id_key)
 
-    n_digits = max(len(str(len(view.shape))), 3)
+    n_digits = max(len(str(view.shape[0])), 3)
 
     tracks_table = compressed_tracks_table(graph)
 
