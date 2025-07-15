@@ -155,7 +155,7 @@ def visualize_matches(
     )
     layer.text.visible = False
 
-    matched_ref_mask = ref_node_attrs[DEFAULT_ATTR_KEYS.NODE_ID].is_in(node_attrs[matched_node_id_key])
+    matched_ref_mask = ref_node_attrs[DEFAULT_ATTR_KEYS.NODE_ID].is_in(node_attrs[matched_node_id_key].implode())
     # matched_ref_node_attrs = ref_node_attrs.filter(matched_ref_mask)
     unmatched_ref_node_attrs = ref_node_attrs.filter(~matched_ref_mask)
 
