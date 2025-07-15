@@ -166,22 +166,20 @@ def visualize_matches(
     )
 
     edge_attrs = input_graph.edge_attrs(attr_keys=[matched_edge_mask_key])
-    source_pos = [f"source_{p}" for p in pos[1:]]
-    target_pos = [f"target_{p}" for p in pos[1:]]
+    source_pos = [f"source_{p}" for p in pos]
+    target_pos = [f"target_{p}" for p in pos]
 
-    source_mapping = dict(zip(pos[1:], source_pos, strict=False))
+    source_mapping = dict(zip(pos, source_pos, strict=False))
     source_mapping[matched_node_id_key] = "matched_source"
-    target_mapping = dict(zip(pos[1:], target_pos, strict=False))
+    target_mapping = dict(zip(pos, target_pos, strict=False))
     target_mapping[matched_node_id_key] = "matched_target"
 
     edge_attrs = edge_attrs.join(
-        node_attrs.select(DEFAULT_ATTR_KEYS.NODE_ID, matched_node_id_key, DEFAULT_ATTR_KEYS.T, *pos[1:]).rename(
-            source_mapping
-        ),
+        node_attrs.select(DEFAULT_ATTR_KEYS.NODE_ID, matched_node_id_key, *pos).rename(source_mapping),
         left_on=DEFAULT_ATTR_KEYS.EDGE_SOURCE,
         right_on=DEFAULT_ATTR_KEYS.NODE_ID,
     ).join(
-        node_attrs.select(DEFAULT_ATTR_KEYS.NODE_ID, matched_node_id_key, *pos[1:]).rename(target_mapping),
+        node_attrs.select(DEFAULT_ATTR_KEYS.NODE_ID, matched_node_id_key, *pos).rename(target_mapping),
         left_on=DEFAULT_ATTR_KEYS.EDGE_TARGET,
         right_on=DEFAULT_ATTR_KEYS.NODE_ID,
     )
@@ -194,8 +192,8 @@ def visualize_matches(
 
     edge_arr = np.stack(
         [
-            edge_attrs.select(DEFAULT_ATTR_KEYS.T, *source_pos),
-            edge_attrs.select(DEFAULT_ATTR_KEYS.T, *target_pos),
+            edge_attrs.select(*source_pos),
+            edge_attrs.select(*target_pos),
         ],
         axis=1,
     )
@@ -247,11 +245,11 @@ def visualize_matches(
     del target_mapping[matched_node_id_key]
 
     unmatched_ref_edge_attrs = unmatched_ref_edge_attrs.join(
-        ref_node_attrs.select(DEFAULT_ATTR_KEYS.NODE_ID, DEFAULT_ATTR_KEYS.T, *pos[1:]).rename(source_mapping),
+        ref_node_attrs.select(DEFAULT_ATTR_KEYS.NODE_ID, *pos).rename(source_mapping),
         left_on=DEFAULT_ATTR_KEYS.EDGE_SOURCE,
         right_on=DEFAULT_ATTR_KEYS.NODE_ID,
     ).join(
-        ref_node_attrs.select(DEFAULT_ATTR_KEYS.NODE_ID, *pos[1:]).rename(target_mapping),
+        ref_node_attrs.select(DEFAULT_ATTR_KEYS.NODE_ID, *pos).rename(target_mapping),
         left_on=DEFAULT_ATTR_KEYS.EDGE_TARGET,
         right_on=DEFAULT_ATTR_KEYS.NODE_ID,
     )
@@ -261,8 +259,8 @@ def visualize_matches(
 
     unmatched_ref_edge_arr = np.stack(
         [
-            unmatched_ref_edge_attrs.select(DEFAULT_ATTR_KEYS.T, *source_pos),
-            unmatched_ref_edge_attrs.select(DEFAULT_ATTR_KEYS.T, *target_pos),
+            unmatched_ref_edge_attrs.select(*source_pos),
+            unmatched_ref_edge_attrs.select(*target_pos),
         ],
         axis=1,
     )
