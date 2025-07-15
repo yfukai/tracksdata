@@ -8,7 +8,7 @@ from tracksdata.attrs import EdgeAttr, NodeAttr
 from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.graph import RustWorkXGraph, SQLGraph
 from tracksdata.graph._base_graph import BaseGraph
-from tracksdata.io._numpy_array import load_array
+from tracksdata.io._numpy_array import from_array
 from tracksdata.nodes._mask import Mask
 
 
@@ -1036,7 +1036,7 @@ def test_from_numpy_array_basic(graph_backend: BaseGraph) -> None:
         # for RustWorkXGraph we validate if the OOP API is working
         graph_backend = RustWorkXGraph.from_array(positions, rx_graph=None)
     else:
-        load_array(positions, graph_backend)
+        from_array(positions, graph_backend)
 
     assert graph_backend.num_nodes == 3
     assert graph_backend.num_edges == 0  # No track_ids, so no edges
@@ -1070,7 +1070,7 @@ def test_from_numpy_array_3d(graph_backend: BaseGraph) -> None:
             rx_graph=None,
         )
     else:
-        load_array(
+        from_array(
             positions,
             graph_backend,
             track_ids=track_ids,

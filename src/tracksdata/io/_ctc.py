@@ -1,16 +1,19 @@
+import shutil
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 import polars as pl
+import tifffile as tiff
 from dask.array.image import imread as dask_imread
-from tifffile import imread as tiff_imread
 
+from tracksdata.array._graph_array import GraphArrayView
 from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.graph._base_graph import BaseGraph
 from tracksdata.io._numpy_array import _add_edges_from_track_ids
 from tracksdata.nodes import RegionPropsNodes
 from tracksdata.utils._logging import LOG
+from tracksdata.utils._multiprocessing import multiprocessing_apply
 
 
 def compressed_tracks_table(graph: BaseGraph) -> np.ndarray:
@@ -112,23 +115,23 @@ def _load_tracks_file(tracks_file: Path) -> dict[int, int]:
     return track_id_graph
 
 
-def load_ctc(
+def from_ctc(
     data_dir: str | Path,
     graph: BaseGraph,
     region_props_kwargs: dict[str, Any] | None = None,
 ) -> None:
     """
     Load a CTC ground truth file into a graph.
-    The resulting graph will have region properties attributesfrom a CTC ground truth file.
+    The resulting graph will have region properties attributes from a CTC directory data.
 
     Graph backend method API (e.g. `graph.from_ctc`) is preferred over this function.
 
     Parameters
     ----------
     data_dir : str | Path
-        The path to the CTC ground truth directory.
+        The path to the CTC data directory.
     graph : BaseGraph
-        The graph to load the CTC ground truth into.
+        The graph to load the CTC data into.
     region_props_kwargs : dict[str, Any]
         Keyword arguments to pass to RegionPropsNodes.
 
@@ -180,7 +183,7 @@ def load_ctc(
             "Graph won't have edges."
         )
 
-    labels = dask_imread(str(data_dir / "*.tif"), imread=tiff_imread)
+    labels = dask_imread(str(data_dir / "*.tif"), imread=tiff.imread)
 
     region_props_nodes = RegionPropsNodes(**region_props_kwargs)
     region_props_nodes.add_nodes(graph, labels=labels)
@@ -207,4 +210,59 @@ def load_ctc(
         attrs={
             DEFAULT_ATTR_KEYS.TRACK_ID: nodes_df["label"].to_list(),
         },
+    )
+
+
+def to_ctc(
+    graph: BaseGraph,
+    shape: tuple[int, ...],
+    output_dir: str | Path,
+    track_id_key: str = DEFAULT_ATTR_KEYS.TRACK_ID,
+    overwrite: bool = False,
+) -> None:
+    """
+    Save a graph to a CTC ground truth directory.
+
+    Parameters
+    ----------
+    graph : BaseGraph
+        The graph to save.
+    shape : tuple[int, ...]
+        The shape of the label images (T, (Z), Y, X)
+    output_dir : str | Path
+        The directory to save the label images to.
+    track_id_key : str
+        The attribute key to use for the track IDs.
+    overwrite : bool
+        Whether to overwrite the output directory if it exists.
+    """
+    if output_dir.exists():
+        if overwrite:
+            shutil.rmtree(output_dir)
+        else:
+            raise FileExistsError(f"Output directory {output_dir} already exists.")
+
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    view = GraphArrayView(graph, shape=shape, attr_key=track_id_key)
+
+    n_digits = max(len(str(len(view.shape))), 3)
+
+    tracks_table = compressed_tracks_table(graph)
+
+    np.savetxt(output_dir / "man_track.txt", tracks_table, fmt="%d")
+
+    def _write_tiff(t: int) -> None:
+        tiff.imwrite(
+            output_dir / f"mask{t:0{n_digits}d}.tif",
+            view[t],
+            compression="LZW",
+        )
+
+    multiprocessing_apply(
+        _write_tiff,
+        range(len(view)),
+        desc="Saving label images",
+        sorted=False,
     )

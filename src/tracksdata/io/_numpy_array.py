@@ -61,7 +61,7 @@ def _add_edges_from_track_ids(
     graph.bulk_add_edges(edges)
 
 
-def load_array(
+def from_array(
     positions: np.ndarray,
     graph: BaseGraph,
     track_ids: np.ndarray | None = None,
