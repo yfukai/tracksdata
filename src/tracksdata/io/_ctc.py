@@ -239,7 +239,8 @@ def to_ctc(
     if output_dir.exists():
         if overwrite:
             shutil.rmtree(output_dir)
-        else:
+        # and not empty
+        elif any(output_dir.iterdir()):
             raise FileExistsError(f"Output directory {output_dir} already exists.")
 
     output_dir = Path(output_dir)
@@ -254,15 +255,18 @@ def to_ctc(
     np.savetxt(output_dir / "man_track.txt", tracks_table, fmt="%d")
 
     def _write_tiff(t: int) -> None:
+        LOG.info(f"Saving label image for time point {t}")
         tiff.imwrite(
             output_dir / f"mask{t:0{n_digits}d}.tif",
             view[t],
             compression="LZW",
         )
 
-    multiprocessing_apply(
-        _write_tiff,
-        range(len(view)),
-        desc="Saving label images",
-        sorted=False,
+    list(
+        multiprocessing_apply(
+            _write_tiff,
+            range(view.shape[0]),
+            desc="Saving label images",
+            sorted=False,
+        )
     )
