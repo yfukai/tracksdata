@@ -569,7 +569,7 @@ class BaseGraph(abc.ABC):
 
         See Also
         --------
-        [load_ctc][tracksdata.io._ctc.load_ctc]:
+        [from_ctc][tracksdata.io._ctc.from_ctc]:
             Load a CTC ground truth file into a graph.
 
         [RegionPropsNodes][tracksdata.nodes.RegionPropsNodes]:
@@ -579,12 +579,62 @@ class BaseGraph(abc.ABC):
         -------
         BaseGraph
             A graph with the nodes and edges from the CTC data directory.
+
+        See Also
+        --------
+        [to_ctc][tracksdata.graph.BaseGraph.to_ctc]:
+            Save a graph to a CTC ground truth directory.
         """
-        from tracksdata.io._ctc import load_ctc
+        from tracksdata.io._ctc import from_ctc
 
         graph = cls(**kwargs)
-        load_ctc(data_dir, graph)
+        from_ctc(data_dir, graph)
         return graph
+
+    def to_ctc(
+        self,
+        shape: tuple[int, ...],
+        output_dir: str | Path,
+        track_id_key: str = DEFAULT_ATTR_KEYS.TRACK_ID,
+        overwrite: bool = False,
+    ) -> None:
+        """
+        Save the graph to a CTC ground truth directory.
+
+        Parameters
+        ----------
+        shape : tuple[int, ...]
+            The shape of the label images (T, (Z), Y, X)
+        output_dir : str | Path
+            The directory to save the graph to.
+        track_id_key : str
+            The attribute key to use for the track IDs.
+        overwrite : bool
+            Whether to overwrite the output directory if it exists.
+
+        Examples
+        --------
+        ```python
+        # ...
+        solution_graph = solver.solve(graph)
+        solution_graph.assign_track_ids()
+        solution_graph.to_ctc(shape=(10, 100, 100), output_dir="01_RES")
+        ```
+
+        See Also
+        --------
+        [to_ctc][tracksdata.io.to_ctc]:
+            Save a graph to a CTC ground truth directory.
+        """
+        from tracksdata.io._ctc import to_ctc
+
+        to_ctc(
+            graph=self,
+            shape=shape,
+            output_dir=output_dir,
+            track_id_key=track_id_key,
+            overwrite=overwrite,
+        )
 
     @classmethod
     def from_array(
@@ -614,10 +664,10 @@ class BaseGraph(abc.ABC):
         BaseGraph
             A graph with the nodes and edges from the numpy array.
         """
-        from tracksdata.io._numpy_array import load_array
+        from tracksdata.io._numpy_array import from_array
 
         graph = cls(**kwargs)
-        load_array(
+        from_array(
             positions=np.asarray(positions),
             graph=graph,
             track_ids=track_ids,
