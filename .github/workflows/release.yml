@@ -44,8 +44,9 @@ jobs:
           uv sync --extra test
 
       - name: Run tests
-        run: |
-          uv run pytest
+        uses: aganders3/headless-gui@v2
+        with:
+          run: uv run pytest
 
       - name: Build package
         run: |
