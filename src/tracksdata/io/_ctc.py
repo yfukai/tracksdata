@@ -241,6 +241,7 @@ def to_ctc(
     [BaseGraph.to_ctc][tracksdata.graph.BaseGraph.to_ctc]:
         Save a graph to a CTC ground truth directory.
     """
+    output_dir = Path(output_dir)
     if output_dir.exists():
         if overwrite:
             shutil.rmtree(output_dir)
