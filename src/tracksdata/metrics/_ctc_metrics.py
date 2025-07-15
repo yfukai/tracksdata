@@ -157,7 +157,7 @@ def _matching_data(
         labels = {}
 
         for (t,), group in nodes_df.group_by(DEFAULT_ATTR_KEYS.T):
-            labels[t] = group[track_id_key].to_list()
+            labels[t] = group[track_id_key].sort().to_list()
             # storing masks of each frame
             groups_by_time[name][t] = group
 
