@@ -55,6 +55,9 @@ test = [
   "pytest-cov",
   "pytest-html",
   "py-ctcmetrics",
+  "pytest-qt",
+  "napari",
+  "pyqt5",
 ]
 docs = [
   "mkdocs",

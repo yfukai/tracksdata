@@ -6,5 +6,6 @@ If you use this module, please cite the respective papers of each metric, as des
 """
 
 from tracksdata.metrics._ctc_metrics import evaluate_ctc_metrics
+from tracksdata.metrics._visualize import visualize_matches
 
-__all__ = ["evaluate_ctc_metrics"]
+__all__ = ["evaluate_ctc_metrics", "visualize_matches"]
