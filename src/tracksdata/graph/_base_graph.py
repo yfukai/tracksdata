@@ -569,7 +569,7 @@ class BaseGraph(abc.ABC):
 
         See Also
         --------
-        [load_ctc][tracksdata.io._ctc.load_ctc]:
+        [from_ctc][tracksdata.io._ctc.from_ctc]:
             Load a CTC ground truth file into a graph.
 
         [RegionPropsNodes][tracksdata.nodes.RegionPropsNodes]:
@@ -579,6 +579,11 @@ class BaseGraph(abc.ABC):
         -------
         BaseGraph
             A graph with the nodes and edges from the CTC data directory.
+
+        See Also
+        --------
+        [to_ctc][tracksdata.graph.BaseGraph.to_ctc]:
+            Save a graph to a CTC ground truth directory.
         """
         from tracksdata.io._ctc import from_ctc
 

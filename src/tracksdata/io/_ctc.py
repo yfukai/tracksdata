@@ -138,11 +138,11 @@ def from_ctc(
     Examples
     --------
     ```python
-    from tracksdata.io import load_ctc
+    from tracksdata.io import from_ctc
     from tracksdata.graph import RustWorkXGraph
 
     graph = RustWorkXGraph()
-    load_ctc("Fluo-N2DL-HeLa/01_GT/TRA", graph)
+    from_ctc("Fluo-N2DL-HeLa/01_GT/TRA", graph)
     ```
 
     See Also
