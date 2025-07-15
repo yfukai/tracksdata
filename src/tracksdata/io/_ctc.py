@@ -122,7 +122,7 @@ def from_ctc(
 ) -> None:
     """
     Load a CTC ground truth file into a graph.
-    The resulting graph will have region properties attributes from a CTC directory data.
+    The resulting graph will have region properties attributes from a CTC data directory.
 
     Graph backend method API (e.g. `graph.from_ctc`) is preferred over this function.
 
@@ -221,7 +221,7 @@ def to_ctc(
     overwrite: bool = False,
 ) -> None:
     """
-    Save a graph to a CTC ground truth directory.
+    Save a graph to a CTC data directory.
 
     Parameters
     ----------
@@ -230,7 +230,7 @@ def to_ctc(
     shape : tuple[int, ...]
         The shape of the label images (T, (Z), Y, X)
     output_dir : str | Path
-        The directory to save the label images to.
+        The directory to save the label images and the tracks graph to.
     track_id_key : str
         The attribute key to use for the track IDs.
     overwrite : bool
@@ -239,7 +239,7 @@ def to_ctc(
     See Also
     --------
     [BaseGraph.to_ctc][tracksdata.graph.BaseGraph.to_ctc]:
-        Save a graph to a CTC ground truth directory.
+        Functional API to export into a CTC data directory.
     """
     output_dir = Path(output_dir)
     if output_dir.exists():

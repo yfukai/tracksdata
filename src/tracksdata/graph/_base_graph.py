@@ -612,7 +612,6 @@ class BaseGraph(abc.ABC):
         overwrite : bool
             Whether to overwrite the output directory if it exists.
 
-
         Examples
         --------
         ```python
