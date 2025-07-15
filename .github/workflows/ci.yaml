@@ -18,6 +18,10 @@ jobs:
         python-version: "3.12"
         cache: 'pip'
 
+    # these libraries enable testing on Qt on linux
+    - name: Set up Qt
+      uses: tlambert03/setup-qt-libs@v1
+
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
