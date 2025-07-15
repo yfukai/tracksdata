@@ -611,6 +611,21 @@ class BaseGraph(abc.ABC):
             The attribute key to use for the track IDs.
         overwrite : bool
             Whether to overwrite the output directory if it exists.
+
+
+        Examples
+        --------
+        ```python
+        # ...
+        solution_graph = solver.solve(graph)
+        solution_graph.assign_track_ids()
+        solution_graph.to_ctc(shape=(10, 100, 100), output_dir="01_RES")
+        ```
+
+        See Also
+        --------
+        [to_ctc][tracksdata.io.to_ctc]:
+            Save a graph to a CTC ground truth directory.
         """
         from tracksdata.io._ctc import to_ctc
 

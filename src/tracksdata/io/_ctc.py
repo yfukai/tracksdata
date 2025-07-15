@@ -147,7 +147,7 @@ def from_ctc(
 
     See Also
     --------
-    [BaseGraph.from_ctc][tracksdata.graph._base_graph.BaseGraph.from_ctc]:
+    [BaseGraph.from_ctc][tracksdata.graph.BaseGraph.from_ctc]:
         Create a graph from a CTC data directory.
 
     [RegionPropsNodes][tracksdata.nodes.RegionPropsNodes]:
@@ -235,6 +235,11 @@ def to_ctc(
         The attribute key to use for the track IDs.
     overwrite : bool
         Whether to overwrite the output directory if it exists.
+
+    See Also
+    --------
+    [BaseGraph.to_ctc][tracksdata.graph.BaseGraph.to_ctc]:
+        Save a graph to a CTC ground truth directory.
     """
     if output_dir.exists():
         if overwrite:
