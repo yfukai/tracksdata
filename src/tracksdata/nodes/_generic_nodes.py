@@ -171,7 +171,7 @@ class GenericFuncNodeAttrs(BaseNodeAttrsOperator):
         if self.batch_size > 0:
             size = len(node_attrs)
             for i in range(0, size, self.batch_size):
-                batch_node_attrs = node_attrs.slice(i, min(i + self.batch_size, size))
+                batch_node_attrs = node_attrs.slice(i, self.batch_size)
                 batch_results = self.func(*args, **batch_node_attrs.to_dict())
                 results.extend(batch_results)
 
