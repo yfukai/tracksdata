@@ -161,7 +161,21 @@ def _matching_data(
             # storing masks of each frame
             groups_by_time[name][t] = group
 
-        result[f"labels_{name}"] = [labels[t] for t in sorted(labels.keys())]
+        result[f"labels_{name}"] = labels
+
+    n_time_points = (
+        max(
+            max(groups_by_time["ref"].keys()),
+            max(groups_by_time["comp"].keys()),
+        )
+        + 1
+    )
+    # NOTE: should we also use a min value?
+
+    # converting `labels_{...}` to a list of lists
+    # we need n_time_points to create the empty lists
+    for k, labels_dict in list(result.items()):
+        result[k] = [labels_dict.get(t, []) for t in range(n_time_points)]
 
     mapped_ref = []
     mapped_comp = []
@@ -174,14 +188,6 @@ def _matching_data(
         input_graph_key=input_graph_key,
         optimal_matching=optimal_matching,
         min_reference_intersection=min_reference_intersection,
-    )
-
-    n_time_points = (
-        max(
-            max(groups_by_time["ref"].keys()),
-            max(groups_by_time["comp"].keys()),
-        )
-        + 1
     )
 
     for _mapped_ref, _mapped_comp, _ious in multiprocessing_apply(
