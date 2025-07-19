@@ -16,7 +16,6 @@ from tracksdata.utils._multiprocessing import multiprocessing_apply
 
 if TYPE_CHECKING:
     from tracksdata.graph._base_filter import BaseFilter
-    from tracksdata.graph._graph_view import GraphView
 
 
 T = TypeVar("T", bound="BaseGraph")
@@ -335,28 +334,6 @@ class BaseGraph(abc.ABC):
             The predecessors of the nodes indexed by node ID if a list of nodes is provided.
         """
 
-    @abc.abstractmethod
-    def filter_nodes_by_attrs(
-        self,
-        *attrs: AttrComparison,
-    ) -> list[int]:
-        """
-        Filter nodes by attributes.
-
-        Parameters
-        ----------
-        attrs : AttrComparison
-            Attributes to filter by, for example:
-            ```python
-            graph.filter_nodes_by_attrs(Attr("t") == 0, Attr("label") == "A")
-            ```
-
-        Returns
-        -------
-        list[int]
-            The IDs of the filtered nodes.
-        """
-
     def _validate_subgraph_args(
         self,
         node_ids: Sequence[int] | None = None,
@@ -382,6 +359,7 @@ class BaseGraph(abc.ABC):
     def filter(
         self,
         *attr_filters: AttrComparison,
+        node_ids: Sequence[int] | None = None,
         include_targets: bool = False,
         include_sources: bool = False,
     ) -> "BaseFilter":
@@ -392,6 +370,9 @@ class BaseGraph(abc.ABC):
         ----------
         *attr_filters : AttrComparison
             The attributes to filter the nodes by.
+        node_ids : Sequence[int] | None
+            The IDs of the nodes to include in the filter.
+            If None, all nodes are used.
         include_targets : bool
             Whether to include edges out-going from the given node_ids even
             if the target node is not in the given node_ids.
@@ -403,39 +384,6 @@ class BaseGraph(abc.ABC):
         -------
         BaseFilter
             A filter object that can be used to create a subgraph or query attributes.
-        """
-
-    @abc.abstractmethod
-    def subgraph(
-        self,
-        *attr_filters: AttrComparison,
-        node_ids: Sequence[int] | None = None,
-        node_attr_keys: Sequence[str] | str | None = None,
-        edge_attr_keys: Sequence[str] | str | None = None,
-    ) -> "GraphView":
-        """
-        Create a subgraph from the graph from the given node IDs
-        or attributes' filters.
-
-        Node IDs or a single attribute filter can be used to create a subgraph.
-
-        Parameters
-        ----------
-        node_ids : Sequence[int]
-            The IDs of the nodes to include in the subgraph.
-        *attr_filters : AttrComparison
-            The attributes to filter the nodes by.
-        node_attr_keys : Sequence[str] | str | None
-            The attribute keys to get.
-            If None, all attributesare used.
-        edge_attr_keys : Sequence[str] | str | None
-            The attribute keys to get.
-            If None, all attributesare used.
-
-        Returns
-        -------
-        GraphView
-            A view of the graph with the specified nodes.
         """
 
     @abc.abstractmethod
@@ -840,7 +788,7 @@ class BaseGraph(abc.ABC):
             raise ValueError("iou_threshold must be between 0.0 and 1.0")
 
         def _estimate_overlaps(t: int) -> list[list[int, 2]]:
-            node_ids = self.filter_nodes_by_attrs(NodeAttr(DEFAULT_ATTR_KEYS.T) == t)
+            node_ids = self._filter_nodes_by_attrs(NodeAttr(DEFAULT_ATTR_KEYS.T) == t)
             masks = self.node_attrs(node_ids=node_ids, attr_keys=[DEFAULT_ATTR_KEYS.MASK])[DEFAULT_ATTR_KEYS.MASK]
             overlaps = []
             for i in range(len(masks)):

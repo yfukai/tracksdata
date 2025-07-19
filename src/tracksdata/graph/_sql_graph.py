@@ -500,12 +500,14 @@ class SQLGraph(BaseGraph):
     def filter(
         self,
         *attr_filters: AttrComparison,
+        node_ids: Sequence[int] | None = None,
         include_targets: bool = False,
         include_sources: bool = False,
     ) -> "SQLFilter":
         return SQLFilter(
             self,
             *attr_filters,
+            node_ids=node_ids,
             include_targets=include_targets,
             include_sources=include_sources,
         )
@@ -969,7 +971,7 @@ class SQLGraph(BaseGraph):
             attr_keys=attr_keys,
         )
 
-    def filter_nodes_by_attrs(
+    def _filter_nodes_by_attrs(
         self,
         *attrs: AttrComparison,
     ) -> list[int]:
@@ -1024,119 +1026,6 @@ class SQLGraph(BaseGraph):
     def edge_ids(self) -> list[int]:
         with Session(self._engine) as session:
             return [i for (i,) in session.query(self.Edge.edge_id).all()]
-
-    def subgraph(
-        self,
-        *attr_filters: AttrComparison,
-        node_ids: Sequence[int] | None = None,
-        node_attr_keys: Sequence[str] | str | None = None,
-        edge_attr_keys: Sequence[str] | str | None = None,
-    ) -> "GraphView":
-        from tracksdata.graph._graph_view import GraphView
-
-        node_attr_comps, edge_attr_comps = split_attr_comps(attr_filters)
-        self._validate_subgraph_args(node_ids, node_attr_comps, edge_attr_comps)
-
-        if hasattr(node_ids, "tolist"):
-            node_ids = node_ids.tolist()
-
-        with Session(self._engine) as session:
-            node_query = sa.select(self.Node)
-            edge_query = sa.select(self.Edge)
-
-            node_filtered = False
-
-            if node_ids is not None:
-                node_query = node_query.filter(self.Node.node_id.in_(node_ids))
-                node_filtered = True
-
-                edge_query = edge_query.filter(
-                    self.Edge.source_id.in_(node_ids),
-                    self.Edge.target_id.in_(node_ids),
-                )
-
-            if node_attr_comps:
-                node_query = _filter_query(node_query, self.Node, node_attr_comps)
-
-                node_ids = list(session.execute(node_query.with_only_columns(self.Node.node_id)).scalars().all())
-                node_filtered = True
-
-                SourceNode = aliased(self.Node)
-                TargetNode = aliased(self.Node)
-
-                edge_query = edge_query.join(
-                    SourceNode,
-                    self.Edge.source_id == SourceNode.node_id,
-                ).join(
-                    TargetNode,
-                    self.Edge.target_id == TargetNode.node_id,
-                )
-                edge_query = _filter_query(edge_query, SourceNode, node_attr_comps)
-                edge_query = _filter_query(edge_query, TargetNode, node_attr_comps)
-
-            if edge_attr_comps:
-                edge_query = _filter_query(edge_query, self.Edge, edge_attr_comps)
-
-                if not node_filtered:
-                    node_ids = (
-                        session.execute(edge_query.with_only_columns(self.Edge.source_id, self.Edge.target_id))
-                        .scalars()
-                        .all()
-                    )
-                    node_ids = np.unique(node_ids).tolist()
-                    node_query = node_query.filter(self.Node.node_id.in_(node_ids))
-
-            if node_attr_keys is not None:
-                if DEFAULT_ATTR_KEYS.NODE_ID not in node_attr_keys:
-                    node_attr_keys.append(DEFAULT_ATTR_KEYS.NODE_ID)
-
-                node_query = node_query.options(
-                    load_only(
-                        *[getattr(self.Node, key) for key in node_attr_keys],
-                    ),
-                )
-
-            if edge_attr_keys is not None:
-                edge_attr_keys = set(edge_attr_keys)
-                # we always return the source and target id by default
-                edge_attr_keys.add(DEFAULT_ATTR_KEYS.EDGE_ID)
-                edge_attr_keys.add(DEFAULT_ATTR_KEYS.EDGE_SOURCE)
-                edge_attr_keys.add(DEFAULT_ATTR_KEYS.EDGE_TARGET)
-                edge_attr_keys = list(edge_attr_keys)
-
-                edge_query = edge_query.options(
-                    load_only(
-                        *[getattr(self.Edge, key) for key in edge_attr_keys],
-                    ),
-                )
-
-        node_map_to_root = {}
-        node_map_from_root = {}
-        rx_graph = rx.PyDiGraph()
-
-        node_query = session.execute(node_query)
-        edge_query = session.execute(edge_query)
-
-        for row in node_query.scalars().all():
-            data = {k: v for k, v in row.__dict__.items() if not k.startswith("_")}
-            root_node_id = data.pop(DEFAULT_ATTR_KEYS.NODE_ID)
-            node_id = rx_graph.add_node(data)
-            node_map_to_root[node_id] = root_node_id
-            node_map_from_root[root_node_id] = node_id
-
-        for row in edge_query.scalars().all():
-            data = {k: v for k, v in row.__dict__.items() if not k.startswith("_")}
-            source_id = node_map_from_root[data.pop(DEFAULT_ATTR_KEYS.EDGE_SOURCE)]
-            target_id = node_map_from_root[data.pop(DEFAULT_ATTR_KEYS.EDGE_TARGET)]
-            rx_graph.add_edge(source_id, target_id, data)
-
-        graph = GraphView(
-            rx_graph=rx_graph,
-            node_map_to_root=node_map_to_root,
-            root=self,
-        )
-
-        return graph
 
     def time_points(self) -> list[int]:
         with Session(self._engine) as session:

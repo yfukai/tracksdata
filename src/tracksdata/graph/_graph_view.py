@@ -367,12 +367,14 @@ class GraphView(RustWorkXGraph):
             raise RuntimeError("Out of sync graph view cannot be used to get predecessors")
         return super().predecessors(node_ids, attr_keys)
 
-    def filter_nodes_by_attrs(
+    def _filter_nodes_by_attrs(
         self,
         *attrs: AttrComparison,
+        node_ids: Sequence[int] | None = None,
     ) -> list[int]:
-        node_ids = super().filter_nodes_by_attrs(
+        node_ids = super()._filter_nodes_by_attrs(
             *attrs,
+            node_ids=map_ids(self._node_map_from_root, node_ids),
         )
         return map_ids(self._node_map_to_root, node_ids)
 

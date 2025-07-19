@@ -122,26 +122,23 @@ def test_filter_nodes_by_attribute(graph_backend: BaseGraph) -> None:
     node3 = graph_backend.add_node({"t": 1, "label": "A"})
 
     # Filter by time
-    nodes = graph_backend.filter_nodes_by_attrs(NodeAttr("t") == 0)
+    nodes = graph_backend.filter(NodeAttr("t") == 0).node_ids()
     assert set(nodes) == {node1, node2}
 
     # Filter by label
-    nodes = graph_backend.filter_nodes_by_attrs(NodeAttr("label") == "A")
+    nodes = graph_backend.filter(NodeAttr("label") == "A").node_ids()
     assert set(nodes) == {node1, node3}
 
     # Filter by t and label using multiple conditions
-    nodes = graph_backend.filter_nodes_by_attrs(
-        NodeAttr("t") == 1,
-        NodeAttr("label") == "A",
-    )
+    nodes = graph_backend.filter(NodeAttr("t") == 1, NodeAttr("label") == "A").node_ids()
     assert set(nodes) == {node3}
 
     # Test with inequality
-    nodes = graph_backend.filter_nodes_by_attrs(NodeAttr("t") > 0)
+    nodes = graph_backend.filter(NodeAttr("t") > 0).node_ids()
     assert set(nodes) == {node3}
 
     # Test with multiple conditions using *args for AND
-    nodes = graph_backend.filter_nodes_by_attrs(NodeAttr("t") == 0, NodeAttr("label") == "A")
+    nodes = graph_backend.filter(NodeAttr("t") == 0, NodeAttr("label") == "A").node_ids()
     assert set(nodes) == {node1}
 
 
@@ -269,10 +266,10 @@ def test_subgraph_with_node_and_edge_attr_filters(graph_backend: BaseGraph) -> N
     edge2 = graph_backend.add_edge(node3, node5, attrs={"weight": 0.2})
     graph_backend.add_edge(node2, node4, attrs={"weight": 0.0})
 
-    subgraph = graph_backend.subgraph(
+    subgraph = graph_backend.filter(
         NodeAttr("x") <= 1.0,
         EdgeAttr("weight") < 0.5,
-    )
+    ).subgraph()
 
     assert subgraph.num_nodes == 3
     assert subgraph.num_edges == 1
@@ -299,11 +296,11 @@ def test_subgraph_with_node_ids_and_filters(graph_backend: BaseGraph) -> None:
     graph_backend.add_edge(node3, node5, attrs={"weight": 0.2})
     graph_backend.add_edge(node2, node4, attrs={"weight": 0.0})
 
-    subgraph = graph_backend.subgraph(
+    subgraph = graph_backend.filter(
         NodeAttr("x") <= 1.0,
         EdgeAttr("weight") < 0.5,
         node_ids=[node1, node3],
-    )
+    ).subgraph()
 
     assert subgraph.num_nodes == 2
     assert subgraph.num_edges == 0

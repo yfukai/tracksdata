@@ -6,12 +6,7 @@ import numpy as np
 import polars as pl
 import rustworkx as rx
 
-from tracksdata.attrs import (
-    AttrComparison,
-    attr_comps_to_strs,
-    polars_reduce_attr_comps,
-    split_attr_comps,
-)
+from tracksdata.attrs import AttrComparison, split_attr_comps
 from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.functional._rx import _assign_track_ids
 from tracksdata.graph._base_filter import BaseFilter, cache_method
@@ -72,12 +67,14 @@ class RXFilter(BaseFilter):
         self,
         graph: "RustWorkXGraph",
         *attr_comps: AttrComparison,
+        node_ids: Sequence[int] | None = None,
         include_targets: bool = False,
         include_sources: bool = False,
     ) -> None:
         super().__init__()
         self._graph = graph
         self._attr_comps = attr_comps
+        self._node_ids = node_ids
         self._include_targets = include_targets
         self._include_sources = include_sources
         self._node_attr_comps, self._edge_attr_comps = split_attr_comps(attr_comps)
@@ -88,10 +85,13 @@ class RXFilter(BaseFilter):
         Get the node IDs without considering their `source` or `target` neighbors.
         """
         if len(self._node_attr_comps) == 0:
-            node_ids = self._graph.rx_graph.node_indices()
+            if self._node_ids is None:
+                node_ids = self._graph.rx_graph.node_indices()
+            else:
+                node_ids = self._node_ids
         else:
             # only nodes are filtered return nodes that pass node filters
-            node_ids = self._graph.filter_nodes_by_attrs(*self._node_attr_comps)
+            node_ids = self._graph._filter_nodes_by_attrs(*self._node_attr_comps, node_ids=self._node_ids)
 
         return node_ids
 
@@ -117,6 +117,11 @@ class RXFilter(BaseFilter):
         if self._node_attr_comps:
             # if there are node filters, we need to add the nodes that pass the node filters
             node_ids.append(self._current_node_ids())
+
+        node_ids = [v for v in node_ids if len(v) > 0]
+
+        if len(node_ids) == 0:
+            return []
 
         node_ids = np.unique(np.concatenate(node_ids, dtype=int))
         return node_ids.tolist()
@@ -187,7 +192,7 @@ class RXFilter(BaseFilter):
 
         df = df.select(attr_keys)
         if unpack:
-            df = unpack_array_attrs(df, attr_keys, unpack_array_attrs)
+            df = unpack_array_attrs(df)
         return df
 
     @cache_method
@@ -300,12 +305,14 @@ class RustWorkXGraph(BaseGraph):
     def filter(
         self,
         *attr_filters: AttrComparison,
+        node_ids: Sequence[int] | None = None,
         include_targets: bool = False,
         include_sources: bool = False,
     ) -> RXFilter:
         return RXFilter(
             self,
             *attr_filters,
+            node_ids=node_ids,
             include_targets=include_targets,
             include_sources=include_sources,
         )
@@ -608,9 +615,10 @@ class RustWorkXGraph(BaseGraph):
             attr_keys,
         )
 
-    def filter_nodes_by_attrs(
+    def _filter_nodes_by_attrs(
         self,
         *attrs: AttrComparison,
+        node_ids: Sequence[int] | None = None,
     ) -> list[int]:
         """
         Filter nodes by attributes.
@@ -622,6 +630,9 @@ class RustWorkXGraph(BaseGraph):
             ```python
             graph.filter_nodes_by_attrs(Attr("t") == 0, Attr("label") == "A")
             ```
+        node_ids : list[int] | None
+            The IDs of the nodes to include in the filter.
+            If None, all nodes are used.
 
         Returns
         -------
@@ -632,12 +643,21 @@ class RustWorkXGraph(BaseGraph):
         node_map = None
         # entire graph
         attrs, time = _pop_time_eq(attrs)
+        selected_nodes = None
 
         if time is not None:
             selected_nodes = self._time_to_nodes.get(time, [])
+
+            if node_ids is not None:
+                selected_nodes = np.intersect1d(selected_nodes, node_ids).tolist()
+
             if len(attrs) == 0:
                 return selected_nodes
 
+        elif node_ids is not None:
+            selected_nodes = node_ids
+
+        if selected_nodes is not None:
             # subgraph of selected nodes
             rx_graph, node_map = rx_graph.subgraph_with_nodemap(selected_nodes)
 
@@ -659,76 +679,6 @@ class RustWorkXGraph(BaseGraph):
         Get the IDs of all edges in the graph.
         """
         return [int(i) for i in self.rx_graph.edge_indices()]
-
-    def subgraph(
-        self,
-        *attr_filters: AttrComparison,
-        node_ids: Sequence[int] | None = None,
-        node_attr_keys: Sequence[str] | str | None = None,
-        edge_attr_keys: Sequence[str] | str | None = None,
-    ) -> "GraphView":
-        """
-        Create a subgraph from the graph from the given node IDs
-        or attributes' filters.
-
-        Node IDs or a single attribute filter can be used to create a subgraph.
-
-        Parameters
-        ----------
-        *attr_filters : AttrComparison
-            The attributes to filter the nodes and edges by.
-        node_ids : Sequence[int] | None
-            The IDs of the nodes to include in the subgraph.
-        node_attr_keys : Sequence[str] | str | None
-            The attribute keys to include in the subgraph.
-        edge_attr_keys : Sequence[str] | str | None
-            The attribute keys to include in the subgraph.
-
-        Returns
-        -------
-        RustWorkXGraph
-            A new graph with the specified nodes.
-        """
-        from tracksdata.graph._graph_view import GraphView
-
-        node_attr_comps, edge_attr_comps = split_attr_comps(attr_filters)
-        self._validate_subgraph_args(node_ids, node_attr_comps, edge_attr_comps)
-
-        if node_attr_comps:
-            filtered_node_ids = self.filter_nodes_by_attrs(*node_attr_comps)
-            if node_ids is not None:
-                node_ids = np.intersect1d(node_ids, filtered_node_ids).tolist()
-            else:
-                node_ids = filtered_node_ids
-
-        if node_ids is None and edge_attr_comps:
-            edges_df = self.edge_attrs(node_ids=node_ids, attr_keys=attr_comps_to_strs(edge_attr_comps))
-            mask = polars_reduce_attr_comps(edges_df, edge_attr_comps, operator.and_)
-            node_ids = np.unique(
-                edges_df.filter(mask)
-                .select(
-                    DEFAULT_ATTR_KEYS.EDGE_SOURCE,
-                    DEFAULT_ATTR_KEYS.EDGE_TARGET,
-                )
-                .to_numpy()
-            )
-
-        rx_graph, node_map = self.rx_graph.subgraph_with_nodemap(node_ids)
-
-        if edge_attr_comps:
-            LOG.info("Removing edges without attributes %s", edge_attr_comps)
-            _filter_func = _create_filter_func(edge_attr_comps)
-            for source, target, edge_attr in rx_graph.weighted_edge_list():
-                if not _filter_func(edge_attr):
-                    rx_graph.remove_edge(source, target)
-
-        graph_view = GraphView(
-            rx_graph=rx_graph,
-            node_map_to_root=dict(node_map.items()),
-            root=self,
-        )
-
-        return graph_view
 
     def time_points(self) -> list[int]:
         """
