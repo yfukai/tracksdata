@@ -7,8 +7,13 @@ import rustworkx as rx
 from tracksdata.attrs import AttrComparison
 from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.functional._rx import _assign_track_ids
+from tracksdata.graph._base_filter import cache_method
 from tracksdata.graph._base_graph import BaseGraph
-from tracksdata.graph._rustworkx_graph import RustWorkXGraph, RXFilter
+from tracksdata.graph._rustworkx_graph import (
+    RustWorkXGraph,
+    RXFilter,
+    _create_filter_func,
+)
 
 
 @overload
@@ -30,6 +35,58 @@ def map_ids(
         indices = indices.tolist()
 
     return [map[node_id] for node_id in indices]
+
+
+class IndexRXFilter(RXFilter):
+    _graph: "GraphView"
+
+    def __init__(
+        self,
+        graph: "GraphView",
+        *attr_comps: AttrComparison,
+        node_ids: Sequence[int] | None = None,
+        include_targets: bool = False,
+        include_sources: bool = False,
+    ) -> None:
+        super().__init__(
+            graph,
+            *attr_comps,
+            node_ids=node_ids,
+            include_targets=include_targets,
+            include_sources=include_sources,
+        )
+
+    @cache_method
+    def node_ids(self) -> list[int]:
+        indices = super().node_ids()
+        return map_ids(self._graph._node_map_to_root, indices)
+
+    @cache_method
+    def subgraph(
+        self,
+        node_attr_keys: Sequence[str] | str | None = None,
+        edge_attr_keys: Sequence[str] | str | None = None,
+    ) -> "GraphView":
+        from tracksdata.graph._graph_view import GraphView
+
+        node_ids = super().node_ids()
+
+        rx_graph, node_map = self._graph.rx_graph.subgraph_with_nodemap(node_ids)
+        if self._edge_attr_comps:
+            _filter_func = _create_filter_func(self._edge_attr_comps)
+            for src, tgt, attr in rx_graph.weighted_edge_list():
+                if not _filter_func(attr):
+                    rx_graph.remove_edge(src, tgt)
+
+        node_map = {k: self._graph._node_map_to_root[v] for k, v in node_map.items()}
+
+        graph_view = GraphView(
+            rx_graph,
+            node_map_to_root=dict(node_map.items()),
+            root=self._graph._root,
+        )
+
+        return graph_view
 
 
 class GraphView(RustWorkXGraph):
@@ -220,8 +277,8 @@ class GraphView(RustWorkXGraph):
         include_targets: bool = False,
         include_sources: bool = False,
     ) -> RXFilter:
-        # TODO: fix node ids mapping
-        return super().filter(
+        return IndexRXFilter(
+            self,
             *attr_filters,
             node_ids=map_ids(self._node_map_from_root, node_ids),
             include_targets=include_targets,
