@@ -8,7 +8,7 @@ from tracksdata.attrs import EdgeAttr, NodeAttr
 from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.graph import RustWorkXGraph, SQLGraph
 from tracksdata.graph._base_graph import BaseGraph
-from tracksdata.io._numpy_array import load_array
+from tracksdata.io._numpy_array import from_array
 from tracksdata.nodes._mask import Mask
 
 
@@ -1032,13 +1032,11 @@ def test_from_numpy_array_basic(graph_backend: BaseGraph) -> None:
         ]
     )
 
-    radius = 2
-
     if isinstance(graph_backend, RustWorkXGraph):
         # for RustWorkXGraph we validate if the OOP API is working
-        graph_backend = RustWorkXGraph.from_array(positions, radius=radius, rx_graph=None)
+        graph_backend = RustWorkXGraph.from_array(positions, rx_graph=None)
     else:
-        load_array(positions, graph_backend, radius=radius)
+        from_array(positions, graph_backend)
 
     assert graph_backend.num_nodes == 3
     assert graph_backend.num_edges == 0  # No track_ids, so no edges
@@ -1047,9 +1045,6 @@ def test_from_numpy_array_basic(graph_backend: BaseGraph) -> None:
     nodes_df = graph_backend.node_attrs(attr_keys=["t", "y", "x"])
 
     np.testing.assert_array_equal(nodes_df.to_numpy(), positions)
-
-    # Check that mask attribute was added
-    assert DEFAULT_ATTR_KEYS.MASK in graph_backend.node_attr_keys
 
 
 def test_from_numpy_array_3d(graph_backend: BaseGraph) -> None:
@@ -1066,24 +1061,20 @@ def test_from_numpy_array_3d(graph_backend: BaseGraph) -> None:
     track_ids = np.asarray([1, 2, 3])
     track_id_graph = {3: 1, 2: 1}
 
-    radius = np.asarray([1, 3, 5])
-
     if isinstance(graph_backend, RustWorkXGraph):
         # for RustWorkXGraph we validate if the OOP API is working
         graph_backend = RustWorkXGraph.from_array(
             positions,
             track_ids=track_ids,
             track_id_graph=track_id_graph,
-            radius=radius,
             rx_graph=None,
         )
     else:
-        load_array(
+        from_array(
             positions,
             graph_backend,
             track_ids=track_ids,
             track_id_graph=track_id_graph,
-            radius=radius,
         )
 
     assert graph_backend.num_nodes == 3
@@ -1100,10 +1091,6 @@ def test_from_numpy_array_3d(graph_backend: BaseGraph) -> None:
     assert [node_ids[0], node_ids[2]] in edges
 
     np.testing.assert_array_equal(nodes_df.select(["t", "z", "y", "x"]).to_numpy(), positions)
-
-    masks = [m.bbox[3] - m.bbox[0] for m in nodes_df[DEFAULT_ATTR_KEYS.MASK].to_list()]
-    np.testing.assert_array_equal(masks, [r * 2 + 1 for r in radius])
-
     np.testing.assert_array_equal(nodes_df[DEFAULT_ATTR_KEYS.TRACK_ID].to_list(), track_ids)
 
 
@@ -1114,11 +1101,7 @@ def test_from_numpy_array_validation_errors() -> None:
     with pytest.raises(ValueError, match="Expected 4 or 5 dimensions"):
         RustWorkXGraph.from_array(invalid_positions)
 
-    # Test radius length mismatch
     positions = np.array([[0, 10, 20], [1, 15, 25]])
-    invalid_radius = np.array([1, 2, 3])  # Length 3, positions length 2
-    with pytest.raises(ValueError, match="must be a scalar or have the same length"):
-        RustWorkXGraph.from_array(positions, radius=invalid_radius)
 
     # Test track_id_graph without track_ids
     with pytest.raises(ValueError, match="must be provided if"):
@@ -1279,3 +1262,27 @@ def test_compute_overlaps_empty_graph(graph_backend: BaseGraph) -> None:
     graph_backend.compute_overlaps(iou_threshold=0.5)
     assert not graph_backend.has_overlaps()
     assert graph_backend.overlaps() == []
+
+
+def test_summary(graph_backend: BaseGraph) -> None:
+    """Test summary method."""
+    graph_backend.add_node_attr_key("x", 0.0)
+    graph_backend.add_edge_attr_key("weight", 0.0)
+    graph_backend.add_edge_attr_key("type", "good")
+
+    node1 = graph_backend.add_node({"t": 0, "x": 1.0})
+    node2 = graph_backend.add_node({"t": 1, "x": 2.0})
+    node3 = graph_backend.add_node({"t": 0, "x": 3.0})
+
+    graph_backend.add_edge(node1, node2, {"weight": 0.5, "type": "good"})
+    graph_backend.add_edge(node3, node2, {"weight": 0.5, "type": "bad"})
+
+    graph_backend.add_overlap(node1, node3)
+
+    summary = graph_backend.summary(attrs_stats=True, print_summary=True)
+    print(summary)
+
+    assert isinstance(summary, str)
+    assert "Graph summary" in summary
+    assert "Number of nodes" in summary
+    assert "Number of edges" in summary
