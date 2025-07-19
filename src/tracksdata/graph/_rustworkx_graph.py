@@ -1050,30 +1050,56 @@ class IndexedRXGraph(RustWorkXGraph):
         super().__init__()
 
     @overload
-    def _from_world_id(self, world_id: None) -> list[int]: ...
+    def from_world_id(self, world_id: None) -> list[int]: ...
 
     @overload
-    def _from_world_id(self, world_id: int) -> int: ...
+    def from_world_id(self, world_id: int) -> int: ...
 
     @overload
-    def _from_world_id(self, world_id: list[int]) -> list[int]: ...
+    def from_world_id(self, world_id: list[int]) -> list[int]: ...
 
-    def _from_world_id(self, world_id: int | list[int] | None) -> int | list[int]:
+    def from_world_id(self, world_id: int | list[int] | None) -> int | list[int]:
+        """
+        Convert world ids to rustworkx graph ids.
+
+        Parameters
+        ----------
+        world_id : int | list[int] | None
+            The world ids to convert.
+
+        Returns
+        -------
+        int | list[int]
+            The rustworkx graph ids.
+        """
         if world_id is None:
             return list(self.rx_graph.node_indices())
         vec_map = np.vectorize(self._world_to_graph_id.__getitem__, otypes=[int])
         return vec_map(np.asarray(world_id, dtype=int)).tolist()
 
     @overload
-    def _to_world_id(self, graph_id: None) -> None: ...
+    def to_world_id(self, graph_id: None) -> None: ...
 
     @overload
-    def _to_world_id(self, graph_id: int) -> int: ...
+    def to_world_id(self, graph_id: int) -> int: ...
 
     @overload
-    def _to_world_id(self, graph_id: list[int]) -> list[int]: ...
+    def to_world_id(self, graph_id: list[int]) -> list[int]: ...
 
-    def _to_world_id(self, graph_id: int | list[int] | None) -> int | list[int] | None:
+    def to_world_id(self, graph_id: int | list[int] | None) -> int | list[int] | None:
+        """
+        Convert rustworkx graph ids to world ids.
+
+        Parameters
+        ----------
+        graph_id : int | list[int] | None
+            The rustworkx graph ids to convert.
+
+        Returns
+        -------
+        int | list[int] | None
+            The world ids.
+        """
         if graph_id is None:
             return None
         vec_map = np.vectorize(self._graph_to_world_id.__getitem__, otypes=[int])
@@ -1093,6 +1119,24 @@ class IndexedRXGraph(RustWorkXGraph):
         validate_keys: bool = True,
         index: int | None = None,
     ) -> int:
+        """
+        Add a node to the graph.
+
+        Parameters
+        ----------
+        attrs : dict[str, Any]
+            The attributes of the node.
+        validate_keys : bool
+            Whether to validate the keys of the attributes.
+        index : int | None
+            The index of the node. If None, the node id will be used.
+            This might cause issues if the node id is not unique.
+
+        Returns
+        -------
+        int
+            The index of the node.
+        """
         node_id = super().add_node(attrs, validate_keys)
         if index is None:
             index = node_id
@@ -1105,6 +1149,22 @@ class IndexedRXGraph(RustWorkXGraph):
         nodes: list[dict[str, Any]],
         indices: list[int] | None = None,
     ) -> list[int]:
+        """
+        Add multiple nodes to the graph.
+
+        Parameters
+        ----------
+        nodes : list[dict[str, Any]]
+            The attributes of the nodes.
+        indices : list[int] | None
+            The indices of the nodes. If None, the node ids will be used.
+            This might cause issues if the node ids are not unique.
+
+        Returns
+        -------
+        list[int]
+            The indices of the nodes.
+        """
         graph_ids = super().bulk_add_nodes(nodes)
 
         if indices is None:
@@ -1120,12 +1180,33 @@ class IndexedRXGraph(RustWorkXGraph):
         self,
         node_ids: Sequence[int] | None = None,
     ) -> tuple[rx.PyDiGraph, rx.NodeMap]:
-        node_ids = self._from_world_id(node_ids)
+        """
+        Get a subgraph of the graph.
+
+        Parameters
+        ----------
+        node_ids : Sequence[int] | None
+            The node ids to include in the subgraph.
+
+        Returns
+        -------
+        tuple[rx.PyDiGraph, rx.NodeMap]
+            The subgraph and the node map.
+        """
+        node_ids = self.from_world_id(node_ids)
         rx_graph, node_map = super()._rx_subgraph_with_nodemap(node_ids)
         node_map = {k: self._graph_to_world_id[v] for k, v in node_map.items()}
         return rx_graph, node_map
 
     def node_ids(self) -> list[int]:
+        """
+        Get the node ids of the graph.
+
+        Returns
+        -------
+        list[int]
+            The node ids of the graph.
+        """
         return list(self._world_to_graph_id.keys())
 
     def node_attrs(
@@ -1135,7 +1216,24 @@ class IndexedRXGraph(RustWorkXGraph):
         attr_keys: Sequence[str] | str | None = None,
         unpack: bool = False,
     ) -> pl.DataFrame:
-        node_ids = self._from_world_id(node_ids)
+        """
+        Get the node attributes of the graph.
+
+        Parameters
+        ----------
+        node_ids : Sequence[int] | None
+            The node ids to include in the subgraph.
+        attr_keys : Sequence[str] | str | None
+            The attributes to include in the subgraph.
+        unpack : bool
+            Whether to unpack the attributes.
+
+        Returns
+        -------
+        pl.DataFrame
+            The node attributes of the graph.
+        """
+        node_ids = self.from_world_id(node_ids)
         df = super().node_attrs(node_ids=node_ids, attr_keys=attr_keys, unpack=unpack)
         df = self._df_to_world_id(df, [DEFAULT_ATTR_KEYS.NODE_ID])
         return df
@@ -1148,17 +1246,62 @@ class IndexedRXGraph(RustWorkXGraph):
         include_targets: bool = False,
         unpack: bool = False,
     ) -> pl.DataFrame:
-        node_ids = self._from_world_id(node_ids)
+        """
+        Get the edge attributes of the graph.
+
+        Parameters
+        ----------
+        node_ids : Sequence[int] | None
+            The node ids to include in the subgraph.
+        attr_keys : Sequence[str] | str | None
+            The attributes to include in the subgraph.
+        include_targets : bool
+            Whether to include the target node attributes.
+        unpack : bool
+            Whether to unpack the attributes.
+
+        Returns
+        -------
+        pl.DataFrame
+            The edge attributes of the graph.
+        """
+        node_ids = self.from_world_id(node_ids)
         df = super().edge_attrs(node_ids=node_ids, attr_keys=attr_keys, include_targets=include_targets, unpack=unpack)
         df = self._df_to_world_id(df, [DEFAULT_ATTR_KEYS.EDGE_SOURCE, DEFAULT_ATTR_KEYS.EDGE_TARGET])
         return df
 
     def in_degree(self, node_ids: list[int] | int | None = None) -> list[int] | int:
-        node_ids = self._from_world_id(node_ids)
+        """
+        Get the in degree of the graph.
+
+        Parameters
+        ----------
+        node_ids : list[int] | int | None
+            The node ids to include in the subgraph.
+
+        Returns
+        -------
+        list[int] | int
+            The in degree of the graph.
+        """
+        node_ids = self.from_world_id(node_ids)
         return super().in_degree(node_ids)
 
     def out_degree(self, node_ids: list[int] | int | None = None) -> list[int] | int:
-        node_ids = self._from_world_id(node_ids)
+        """
+        Get the out degree of the graph.
+
+        Parameters
+        ----------
+        node_ids : list[int] | int | None
+            The node ids to include in the subgraph.
+
+        Returns
+        -------
+        list[int] | int
+            The out degree of the graph.
+        """
+        node_ids = self.from_world_id(node_ids)
         return super().out_degree(node_ids)
 
     def add_edge(
@@ -1168,6 +1311,25 @@ class IndexedRXGraph(RustWorkXGraph):
         attrs: dict[str, Any],
         validate_keys: bool = True,
     ) -> int:
+        """
+        Add an edge to the graph.
+
+        Parameters
+        ----------
+        source_id : int
+            The source node id.
+        target_id : int
+            The target node id.
+        attrs : dict[str, Any]
+            The attributes of the edge.
+        validate_keys : bool
+            Whether to validate the keys of the attributes.
+
+        Returns
+        -------
+        int
+            The edge id.
+        """
         try:
             source_id = self._world_to_graph_id[source_id]
             target_id = self._world_to_graph_id[target_id]
@@ -1176,6 +1338,21 @@ class IndexedRXGraph(RustWorkXGraph):
         return super().add_edge(source_id, target_id, attrs, validate_keys)
 
     def add_overlap(self, source_id: int, target_id: int) -> int:
+        """
+        Add an overlap to the graph.
+
+        Parameters
+        ----------
+        source_id : int
+            The source node id.
+        target_id : int
+            The target node id.
+
+        Returns
+        -------
+        int
+            The overlap id.
+        """
         try:
             source_id = self._world_to_graph_id[source_id]
             target_id = self._world_to_graph_id[target_id]
@@ -1184,12 +1361,25 @@ class IndexedRXGraph(RustWorkXGraph):
         return super().add_overlap(source_id, target_id)
 
     def overlaps(self, node_ids: list[int] | int | None = None) -> list[list[int, 2]]:
+        """
+        Get the overlaps of the graph.
+
+        Parameters
+        ----------
+        node_ids : list[int] | int | None
+            The node ids to include in the subgraph.
+
+        Returns
+        -------
+        list[list[int, 2]]
+            The overlaps of the graph.
+        """
         try:
-            node_ids = self._from_world_id(node_ids)
+            node_ids = self.from_world_id(node_ids)
         except KeyError:
             LOG.warning(f"`node_ids` {node_ids} not found in index map.")
             return []
-        overlaps = self._to_world_id(super().overlaps(node_ids))
+        overlaps = self.to_world_id(super().overlaps(node_ids))
         return overlaps
 
     def _get_neighbors(
@@ -1198,7 +1388,7 @@ class IndexedRXGraph(RustWorkXGraph):
         node_ids: list[int] | int | None = None,
         attr_keys: Sequence[str] | str | None = None,
     ) -> dict[int, pl.DataFrame] | pl.DataFrame:
-        node_ids = self._from_world_id(node_ids)
+        node_ids = self.from_world_id(node_ids)
         dfs = super()._get_neighbors(neighbors_func, node_ids, attr_keys)
         if isinstance(dfs, pl.DataFrame):
             dfs = self._df_to_world_id(dfs, [DEFAULT_ATTR_KEYS.NODE_ID])
@@ -1215,9 +1405,32 @@ class IndexedRXGraph(RustWorkXGraph):
         attrs: dict[str, Any],
         node_ids: Sequence[int] | None = None,
     ) -> None:
-        node_ids = self._from_world_id(node_ids)
+        """
+        Update the node attributes of the graph.
+
+        Parameters
+        ----------
+        attrs : dict[str, Any]
+            The attributes to update.
+        node_ids : Sequence[int] | None
+            The node ids to update.
+        """
+        node_ids = self.from_world_id(node_ids)
         super().update_node_attrs(attrs=attrs, node_ids=node_ids)
 
     def filter_nodes_by_attrs(self, *attrs: AttrComparison) -> list[int]:
+        """
+        Filter the nodes of the graph by attributes.
+
+        Parameters
+        ----------
+        attrs : AttrComparison
+            The attributes to filter by.
+
+        Returns
+        -------
+        list[int]
+            The filtered node ids.
+        """
         node_ids = super().filter_nodes_by_attrs(*attrs)
-        return self._to_world_id(node_ids)
+        return self.to_world_id(node_ids)
