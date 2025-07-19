@@ -66,10 +66,14 @@ TracksData provides utilities for converting to napari format:
 ```python
 import tracksdata as td
 
-labels, tracks_df, track_graph = td.functional.to_napari_format(solution_graph)
+labels = ...
+
+tracks_df, track_graph, track_labels = td.functional.to_napari_format(
+    solution_graph, shape=labels.shape, mask_key="mask",
+)
 
 viewer = napari.Viewer()
-viewer.add_labels(labels)
+viewer.add_labels(track_labels)
 viewer.add_tracks(tracks_df, graph=track_graph)
 napari.run()
 ```
