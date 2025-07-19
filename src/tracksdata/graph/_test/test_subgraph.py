@@ -505,14 +505,19 @@ def test_nested_subgraph_creation(graph_backend: BaseGraph) -> None:
 
     # Create nested subgraphs
     first_subgraph = graph_with_data.filter(node_ids=original_nodes[:4]).subgraph()
-    second_subgraph = first_subgraph.filter(node_ids=original_nodes[:2]).subgraph()
+
+    second_subgraph = first_subgraph.filter(node_ids=original_nodes[-2:]).subgraph()
+
+    print("original", graph_with_data.node_attrs())
+    print("first", first_subgraph.node_attrs())
+    print("second", second_subgraph.node_attrs())
 
     # Verify nested subgraph properties
     assert second_subgraph.num_nodes == 2
-    assert set(second_subgraph.node_ids()) == set(original_nodes[:2])
+    assert set(second_subgraph.node_ids()) == set(original_nodes[-2:])
 
     # Verify node attributesare preserved through all levels
-    for node_id in original_nodes[:2]:
+    for node_id in original_nodes[-2:]:
         graphs = [graph_with_data, first_subgraph, second_subgraph]
         attributes = [g.node_attrs(node_ids=[node_id]) for g in graphs]
 
@@ -529,7 +534,7 @@ def test_nested_subgraph_edge_preservation(graph_backend: BaseGraph) -> None:
 
     # Create nested subgraphs: original -> first (3 nodes) -> nested (2 nodes)
     first_subgraph = graph_with_data.filter(node_ids=original_nodes[:3]).subgraph()
-    nested_subgraph = first_subgraph.filter(node_ids=original_nodes[:2]).subgraph()
+    nested_subgraph = first_subgraph.filter(node_ids=original_nodes[-2:]).subgraph()
 
     # Verify the nested subgraph has exactly one edge: 0->1
     nested_edges = nested_subgraph.edge_attrs()
@@ -538,7 +543,7 @@ def test_nested_subgraph_edge_preservation(graph_backend: BaseGraph) -> None:
     edge_source = nested_edges[DEFAULT_ATTR_KEYS.EDGE_SOURCE].to_list()[0]
     edge_target = nested_edges[DEFAULT_ATTR_KEYS.EDGE_TARGET].to_list()[0]
 
-    assert (edge_source, edge_target) == (original_nodes[0], original_nodes[1])
+    assert (edge_source, edge_target) == (original_nodes[-2], original_nodes[-1])
 
 
 def test_nested_subgraph_modifications(graph_backend: BaseGraph) -> None:

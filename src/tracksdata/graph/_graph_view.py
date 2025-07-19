@@ -8,7 +8,7 @@ from tracksdata.attrs import AttrComparison
 from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.functional._rx import _assign_track_ids
 from tracksdata.graph._base_graph import BaseGraph
-from tracksdata.graph._rustworkx_graph import RustWorkXGraph
+from tracksdata.graph._rustworkx_graph import RustWorkXGraph, RXFilter
 
 
 @overload
@@ -147,24 +147,6 @@ class GraphView(RustWorkXGraph):
         indices = self.rx_graph.edge_indices()
         return map_ids(self._edge_map_to_root, indices)
 
-    def subgraph(
-        self,
-        *attr_filters: AttrComparison,
-        node_ids: Sequence[int] | None = None,
-        node_attr_keys: Sequence[str] | str | None = None,
-        edge_attr_keys: Sequence[str] | str | None = None,
-    ) -> "GraphView":
-        subgraph = super().subgraph(
-            *attr_filters,
-            node_ids=map_ids(self._node_map_from_root, node_ids),
-            node_attr_keys=node_attr_keys,
-            edge_attr_keys=edge_attr_keys,
-        )
-
-        subgraph._replace_parent_graph_with_root()
-
-        return subgraph
-
     def add_overlap(
         self,
         source_id: int,
@@ -230,6 +212,21 @@ class GraphView(RustWorkXGraph):
         if node_ids is None:
             node_ids = self.node_ids()
         return self._root.overlaps(node_ids)
+
+    def filter(
+        self,
+        *attr_filters: AttrComparison,
+        node_ids: Sequence[int] | None = None,
+        include_targets: bool = False,
+        include_sources: bool = False,
+    ) -> RXFilter:
+        # TODO: fix node ids mapping
+        return super().filter(
+            *attr_filters,
+            node_ids=map_ids(self._node_map_from_root, node_ids),
+            include_targets=include_targets,
+            include_sources=include_sources,
+        )
 
     @property
     def node_attr_keys(self) -> list[str]:

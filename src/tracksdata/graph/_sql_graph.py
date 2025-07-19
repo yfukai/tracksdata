@@ -73,6 +73,7 @@ class SQLFilter(BaseFilter):
         self,
         graph: "SQLGraph",
         *attr_filters: AttrComparison,
+        node_ids: Sequence[int] | None = None,
         include_targets: bool = False,
         include_sources: bool = False,
     ):
@@ -85,8 +86,18 @@ class SQLFilter(BaseFilter):
         # creating initial query
         self._node_query: sa.Select = sa.select(self._graph.Node)
         self._edge_query: sa.Select = sa.select(self._graph.Edge)
+        node_filtered = False
+
+        if node_ids is not None:
+            self._node_query = self._node_query.filter(self._graph.Node.node_id.in_(node_ids))
+            self._edge_query = self._edge_query.filter(
+                self._graph.Edge.source_id.in_(node_ids),
+                self._graph.Edge.target_id.in_(node_ids),
+            )
+            node_filtered = True
 
         if self._node_attr_comps:
+            node_filtered = True
             # filtering nodes by attributes
             self._node_query = _filter_query(self._node_query, self._graph.Node, self._node_attr_comps)
 
@@ -118,7 +129,7 @@ class SQLFilter(BaseFilter):
 
             # we haven't filtered the nodes by attributes
             # so we only return the nodes that are in the edges
-            if not self._node_attr_comps:
+            if not node_filtered:
                 self._node_query = self._node_query.filter(
                     sa.or_(
                         self._graph.Node.node_id.in_(sa.select(self._edge_query.subquery().c.source_id)),
