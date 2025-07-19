@@ -47,6 +47,7 @@ dependencies = [
   "typing-extensions",
   "ilpy >= 0.5.1",
   "pyarrow",
+  "bidict>=0.23.1",
 ]
 
 [project.optional-dependencies]
