@@ -2,6 +2,7 @@ import operator
 from collections.abc import Callable, Sequence
 from typing import TYPE_CHECKING, Any, overload
 
+import bidict
 import numpy as np
 import polars as pl
 import rustworkx as rx
@@ -1005,20 +1006,27 @@ class RustWorkXGraph(BaseGraph):
         return graph_view
 
 
-class UniqueDict(dict):
-    """
-    A dictionary that ensures that the keys are unique.
-    """
-
-    def __setitem__(self, key: Any, value: Any) -> None:
-        if key in self:
-            raise ValueError(f"Index '{key}' already exists")
-        super().__setitem__(key, value)
-
-
 class IndexedRXGraph(RustWorkXGraph):
     """
     A graph that is indexed by node ids.
+
+    This graph is useful when you have a graph with arbitrary node ids.
+
+    Parameters
+    ----------
+    rx_graph : rx.PyDiGraph | None
+        The rustworkx graph to index.
+    node_id_map : dict[int, int] | None
+        A map of world ids to graph ids, must be provided if `rx_graph` is provided.
+
+    Examples
+    --------
+    ```python
+    graph = IndexedRXGraph(rx_graph=rx_graph, node_id_map=node_id_map)
+    ...
+    graph = IndexedRXGraph()
+    graph.add_node({"t": 0}, index=1355)
+    ```
     """
 
     def __init__(
@@ -1038,14 +1046,12 @@ class IndexedRXGraph(RustWorkXGraph):
             self._graph = rx_graph
 
         if node_id_map is not None:
-            self._world_to_graph_id = UniqueDict(node_id_map)
-            self._graph_to_world_id = UniqueDict()
-            for world_id, graph_id in self._world_to_graph_id.items():
-                self._graph_to_world_id[graph_id] = world_id
+            self._world_to_graph_id = bidict.bidict(node_id_map)
 
         else:
-            self._world_to_graph_id = UniqueDict()
-            self._graph_to_world_id = UniqueDict()
+            self._world_to_graph_id = bidict.bidict()
+
+        self._graph_to_world_id = self._world_to_graph_id.inverse
 
         super().__init__()
 
@@ -1140,8 +1146,7 @@ class IndexedRXGraph(RustWorkXGraph):
         node_id = super().add_node(attrs, validate_keys)
         if index is None:
             index = node_id
-        self._world_to_graph_id[index] = node_id
-        self._graph_to_world_id[node_id] = index
+        self._world_to_graph_id.put(index, node_id)
         return index
 
     def bulk_add_nodes(
@@ -1170,9 +1175,7 @@ class IndexedRXGraph(RustWorkXGraph):
         if indices is None:
             indices = graph_ids
 
-        for node_id, index in zip(graph_ids, indices, strict=True):
-            self._world_to_graph_id[index] = node_id
-            self._graph_to_world_id[node_id] = index
+        self._world_to_graph_id.putall(zip(indices, graph_ids, strict=True))
 
         return indices
 
@@ -1330,11 +1333,8 @@ class IndexedRXGraph(RustWorkXGraph):
         int
             The edge id.
         """
-        try:
-            source_id = self._world_to_graph_id[source_id]
-            target_id = self._world_to_graph_id[target_id]
-        except KeyError as e:
-            raise ValueError(f"`source_id` {source_id} or `target_id` {target_id} not found in index map.") from e
+        source_id = self._world_to_graph_id[source_id]
+        target_id = self._world_to_graph_id[target_id]
         return super().add_edge(source_id, target_id, attrs, validate_keys)
 
     def add_overlap(self, source_id: int, target_id: int) -> int:
@@ -1353,11 +1353,8 @@ class IndexedRXGraph(RustWorkXGraph):
         int
             The overlap id.
         """
-        try:
-            source_id = self._world_to_graph_id[source_id]
-            target_id = self._world_to_graph_id[target_id]
-        except KeyError as e:
-            raise ValueError(f"`source_id` {source_id} or `target_id` {target_id} not found in index map.") from e
+        source_id = self._world_to_graph_id[source_id]
+        target_id = self._world_to_graph_id[target_id]
         return super().add_overlap(source_id, target_id)
 
     def overlaps(self, node_ids: list[int] | int | None = None) -> list[list[int, 2]]:

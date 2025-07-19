@@ -44,7 +44,7 @@ def test_node_validation(graph_backend: BaseGraph) -> None:
 
 def test_edge_validation(graph_backend: BaseGraph) -> None:
     """Test edge validation."""
-    with pytest.raises(ValueError):
+    with pytest.raises((ValueError, KeyError)):
         graph_backend.add_edge(0, 1, {"weight": 0.5})
 
 
