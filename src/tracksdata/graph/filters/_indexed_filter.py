@@ -6,12 +6,12 @@ import polars as pl
 
 from tracksdata.attrs import AttrComparison
 from tracksdata.constants import DEFAULT_ATTR_KEYS
-from tracksdata.graph._base_filter import cache_method
 from tracksdata.graph._rustworkx_graph import (
     IndexedRXGraph,
     RXFilter,
     _create_filter_func,
 )
+from tracksdata.graph.filters._base_filter import cache_method
 
 if TYPE_CHECKING:
     from tracksdata.graph._graph_view import GraphView

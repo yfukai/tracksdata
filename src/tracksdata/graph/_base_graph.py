@@ -15,7 +15,7 @@ from tracksdata.utils._logging import LOG
 from tracksdata.utils._multiprocessing import multiprocessing_apply
 
 if TYPE_CHECKING:
-    from tracksdata.graph._base_filter import BaseFilter
+    from tracksdata.graph.filters._base_filter import BaseFilter
 
 
 T = TypeVar("T", bound="BaseGraph")

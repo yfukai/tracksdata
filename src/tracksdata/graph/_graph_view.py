@@ -9,8 +9,8 @@ from tracksdata.attrs import AttrComparison
 from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.functional._rx import _assign_track_ids
 from tracksdata.graph._base_graph import BaseGraph
-from tracksdata.graph._indexed_filter import IndexRXFilter
 from tracksdata.graph._rustworkx_graph import RustWorkXGraph, RXFilter
+from tracksdata.graph.filters._indexed_filter import IndexRXFilter
 
 
 @overload
