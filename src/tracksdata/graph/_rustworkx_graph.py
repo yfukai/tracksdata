@@ -1528,20 +1528,3 @@ class IndexedRXGraph(RustWorkXGraph):
         """
         node_ids = self.from_world_id(node_ids)
         super().update_node_attrs(attrs=attrs, node_ids=node_ids)
-
-    def filter_nodes_by_attrs(self, *attrs: AttrComparison) -> list[int]:
-        """
-        Filter the nodes of the graph by attributes.
-
-        Parameters
-        ----------
-        attrs : AttrComparison
-            The attributes to filter by.
-
-        Returns
-        -------
-        list[int]
-            The filtered node ids.
-        """
-        node_ids = super().filter_nodes_by_attrs(*attrs)
-        return self.to_world_id(node_ids)
