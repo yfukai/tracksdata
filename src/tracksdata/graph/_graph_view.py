@@ -1,5 +1,5 @@
 from collections.abc import Callable, Sequence
-from typing import Any, overload
+from typing import Any
 
 import bidict
 import polars as pl
@@ -10,35 +10,7 @@ from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.functional._rx import _assign_track_ids
 from tracksdata.graph._base_graph import BaseGraph
 from tracksdata.graph._rustworkx_graph import RustWorkXGraph, RXFilter
-from tracksdata.graph.filters._indexed_filter import IndexRXFilter
-
-
-@overload
-def map_ids(map: bidict.bidict[int, int], indices: Sequence[int]) -> list[int]: ...
-
-
-@overload
-def map_ids(map: bidict.bidict[int, int], indices: None) -> None: ...
-
-
-def map_ids(
-    map: bidict.bidict[int, int],
-    indices: Sequence[int] | None,
-) -> list[int] | None:
-    if indices is None:
-        return None
-
-    if hasattr(indices, "tolist"):
-        indices = indices.tolist()
-
-    return [map[node_id] for node_id in indices]
-
-
-def _map_df_ids(df: pl.DataFrame, map: bidict.bidict[int, int]) -> pl.DataFrame:
-    for col in [DEFAULT_ATTR_KEYS.NODE_ID, DEFAULT_ATTR_KEYS.EDGE_SOURCE, DEFAULT_ATTR_KEYS.EDGE_TARGET]:
-        if col in df.columns:
-            df = df.with_columns(pl.col(col).map_elements(map.__getitem__, return_dtype=pl.Int64).alias(col))
-    return df
+from tracksdata.graph.filters._indexed_filter import IndexRXFilter, _map_df_ids, map_ids
 
 
 class GraphView(RustWorkXGraph):
