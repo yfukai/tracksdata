@@ -118,12 +118,12 @@ def test_filter_nodes_and_edges_by_attr_with_data(
     edge_filter = graph_with_data.filter(EdgeAttr("weight") >= 0.4)
 
     # testing edges
-    edges = edge_filter.edge_ids()
+    subgraph_edge_attrs = edge_filter.edge_attrs()
     # Should find edges with weight=0.4 that are in this graph
     expected_weight_0_4_edges = edge_attrs.filter(pl.col("weight") >= 0.4)[DEFAULT_ATTR_KEYS.EDGE_ID].to_list()  # type: ignore
-    assert set(edges) == set(expected_weight_0_4_edges)
+    assert set(subgraph_edge_attrs[DEFAULT_ATTR_KEYS.EDGE_ID].to_list()) == set(expected_weight_0_4_edges)
 
-    # testing nodes
+    # testing edge_attrs
     nodes = edge_filter.node_ids()
     expected_nodes = (
         edge_attrs.filter(pl.col("weight") >= 0.4)
@@ -133,6 +133,12 @@ def test_filter_nodes_and_edges_by_attr_with_data(
         .tolist()
     )
     assert set(nodes) == set(expected_nodes)
+
+    edge_tuples = set(subgraph_edge_attrs.iter_rows())
+    expected_edge_tuples = set(
+        edge_attrs.filter(pl.col("weight") >= 0.4).select(subgraph_edge_attrs.columns).iter_rows()
+    )
+    assert edge_tuples == expected_edge_tuples
 
 
 @parametrize_subgraph_tests
