@@ -158,9 +158,6 @@ class SQLFilter(BaseFilter):
 
             self._node_query = sa.union(*nodes_query)
 
-    def __enter__(self) -> "SQLFilter":
-        return self
-
     @cache_method
     def node_ids(self) -> list[int]:
         """
