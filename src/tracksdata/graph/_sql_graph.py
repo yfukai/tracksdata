@@ -988,39 +988,6 @@ class SQLGraph(BaseGraph):
             attr_keys=attr_keys,
         )
 
-    def _filter_nodes_by_attrs(
-        self,
-        *attrs: AttrComparison,
-    ) -> list[int]:
-        """
-        Filter nodes by their attribute values.
-
-        Performs an SQL query with WHERE clauses for each specified attribute,
-        providing efficient filtering for large graphs.
-
-        Parameters
-        ----------
-        attrs : dict[str, Any]
-            Dictionary of attribute-value pairs to filter by. Only nodes
-            that match all specified attributes will be returned.
-
-        Returns
-        -------
-        list[int]
-            List of node IDs that match the filter criteria.
-
-        Examples
-        --------
-        ```python
-        node_ids = graph.filter_nodes_by_attribute({"t": 0})
-        node_ids = graph.filter_nodes_by_attribute({"t": 1, "label": "A"})
-        ```
-        """
-        with Session(self._engine) as session:
-            query = session.query(self.Node.node_id)
-            query = _filter_query(query, self.Node, attrs)
-            return [i for (i,) in query.all()]
-
     def node_ids(self) -> list[int]:
         """
         Get the IDs of all nodes in the graph.

@@ -788,8 +788,11 @@ class BaseGraph(abc.ABC):
             raise ValueError("iou_threshold must be between 0.0 and 1.0")
 
         def _estimate_overlaps(t: int) -> list[list[int, 2]]:
-            node_ids = self._filter_nodes_by_attrs(NodeAttr(DEFAULT_ATTR_KEYS.T) == t)
-            masks = self.node_attrs(node_ids=node_ids, attr_keys=[DEFAULT_ATTR_KEYS.MASK])[DEFAULT_ATTR_KEYS.MASK]
+            node_attrs = self.filter(NodeAttr(DEFAULT_ATTR_KEYS.T) == t).node_attrs(
+                attr_keys=[DEFAULT_ATTR_KEYS.NODE_ID, DEFAULT_ATTR_KEYS.MASK],
+            )
+            node_ids = node_attrs[DEFAULT_ATTR_KEYS.NODE_ID].to_list()
+            masks = node_attrs[DEFAULT_ATTR_KEYS.MASK].to_list()
             overlaps = []
             for i in range(len(masks)):
                 mask_i = masks[i]

@@ -283,7 +283,7 @@ class RustWorkXGraph(BaseGraph):
     ```python
     from tracksdata.attrs import NodeAttr
 
-    node_ids = graph.filter_nodes_by_attrs(NodeAttr("t") == 0)
+    node_ids = graph.filter(NodeAttr("t") == 0).node_ids()
     ```
 
     Create subgraphs:
@@ -635,9 +635,6 @@ class RustWorkXGraph(BaseGraph):
         ----------
         *attrs : AttrComparison
             The attributes to filter by, for example:
-            ```python
-            graph.filter_nodes_by_attrs(Attr("t") == 0, Attr("label") == "A")
-            ```
         node_ids : list[int] | None
             The IDs of the nodes to include in the filter.
             If None, all nodes are used.

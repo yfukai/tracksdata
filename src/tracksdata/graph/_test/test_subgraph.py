@@ -89,9 +89,7 @@ def test_filter_nodes_and_edges_by_attr_with_data(
 ) -> None:
     """Test filtering nodes and edges by attributes on both original graphs and subgraphs."""
     graph_with_data = create_test_graph(graph_backend, use_subgraph)
-    # graph_with_data = RustWorkXGraph.from_other(graph_with_data)
     node_attrs = graph_with_data.node_attrs()
-    print(node_attrs)
 
     # Filter by time
     nodes = graph_with_data.filter(NodeAttr("t") == 2).node_ids()
@@ -122,7 +120,6 @@ def test_filter_nodes_and_edges_by_attr_with_data(
     # testing edges
     edges = edge_filter.edge_ids()
     # Should find edges with weight=0.4 that are in this graph
-    print(edge_attrs)
     expected_weight_0_4_edges = edge_attrs.filter(pl.col("weight") >= 0.4)[DEFAULT_ATTR_KEYS.EDGE_ID].to_list()  # type: ignore
     assert set(edges) == set(expected_weight_0_4_edges)
 
@@ -135,7 +132,6 @@ def test_filter_nodes_and_edges_by_attr_with_data(
         .ravel()
         .tolist()
     )
-    print(expected_nodes)
     assert set(nodes) == set(expected_nodes)
 
 
