@@ -68,7 +68,6 @@ class GraphArrayView(BaseReadOnlyArray):
             if graph_filter.is_empty():
                 return np.zeros(self.shape[1:], dtype=self.dtype)
 
-            # TODO: this should be a single `subgraph(t=index).node_attrs(...)` call
             df = graph_filter.node_attrs(
                 attr_keys=[self._attr_key, DEFAULT_ATTR_KEYS.MASK],
             )

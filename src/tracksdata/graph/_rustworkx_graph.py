@@ -131,10 +131,10 @@ class RXFilter(BaseFilter):
         node_ids = self._current_node_ids()
 
         _filter_func = _create_filter_func(self._edge_attr_comps)
-        neigh_funcs = [self._graph.rx_graph.in_edges]
+        neigh_funcs = [self._graph.rx_graph.out_edges]
 
         if self._include_sources:
-            neigh_funcs.append(self._graph.rx_graph.out_edges)
+            neigh_funcs.append(self._graph.rx_graph.in_edges)
 
         # only edges are filtered return nodes that pass edge filters
         sources = []
@@ -142,10 +142,18 @@ class RXFilter(BaseFilter):
         data = {k: [] for k in self._graph.edge_attr_keys}
         data[DEFAULT_ATTR_KEYS.EDGE_ID] = []
 
+        check_node_ids = None
+        if self._node_ids is not None:
+            check_node_ids = set(node_ids)
+
         for node_id in node_ids:
             for nf in neigh_funcs:
                 for src, tgt, attr in nf(node_id):
                     if _filter_func(attr):
+                        if check_node_ids is not None:
+                            if src not in check_node_ids or tgt not in check_node_ids:
+                                continue
+
                         sources.append(src)
                         targets.append(tgt)
                         for k in data.keys():

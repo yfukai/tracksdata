@@ -83,29 +83,60 @@ def test_node_ids_with_data(graph_backend: BaseGraph, use_subgraph: bool) -> Non
 
 
 @parametrize_subgraph_tests
-def test_filter_nodes_by_attr_with_data(graph_backend: BaseGraph, use_subgraph: bool) -> None:
-    """Test filtering nodes by attributes on both original graphs and subgraphs."""
+def test_filter_nodes_and_edges_by_attr_with_data(
+    graph_backend: BaseGraph,
+    use_subgraph: bool,
+) -> None:
+    """Test filtering nodes and edges by attributes on both original graphs and subgraphs."""
     graph_with_data = create_test_graph(graph_backend, use_subgraph)
+    # graph_with_data = RustWorkXGraph.from_other(graph_with_data)
+    node_attrs = graph_with_data.node_attrs()
+    print(node_attrs)
 
     # Filter by time
-    nodes = graph_with_data.filter(NodeAttr("t") == 0).node_ids()
-    # Should find nodes with t=0 that are in this graph
-    expected_t0_nodes = [
-        n
-        for n in graph_with_data._test_nodes  # type: ignore
-        if graph_with_data.node_attrs(node_ids=[n])["t"].to_list()[0] == 0
-    ]
+    nodes = graph_with_data.filter(NodeAttr("t") == 2).node_ids()
+    # Should find nodes with t=2 that are in this graph
+    expected_t0_nodes = node_attrs.filter(pl.col("t") == 2)[DEFAULT_ATTR_KEYS.NODE_ID].to_list()
     assert set(nodes) == set(expected_t0_nodes)
 
     # Filter by label
     nodes = graph_with_data.filter(NodeAttr("label") == "A").node_ids()
     # Should find nodes with label="A" that are in this graph
-    expected_label_a_nodes = [
-        n
-        for n in graph_with_data._test_nodes  # type: ignore
-        if graph_with_data.node_attrs(node_ids=[n])["label"].to_list()[0] == "A"
-    ]
+    expected_label_a_nodes = node_attrs.filter(pl.col("label") == "A")[DEFAULT_ATTR_KEYS.NODE_ID].to_list()
     assert set(nodes) == set(expected_label_a_nodes)
+
+    edge_attrs = graph_with_data.edge_attrs()
+
+    # including targets
+    nodes = graph_with_data.filter(NodeAttr("label") == "A", include_targets=True).node_ids()
+    expected_label_a_nodes.extend(
+        edge_attrs.filter(pl.col(DEFAULT_ATTR_KEYS.EDGE_SOURCE) == expected_label_a_nodes[0])[
+            DEFAULT_ATTR_KEYS.EDGE_TARGET
+        ].to_list()
+    )
+    assert set(nodes) == set(expected_label_a_nodes)
+
+    # Filter by edge weight
+    edge_filter = graph_with_data.filter(EdgeAttr("weight") >= 0.4)
+
+    # testing edges
+    edges = edge_filter.edge_ids()
+    # Should find edges with weight=0.4 that are in this graph
+    print(edge_attrs)
+    expected_weight_0_4_edges = edge_attrs.filter(pl.col("weight") >= 0.4)[DEFAULT_ATTR_KEYS.EDGE_ID].to_list()  # type: ignore
+    assert set(edges) == set(expected_weight_0_4_edges)
+
+    # testing nodes
+    nodes = edge_filter.node_ids()
+    expected_nodes = (
+        edge_attrs.filter(pl.col("weight") >= 0.4)
+        .select(DEFAULT_ATTR_KEYS.EDGE_SOURCE, DEFAULT_ATTR_KEYS.EDGE_TARGET)
+        .to_numpy()
+        .ravel()
+        .tolist()
+    )
+    print(expected_nodes)
+    assert set(nodes) == set(expected_nodes)
 
 
 @parametrize_subgraph_tests

@@ -286,27 +286,31 @@ def test_subgraph_with_node_ids_and_filters(graph_backend: BaseGraph) -> None:
     graph_backend.add_node_attr_key("x", None)
     graph_backend.add_edge_attr_key("weight", 0.0)
 
-    node1 = graph_backend.add_node({"t": 0, "x": 1.0})
-    node2 = graph_backend.add_node({"t": 1, "x": 2.0})
-    node3 = graph_backend.add_node({"t": 2, "x": 1.0})
-    node4 = graph_backend.add_node({"t": 3, "x": 3.0})
-    node5 = graph_backend.add_node({"t": 4, "x": 0.5})
+    node0 = graph_backend.add_node({"t": 0, "x": 1.0})
+    node1 = graph_backend.add_node({"t": 1, "x": 2.0})
+    node2 = graph_backend.add_node({"t": 2, "x": 1.0})
+    node3 = graph_backend.add_node({"t": 3, "x": 3.0})
+    node4 = graph_backend.add_node({"t": 4, "x": 0.5})
 
-    graph_backend.add_edge(node1, node3, attrs={"weight": 0.8})
-    graph_backend.add_edge(node3, node5, attrs={"weight": 0.2})
-    graph_backend.add_edge(node2, node4, attrs={"weight": 0.0})
+    graph_backend.add_edge(node0, node2, attrs={"weight": 0.8})
+    graph_backend.add_edge(node2, node4, attrs={"weight": 0.2})
+    graph_backend.add_edge(node1, node3, attrs={"weight": 0.0})
 
-    subgraph = graph_backend.filter(
+    g_filter = graph_backend.filter(
         NodeAttr("x") <= 1.0,
         EdgeAttr("weight") < 0.5,
-        node_ids=[node1, node3],
-    ).subgraph()
+        node_ids=[node0, node2],
+    )
+    node_ids = g_filter.node_ids()
+    assert set(node_ids) == {node0, node2}
+
+    subgraph = g_filter.subgraph()
 
     assert subgraph.num_nodes == 2
     assert subgraph.num_edges == 0
 
     subgraph_node_ids = subgraph.node_ids()
-    assert set(subgraph_node_ids) == {node1, node3}
+    assert set(subgraph_node_ids) == {node0, node2}
 
     subgraph_edge_ids = subgraph.edge_ids()
     assert len(subgraph_edge_ids) == 0

@@ -167,7 +167,10 @@ class SQLFilter(BaseFilter):
         Get the ids of the nodes resulting from the filter.
         """
         with Session(self._graph._engine) as session:
-            return session.execute(self._node_query.with_only_columns(self._graph.Node.node_id)).scalars().all()
+            if isinstance(self._node_query, sa.CompoundSelect):
+                return session.execute(self._node_query.options(load_only(self._graph.Node.node_id))).scalars().all()
+            else:
+                return session.execute(self._node_query.with_only_columns(self._graph.Node.node_id)).scalars().all()
 
     @cache_method
     def edge_ids(self) -> list[int]:
@@ -175,7 +178,10 @@ class SQLFilter(BaseFilter):
         Get the ids of the edges resulting from the filter.
         """
         with Session(self._graph._engine) as session:
-            return session.execute(self._edge_query.with_only_columns(self._graph.Edge.edge_id)).scalars().all()
+            if isinstance(self._edge_query, sa.CompoundSelect):
+                return session.execute(self._edge_query.options(load_only(self._graph.Edge.edge_id))).scalars().all()
+            else:
+                return session.execute(self._edge_query.with_only_columns(self._graph.Edge.edge_id)).scalars().all()
 
     @cache_method
     def node_attrs(

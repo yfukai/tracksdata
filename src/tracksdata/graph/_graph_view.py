@@ -37,6 +37,13 @@ def map_ids(
     return [map[node_id] for node_id in indices]
 
 
+def _map_df_ids(df: pl.DataFrame, map: dict[int, int]) -> pl.DataFrame:
+    for col in [DEFAULT_ATTR_KEYS.NODE_ID, DEFAULT_ATTR_KEYS.EDGE_SOURCE, DEFAULT_ATTR_KEYS.EDGE_TARGET]:
+        if col in df.columns:
+            df = df.with_columns(pl.col(col).map_elements(map.__getitem__, return_dtype=pl.Int64).alias(col))
+    return df
+
+
 class IndexRXFilter(RXFilter):
     _graph: "GraphView"
 
@@ -54,6 +61,22 @@ class IndexRXFilter(RXFilter):
             node_ids=node_ids,
             include_targets=include_targets,
             include_sources=include_sources,
+        )
+
+    # @cache_method
+    # def _edge_attrs(self) -> pl.DataFrame:
+    #     print(super()._edge_attrs())
+    #     print(self._graph._node_map_from_root)
+    #     return _map_df_ids(
+    #         super()._edge_attrs(),
+    #         self._graph._node_map_from_root,
+    #     )
+
+    @cache_method
+    def edge_attrs(self, attr_keys: list[str] | None = None, unpack: bool = False) -> pl.DataFrame:
+        return _map_df_ids(
+            super().edge_attrs(attr_keys, unpack),
+            self._graph._edge_map_to_root,
         )
 
     @cache_method
@@ -396,7 +419,7 @@ class GraphView(RustWorkXGraph):
         out_data = {}
         for node_id in node_ids:
             df = neighbors_data[node_id]
-            out_data[self._node_map_to_root[node_id]] = self._map_to_root_df_node_ids(df)
+            out_data[self._node_map_to_root[node_id]] = _map_df_ids(df, self._node_map_to_root)
 
         if single_node:
             return next(iter(out_data.values()))
@@ -421,26 +444,6 @@ class GraphView(RustWorkXGraph):
             raise RuntimeError("Out of sync graph view cannot be used to get predecessors")
         return super().predecessors(node_ids, attr_keys)
 
-    def _filter_nodes_by_attrs(
-        self,
-        *attrs: AttrComparison,
-        node_ids: Sequence[int] | None = None,
-    ) -> list[int]:
-        node_ids = super()._filter_nodes_by_attrs(
-            *attrs,
-            node_ids=map_ids(self._node_map_from_root, node_ids),
-        )
-        return map_ids(self._node_map_to_root, node_ids)
-
-    def _map_to_root_df_node_ids(self, df: pl.DataFrame) -> pl.DataFrame:
-        if DEFAULT_ATTR_KEYS.NODE_ID in df.columns:
-            df = df.with_columns(
-                pl.col(DEFAULT_ATTR_KEYS.NODE_ID)
-                .map_elements(self._node_map_to_root.get, return_dtype=pl.Int64)
-                .alias(DEFAULT_ATTR_KEYS.NODE_ID)
-            )
-        return df
-
     def node_attrs(
         self,
         *,
@@ -453,7 +456,7 @@ class GraphView(RustWorkXGraph):
             attr_keys=attr_keys,
             unpack=unpack,
         )
-        node_dfs = self._map_to_root_df_node_ids(node_dfs)
+        node_dfs = _map_df_ids(node_dfs, self._node_map_to_root)
         return node_dfs
 
     def edge_attrs(
