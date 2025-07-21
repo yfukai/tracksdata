@@ -376,7 +376,7 @@ class BaseGraph(abc.ABC):
         include_sources: bool = False,
     ) -> "BaseFilter":
         """
-        Filter the graph by the given attributes.
+        Creates a filter object that can be used to create a subgraph or query ids and attributes.
 
         Parameters
         ----------

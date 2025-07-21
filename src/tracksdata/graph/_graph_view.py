@@ -230,9 +230,9 @@ class GraphView(RustWorkXGraph):
         include_sources: bool = False,
     ) -> RXFilter:
         return IndexRXFilter(
-            self,
-            self._node_map_to_root,
             *attr_filters,
+            graph=self,
+            to_world_id_map=self._node_map_to_root,
             node_ids=map_ids(self._node_map_from_root, node_ids),
             include_targets=include_targets,
             include_sources=include_sources,

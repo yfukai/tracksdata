@@ -71,8 +71,8 @@ def _filter_query(
 class SQLFilter(BaseFilter):
     def __init__(
         self,
-        graph: "SQLGraph",
         *attr_filters: AttrComparison,
+        graph: "SQLGraph",
         node_ids: Sequence[int] | None = None,
         include_targets: bool = False,
         include_sources: bool = False,
@@ -519,8 +519,8 @@ class SQLGraph(BaseGraph):
         include_sources: bool = False,
     ) -> "SQLFilter":
         return SQLFilter(
-            self,
             *attr_filters,
+            graph=self,
             node_ids=node_ids,
             include_targets=include_targets,
             include_sources=include_sources,

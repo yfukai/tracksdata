@@ -66,8 +66,8 @@ def _create_filter_func(
 class RXFilter(BaseFilter):
     def __init__(
         self,
-        graph: "RustWorkXGraph",
         *attr_comps: AttrComparison,
+        graph: "RustWorkXGraph",
         node_ids: Sequence[int] | None = None,
         include_targets: bool = False,
         include_sources: bool = False,
@@ -319,8 +319,8 @@ class RustWorkXGraph(BaseGraph):
         include_sources: bool = False,
     ) -> RXFilter:
         return RXFilter(
-            self,
             *attr_filters,
+            graph=self,
             node_ids=node_ids,
             include_targets=include_targets,
             include_sources=include_sources,
@@ -1560,9 +1560,9 @@ class IndexedRXGraph(RustWorkXGraph):
         from tracksdata.graph._indexed_filter import IndexRXFilter
 
         return IndexRXFilter(
-            self,
-            self._graph_to_world_id,
             *attr_filters,
+            graph=self,
+            to_world_id_map=self._graph_to_world_id,
             node_ids=None if node_ids is None else self.from_world_id(node_ids),
             include_targets=include_targets,
             include_sources=include_sources,

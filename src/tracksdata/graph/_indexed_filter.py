@@ -50,16 +50,16 @@ class IndexRXFilter(RXFilter):
 
     def __init__(
         self,
+        *attr_comps: AttrComparison,
         graph: "GraphView | IndexedRXGraph",
         to_world_id_map: bidict.bidict[int, int],
-        *attr_comps: AttrComparison,
         node_ids: Sequence[int] | None = None,
         include_targets: bool = False,
         include_sources: bool = False,
     ) -> None:
         super().__init__(
-            graph,
             *attr_comps,
+            graph=graph,
             node_ids=node_ids,
             include_targets=include_targets,
             include_sources=include_sources,
