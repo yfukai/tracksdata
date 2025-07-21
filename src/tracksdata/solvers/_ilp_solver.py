@@ -60,6 +60,8 @@ class ILPSolver(BaseSolver):
         Whether to return a subgraph containing only the solution.
     gap : float, default 0.0
         Optimality gap tolerance (0.0 for exact solutions).
+    timeout : float | None
+        Time limit for solving in seconds. If None, no timeout is set.
 
     Attributes
     ----------
