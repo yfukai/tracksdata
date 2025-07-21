@@ -63,15 +63,6 @@ class IndexRXFilter(RXFilter):
             include_sources=include_sources,
         )
 
-    # @cache_method
-    # def _edge_attrs(self) -> pl.DataFrame:
-    #     print(super()._edge_attrs())
-    #     print(self._graph._node_map_from_root)
-    #     return _map_df_ids(
-    #         super()._edge_attrs(),
-    #         self._graph._node_map_from_root,
-    #     )
-
     @cache_method
     def edge_attrs(self, attr_keys: list[str] | None = None, unpack: bool = False) -> pl.DataFrame:
         return _map_df_ids(
