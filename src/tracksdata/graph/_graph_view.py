@@ -8,13 +8,9 @@ import rustworkx as rx
 from tracksdata.attrs import AttrComparison
 from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.functional._rx import _assign_track_ids
-from tracksdata.graph._base_filter import cache_method
 from tracksdata.graph._base_graph import BaseGraph
-from tracksdata.graph._rustworkx_graph import (
-    RustWorkXGraph,
-    RXFilter,
-    _create_filter_func,
-)
+from tracksdata.graph._indexed_filter import IndexRXFilter
+from tracksdata.graph._rustworkx_graph import RustWorkXGraph, RXFilter
 
 
 @overload
@@ -43,65 +39,6 @@ def _map_df_ids(df: pl.DataFrame, map: bidict.bidict[int, int]) -> pl.DataFrame:
         if col in df.columns:
             df = df.with_columns(pl.col(col).map_elements(map.__getitem__, return_dtype=pl.Int64).alias(col))
     return df
-
-
-class IndexRXFilter(RXFilter):
-    _graph: "GraphView"
-
-    def __init__(
-        self,
-        graph: "GraphView",
-        *attr_comps: AttrComparison,
-        node_ids: Sequence[int] | None = None,
-        include_targets: bool = False,
-        include_sources: bool = False,
-    ) -> None:
-        super().__init__(
-            graph,
-            *attr_comps,
-            node_ids=node_ids,
-            include_targets=include_targets,
-            include_sources=include_sources,
-        )
-
-    @cache_method
-    def edge_attrs(self, attr_keys: list[str] | None = None, unpack: bool = False) -> pl.DataFrame:
-        return _map_df_ids(
-            super().edge_attrs(attr_keys, unpack),
-            self._graph._edge_map_to_root,
-        )
-
-    @cache_method
-    def node_ids(self) -> list[int]:
-        indices = super().node_ids()
-        return map_ids(self._graph._node_map_to_root, indices)
-
-    @cache_method
-    def subgraph(
-        self,
-        node_attr_keys: Sequence[str] | str | None = None,
-        edge_attr_keys: Sequence[str] | str | None = None,
-    ) -> "GraphView":
-        from tracksdata.graph._graph_view import GraphView
-
-        node_ids = super().node_ids()
-
-        rx_graph, node_map = self._graph.rx_graph.subgraph_with_nodemap(node_ids)
-        if self._edge_attr_comps:
-            _filter_func = _create_filter_func(self._edge_attr_comps)
-            for src, tgt, attr in rx_graph.weighted_edge_list():
-                if not _filter_func(attr):
-                    rx_graph.remove_edge(src, tgt)
-
-        node_map = {k: self._graph._node_map_to_root[v] for k, v in node_map.items()}
-
-        graph_view = GraphView(
-            rx_graph,
-            node_map_to_root=dict(node_map.items()),
-            root=self._graph._root,
-        )
-
-        return graph_view
 
 
 class GraphView(RustWorkXGraph):
@@ -185,7 +122,7 @@ class GraphView(RustWorkXGraph):
 
         self._edge_map_to_root: bidict.bidict[int, int] = bidict.bidict()
         for idx, (_, _, data) in self.rx_graph.edge_index_map().items():
-            self._edge_map_to_root[idx] = data[DEFAULT_ATTR_KEYS.EDGE_ID]
+            self._edge_map_to_root.put(idx, data[DEFAULT_ATTR_KEYS.EDGE_ID])
         self._edge_map_from_root = self._edge_map_to_root.inverse
 
         self._root = root
@@ -294,6 +231,7 @@ class GraphView(RustWorkXGraph):
     ) -> RXFilter:
         return IndexRXFilter(
             self,
+            self._node_map_to_root,
             *attr_filters,
             node_ids=map_ids(self._node_map_from_root, node_ids),
             include_targets=include_targets,
@@ -344,7 +282,7 @@ class GraphView(RustWorkXGraph):
                 attrs=attrs,
                 validate_keys=validate_keys,
             )
-            self._node_map_to_root[node_id] = parent_node_id
+            self._node_map_to_root.put(node_id, parent_node_id)
         else:
             self._out_of_sync = True
 
@@ -355,7 +293,7 @@ class GraphView(RustWorkXGraph):
         if self.sync:
             node_ids = super().bulk_add_nodes(nodes)
             for node_id, parent_node_id in zip(node_ids, parent_node_ids, strict=True):
-                self._node_map_to_root[node_id] = parent_node_id
+                self._node_map_to_root.put(node_id, parent_node_id)
         else:
             self._out_of_sync = True
         return parent_node_ids
@@ -382,8 +320,7 @@ class GraphView(RustWorkXGraph):
                 self._node_map_from_root[target_id],
                 attrs,
             )
-            self._edge_map_to_root[edge_id] = parent_edge_id
-            self._edge_map_from_root[parent_edge_id] = edge_id
+            self._edge_map_to_root.put(edge_id, parent_edge_id)
         else:
             self._out_of_sync = True
 
@@ -599,11 +536,11 @@ class GraphView(RustWorkXGraph):
         self._root = parent._root
         self._node_map_to_root = bidict.bidict()
         for k, v in self._node_map_to_root.items():
-            self._node_map_to_root[k] = parent._node_map_to_root[v]
+            self._node_map_to_root.put(k, parent._node_map_to_root[v])
 
         self._edge_map_to_root = bidict.bidict()
         for k, v in self._edge_map_to_root.items():
-            self._edge_map_to_root[k] = parent._edge_map_to_root[v]
+            self._edge_map_to_root.put(k, parent._edge_map_to_root[v])
 
     def contract_nodes(
         self,
@@ -655,3 +592,25 @@ class GraphView(RustWorkXGraph):
         without the view's mapping and indenpendent ids.
         """
         return RustWorkXGraph.from_other(self)
+
+    def _rx_subgraph_with_nodemap(
+        self,
+        node_ids: Sequence[int] | None = None,
+    ) -> tuple[rx.PyDiGraph, rx.NodeMap]:
+        """
+        Get a subgraph of the graph.
+
+        Parameters
+        ----------
+        node_ids : Sequence[int] | None
+            The node ids to include in the subgraph.
+
+        Returns
+        -------
+        tuple[rx.PyDiGraph, rx.NodeMap]
+            The subgraph and the node map.
+        """
+        node_ids = map_ids(self._node_map_from_root, node_ids)
+        rx_graph, node_map = super()._rx_subgraph_with_nodemap(node_ids)
+        node_map = {k: self._node_map_to_root[v] for k, v in node_map.items()}
+        return rx_graph, node_map

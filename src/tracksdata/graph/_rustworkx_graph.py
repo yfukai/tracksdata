@@ -214,7 +214,7 @@ class RXFilter(BaseFilter):
 
         node_ids = self.node_ids()
 
-        rx_graph, node_map = self._graph.rx_graph.subgraph_with_nodemap(node_ids)
+        rx_graph, node_map = self._graph._rx_subgraph_with_nodemap(node_ids)
         if self._edge_attr_comps:
             _filter_func = _create_filter_func(self._edge_attr_comps)
             for src, tgt, attr in rx_graph.weighted_edge_list():
@@ -1119,6 +1119,26 @@ class RustWorkXGraph(BaseGraph):
 
         return graph_view
 
+    def _rx_subgraph_with_nodemap(
+        self,
+        node_ids: Sequence[int] | None = None,
+    ) -> tuple[rx.PyDiGraph, rx.NodeMap]:
+        """
+        Get a subgraph of the graph.
+
+        Parameters
+        ----------
+        node_ids : Sequence[int] | None
+            The node ids to include in the subgraph.
+
+        Returns
+        -------
+        tuple[rx.PyDiGraph, rx.NodeMap]
+            The subgraph and the node map.
+        """
+        rx_graph, node_map = self.rx_graph.subgraph_with_nodemap(node_ids)
+        return rx_graph, node_map
+
 
 class IndexedRXGraph(RustWorkXGraph):
     """
@@ -1310,6 +1330,7 @@ class IndexedRXGraph(RustWorkXGraph):
         tuple[rx.PyDiGraph, rx.NodeMap]
             The subgraph and the node map.
         """
+        # TODO: fix this, too many back and forth between world and graph ids within FilterRX
         node_ids = self.from_world_id(node_ids)
         rx_graph, node_map = super()._rx_subgraph_with_nodemap(node_ids)
         node_map = {k: self._graph_to_world_id[v] for k, v in node_map.items()}
@@ -1528,3 +1549,21 @@ class IndexedRXGraph(RustWorkXGraph):
         """
         node_ids = self.from_world_id(node_ids)
         super().update_node_attrs(attrs=attrs, node_ids=node_ids)
+
+    def filter(
+        self,
+        *attr_filters: AttrComparison,
+        node_ids: Sequence[int] | None = None,
+        include_targets: bool = False,
+        include_sources: bool = False,
+    ) -> RXFilter:
+        from tracksdata.graph._indexed_filter import IndexRXFilter
+
+        return IndexRXFilter(
+            self,
+            self._graph_to_world_id,
+            *attr_filters,
+            node_ids=None if node_ids is None else self.from_world_id(node_ids),
+            include_targets=include_targets,
+            include_sources=include_sources,
+        )
