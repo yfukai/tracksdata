@@ -97,9 +97,6 @@ def test_add_edge(graph_backend: BaseGraph) -> None:
     edge_id = graph_backend.add_edge(node2, node3, attrs={"new_attribute": 1.0, "weight": 0.1})
     assert isinstance(edge_id, int)
 
-    # testing default value was assigned correctly
-    # at some point there was a bug and this was needed
-    # df = graph_backend.edge_attrs(node_ids=[node1, node2, node3])
     df = graph_backend.edge_attrs()
     assert df["new_attribute"].to_list() == [0.0, 1.0]
     assert df["weight"].to_list() == [0.5, 0.1]
@@ -895,8 +892,8 @@ def test_match_method(graph_backend: BaseGraph) -> None:
     assert len(edges_df) > 0
 
     # After your bug fixes, both edges are matching
-    edge_matches = edges_df[edge_match_key].to_list()
-    expected_matches = np.array([False, False, True])
+    edge_matches = edges_df.sort(DEFAULT_ATTR_KEYS.EDGE_ID)[edge_match_key].to_list()
+    expected_matches = np.asarray([False, False, True])
 
     np.testing.assert_array_equal(edge_matches, expected_matches)
 

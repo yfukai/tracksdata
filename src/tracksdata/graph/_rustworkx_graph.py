@@ -842,9 +842,7 @@ class RustWorkXGraph(BaseGraph):
     def edge_attrs(
         self,
         *,
-        node_ids: list[int] | None = None,
         attr_keys: Sequence[str] | str | None = None,
-        include_targets: bool = False,
         unpack: bool = False,
     ) -> pl.DataFrame:
         """
@@ -852,15 +850,9 @@ class RustWorkXGraph(BaseGraph):
 
         Parameters
         ----------
-        node_ids : list[int] | None
-            The IDs of the subgraph to get the edge attributesfor.
-            If None, all edges of the graph are used.
         attr_keys : Sequence[str] | str | None
             The attribute keys to get.
             If None, all attributesare used.
-        include_targets : bool
-            Whether to include edges out-going from the given node_ids even
-            if the target node is not in the given node_ids.
         unpack : bool
             Whether to unpack array attributesinto multiple scalar attributes.
         """
@@ -870,18 +862,7 @@ class RustWorkXGraph(BaseGraph):
         attr_keys = [DEFAULT_ATTR_KEYS.EDGE_ID, *attr_keys]
         attr_keys = list(dict.fromkeys(attr_keys))
 
-        if node_ids is None:
-            rx_graph = self.rx_graph
-            node_map = None
-        else:
-            if include_targets:
-                selected_nodes = set(node_ids)
-                for node_id in node_ids:
-                    neighbors = self.rx_graph.neighbors(node_id)
-                    selected_nodes.update(neighbors)
-                node_ids = list(selected_nodes)
-
-            rx_graph, node_map = self.rx_graph.subgraph_with_nodemap(node_ids)
+        rx_graph = self.rx_graph
 
         edge_map = rx_graph.edge_index_map()
         if len(edge_map) == 0:
@@ -897,10 +878,6 @@ class RustWorkXGraph(BaseGraph):
             )
 
         source, target, data = zip(*edge_map.values(), strict=False)
-
-        if node_map is not None:
-            source = [node_map[s] for s in source]
-            target = [node_map[t] for t in target]
 
         columns = {key: [] for key in attr_keys}
 
@@ -1408,9 +1385,7 @@ class IndexedRXGraph(RustWorkXGraph):
     def edge_attrs(
         self,
         *,
-        node_ids: Sequence[int] | None = None,
         attr_keys: Sequence[str] | str | None = None,
-        include_targets: bool = False,
         unpack: bool = False,
     ) -> pl.DataFrame:
         """
@@ -1418,12 +1393,8 @@ class IndexedRXGraph(RustWorkXGraph):
 
         Parameters
         ----------
-        node_ids : Sequence[int] | None
-            The node ids to include in the subgraph.
         attr_keys : Sequence[str] | str | None
             The attributes to include in the subgraph.
-        include_targets : bool
-            Whether to include the target node attributes.
         unpack : bool
             Whether to unpack the attributes.
 
@@ -1432,8 +1403,8 @@ class IndexedRXGraph(RustWorkXGraph):
         pl.DataFrame
             The edge attributes of the graph.
         """
-        node_ids = self.from_world_id(node_ids)
-        df = super().edge_attrs(node_ids=node_ids, attr_keys=attr_keys, include_targets=include_targets, unpack=unpack)
+        node_ids = list(self._graph_to_world_id.keys())
+        df = super().filter(node_ids=node_ids).edge_attrs(attr_keys=attr_keys, unpack=unpack)
         df = self._df_to_world_id(df, [DEFAULT_ATTR_KEYS.EDGE_SOURCE, DEFAULT_ATTR_KEYS.EDGE_TARGET])
         return df
 

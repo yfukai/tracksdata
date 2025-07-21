@@ -369,25 +369,19 @@ class GraphView(RustWorkXGraph):
     def edge_attrs(
         self,
         *,
-        node_ids: Sequence[int] | None = None,
         attr_keys: Sequence[str] | str | None = None,
-        include_targets: bool = False,
         unpack: bool = False,
     ) -> pl.DataFrame:
-        edges_df = super().edge_attrs(
-            node_ids=map_ids(self._node_map_from_root, node_ids),
-            attr_keys=attr_keys,
-            include_targets=include_targets,
-            unpack=unpack,
+        node_ids = list(self._node_map_to_root.keys())
+        edges_df = (
+            super()
+            .filter(node_ids=node_ids)
+            .edge_attrs(
+                attr_keys=attr_keys,
+                unpack=unpack,
+            )
         )
-
-        edges_df = edges_df.with_columns(
-            *[
-                pl.col(key).map_elements(self._node_map_to_root.get, return_dtype=pl.Int64).alias(key)
-                for key in [DEFAULT_ATTR_KEYS.EDGE_SOURCE, DEFAULT_ATTR_KEYS.EDGE_TARGET]
-            ]
-        )
-
+        edges_df = _map_df_ids(edges_df, self._node_map_to_root)
         return edges_df
 
     def update_node_attrs(
