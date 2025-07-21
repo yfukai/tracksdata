@@ -1,6 +1,7 @@
 from collections.abc import Callable, Sequence
 from typing import Any, overload
 
+import bidict
 import polars as pl
 import rustworkx as rx
 
@@ -17,15 +18,15 @@ from tracksdata.graph._rustworkx_graph import (
 
 
 @overload
-def map_ids(map: dict[int, int], indices: Sequence[int]) -> list[int]: ...
+def map_ids(map: bidict.bidict[int, int], indices: Sequence[int]) -> list[int]: ...
 
 
 @overload
-def map_ids(map: dict[int, int], indices: None) -> None: ...
+def map_ids(map: bidict.bidict[int, int], indices: None) -> None: ...
 
 
 def map_ids(
-    map: dict[int, int],
+    map: bidict.bidict[int, int],
     indices: Sequence[int] | None,
 ) -> list[int] | None:
     if indices is None:
@@ -37,7 +38,7 @@ def map_ids(
     return [map[node_id] for node_id in indices]
 
 
-def _map_df_ids(df: pl.DataFrame, map: dict[int, int]) -> pl.DataFrame:
+def _map_df_ids(df: pl.DataFrame, map: bidict.bidict[int, int]) -> pl.DataFrame:
     for col in [DEFAULT_ATTR_KEYS.NODE_ID, DEFAULT_ATTR_KEYS.EDGE_SOURCE, DEFAULT_ATTR_KEYS.EDGE_TARGET]:
         if col in df.columns:
             df = df.with_columns(pl.col(col).map_elements(map.__getitem__, return_dtype=pl.Int64).alias(col))
@@ -179,13 +180,13 @@ class GraphView(RustWorkXGraph):
                 self._time_to_nodes[t] = []
             self._time_to_nodes[t].append(idx)
 
-        self._node_map_to_root = node_map_to_root.copy()
-        self._node_map_from_root = {v: k for k, v in node_map_to_root.items()}
+        self._node_map_to_root = bidict.bidict(node_map_to_root)
+        self._node_map_from_root = self._node_map_to_root.inverse
 
-        self._edge_map_to_root: dict[int, int] = {
-            idx: data[DEFAULT_ATTR_KEYS.EDGE_ID] for idx, (_, _, data) in self.rx_graph.edge_index_map().items()
-        }
-        self._edge_map_from_root: dict[int, int] = {v: k for k, v in self._edge_map_to_root.items()}
+        self._edge_map_to_root: bidict.bidict[int, int] = bidict.bidict()
+        for idx, (_, _, data) in self.rx_graph.edge_index_map().items():
+            self._edge_map_to_root[idx] = data[DEFAULT_ATTR_KEYS.EDGE_ID]
+        self._edge_map_from_root = self._edge_map_to_root.inverse
 
         self._root = root
         self._is_root_rx_graph = isinstance(root, RustWorkXGraph)
@@ -344,7 +345,6 @@ class GraphView(RustWorkXGraph):
                 validate_keys=validate_keys,
             )
             self._node_map_to_root[node_id] = parent_node_id
-            self._node_map_from_root[parent_node_id] = node_id
         else:
             self._out_of_sync = True
 
@@ -356,7 +356,6 @@ class GraphView(RustWorkXGraph):
             node_ids = super().bulk_add_nodes(nodes)
             for node_id, parent_node_id in zip(node_ids, parent_node_ids, strict=True):
                 self._node_map_to_root[node_id] = parent_node_id
-                self._node_map_from_root[parent_node_id] = node_id
         else:
             self._out_of_sync = True
         return parent_node_ids
@@ -598,11 +597,13 @@ class GraphView(RustWorkXGraph):
             )
 
         self._root = parent._root
-        self._node_map_to_root = {k: parent._node_map_to_root[v] for k, v in self._node_map_to_root.items()}
-        self._node_map_from_root = {v: k for k, v in self._node_map_to_root.items()}
+        self._node_map_to_root = bidict.bidict()
+        for k, v in self._node_map_to_root.items():
+            self._node_map_to_root[k] = parent._node_map_to_root[v]
 
-        self._edge_map_to_root = {k: parent._edge_map_to_root[v] for k, v in self._edge_map_to_root.items()}
-        self._edge_map_from_root = {v: k for k, v in self._edge_map_to_root.items()}
+        self._edge_map_to_root = bidict.bidict()
+        for k, v in self._edge_map_to_root.items():
+            self._edge_map_to_root[k] = parent._edge_map_to_root[v]
 
     def contract_nodes(
         self,
