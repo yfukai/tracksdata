@@ -343,20 +343,28 @@ class GraphView(RustWorkXGraph):
             raise RuntimeError("Out of sync graph view cannot be used to get predecessors")
         return super().predecessors(node_ids, attr_keys)
 
-    def node_attrs(
+    def _node_attrs_from_node_ids(
         self,
         *,
-        node_ids: Sequence[int] | None = None,
+        node_ids: list[int] | None = None,
         attr_keys: Sequence[str] | str | None = None,
         unpack: bool = False,
     ) -> pl.DataFrame:
-        node_dfs = super().node_attrs(
+        node_dfs = super()._node_attrs_from_node_ids(
             node_ids=map_ids(self._node_map_from_root, node_ids),
             attr_keys=attr_keys,
             unpack=unpack,
         )
         node_dfs = _map_df_ids(node_dfs, self._node_map_to_root)
         return node_dfs
+
+    def node_attrs(
+        self,
+        *,
+        attr_keys: Sequence[str] | str | None = None,
+        unpack: bool = False,
+    ) -> pl.DataFrame:
+        return self._node_attrs_from_node_ids(attr_keys=attr_keys, unpack=unpack)
 
     def edge_attrs(
         self,

@@ -1033,7 +1033,6 @@ class SQLGraph(BaseGraph):
     def node_attrs(
         self,
         *,
-        node_ids: Sequence[int] | None = None,
         attr_keys: Sequence[str] | str | None = None,
         unpack: bool = False,
     ) -> pl.DataFrame:
@@ -1041,36 +1040,22 @@ class SQLGraph(BaseGraph):
             attr_keys = [attr_keys]
 
         with Session(self._engine) as session:
-            query = session.query(self.Node)
-
-            if node_ids is not None:
-                if hasattr(node_ids, "tolist"):
-                    node_ids = node_ids.tolist()
-
-                query = query.filter(self.Node.node_id.in_(node_ids))
+            query = sa.select(self.Node)
 
             if attr_keys is not None:
                 # making them unique
                 attr_keys = list(dict.fromkeys(attr_keys))
 
-                query = query.options(
-                    load_only(
-                        *[getattr(self.Node, key) for key in attr_keys],
-                    ),
+                query = query.with_only_columns(
+                    *[getattr(self.Node, key) for key in attr_keys],
                 )
 
-            LOG.info("Query: %s", query.statement)
-
         nodes_df = pl.read_database(
-            query.statement,
+            self._raw_query(query),
             connection=session.connection(),
         )
         nodes_df = self._cast_boolean_columns(self.Node, nodes_df)
         nodes_df = unpickle_bytes_columns(nodes_df)
-
-        # match node_ids ordering
-        if node_ids is not None and not nodes_df.is_empty():
-            nodes_df = self._reorder_by_indices(nodes_df, node_ids, "node_id")
 
         # indices are included by default and must be removed
         if attr_keys is not None:
@@ -1084,9 +1069,7 @@ class SQLGraph(BaseGraph):
     def edge_attrs(
         self,
         *,
-        node_ids: list[int] | None = None,
         attr_keys: Sequence[str] | None = None,
-        include_targets: bool = False,
         unpack: bool = False,
     ) -> pl.DataFrame:
         if isinstance(attr_keys, str):
@@ -1094,18 +1077,6 @@ class SQLGraph(BaseGraph):
 
         with Session(self._engine) as session:
             query = sa.select(self.Edge)
-
-            if node_ids is not None:
-                if hasattr(node_ids, "tolist"):
-                    node_ids = node_ids.tolist()
-
-                if include_targets:
-                    query = query.filter(self.Edge.source_id.in_(node_ids))
-                else:
-                    query = query.filter(
-                        self.Edge.source_id.in_(node_ids),
-                        self.Edge.target_id.in_(node_ids),
-                    )
 
             if attr_keys is not None:
                 attr_keys = set(attr_keys)

@@ -458,10 +458,9 @@ def test_ilp_solver_division_constraint() -> None:
     solver.solve(graph)
 
     # Check results
-    node_attrs = graph.node_attrs(
+    node_attrs = graph.filter(
         node_ids=[parent_node, child1, child2],
-        attr_keys=[DEFAULT_ATTR_KEYS.NODE_ID, DEFAULT_ATTR_KEYS.SOLUTION],
-    )
+    ).node_attrs(attr_keys=[DEFAULT_ATTR_KEYS.NODE_ID, DEFAULT_ATTR_KEYS.SOLUTION])
     edge_attrs = graph.edge_attrs()
 
     assert node_attrs[DEFAULT_ATTR_KEYS.SOLUTION].all()

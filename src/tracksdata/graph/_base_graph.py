@@ -408,7 +408,6 @@ class BaseGraph(abc.ABC):
     def node_attrs(
         self,
         *,
-        node_ids: Sequence[int] | None = None,
         attr_keys: Sequence[str] | str | None = None,
         unpack: bool = False,
     ) -> pl.DataFrame:
@@ -417,9 +416,6 @@ class BaseGraph(abc.ABC):
 
         Parameters
         ----------
-        node_ids : list[int] | None
-            The IDs of the nodes to get the attributes for.
-            If None, all nodes are used.
         attr_keys : Sequence[str] | str | None
             The attribute keys to get.
             If None, all attributesare used.
@@ -436,9 +432,7 @@ class BaseGraph(abc.ABC):
     def edge_attrs(
         self,
         *,
-        node_ids: list[int] | None = None,
         attr_keys: Sequence[str] | None = None,
-        include_targets: bool = False,
         unpack: bool = False,
     ) -> pl.DataFrame:
         """
@@ -446,15 +440,9 @@ class BaseGraph(abc.ABC):
 
         Parameters
         ----------
-        node_ids : list[int] | None
-            The IDs of the subgraph to get the edge attributesfor.
-            If None, all edges of the graph are used.
         attr_keys : Sequence[str] | None
             The attribute keys to get.
             If None, all attributesare used.
-        include_targets : bool
-            Whether to include edges out-going from the given node_ids even
-            if the target node is not in the given node_ids.
         unpack : bool
             Whether to unpack array attributesinto multiple scalar attributes.
         """

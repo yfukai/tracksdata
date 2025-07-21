@@ -144,9 +144,11 @@ class RXFilter(BaseFilter):
         data[DEFAULT_ATTR_KEYS.EDGE_ID] = []
 
         check_node_ids = None
-        if self._node_ids is not None:
+        if self._node_ids is not None and not (self._include_targets or self._include_sources):
             check_node_ids = set(node_ids)
 
+        # TODO: at this point I think we are better creating a rx subgraph
+        # and using the filter method
         for node_id in node_ids:
             for nf in neigh_funcs:
                 for src, tgt, attr in nf(node_id):
@@ -176,7 +178,11 @@ class RXFilter(BaseFilter):
         attr_keys: list[str] | None = None,
         unpack: bool = False,
     ) -> pl.DataFrame:
-        return self._graph.node_attrs(node_ids=self.node_ids(), attr_keys=attr_keys, unpack=unpack)
+        return self._graph._node_attrs_from_node_ids(
+            node_ids=self.node_ids(),
+            attr_keys=attr_keys,
+            unpack=unpack,
+        )
 
     @cache_method
     def edge_attrs(
@@ -755,10 +761,10 @@ class RustWorkXGraph(BaseGraph):
         for _, _, edge_attr in self.rx_graph.weighted_edge_list():
             edge_attr[key] = default_value
 
-    def node_attrs(
+    def _node_attrs_from_node_ids(
         self,
         *,
-        node_ids: Sequence[int] | None = None,
+        node_ids: list[int] | None = None,
         attr_keys: Sequence[str] | str | None = None,
         unpack: bool = False,
     ) -> pl.DataFrame:
@@ -821,6 +827,17 @@ class RustWorkXGraph(BaseGraph):
             df = unpack_array_attrs(df)
 
         return df
+
+    def node_attrs(
+        self,
+        *,
+        attr_keys: Sequence[str] | str | None = None,
+        unpack: bool = False,
+    ) -> pl.DataFrame:
+        """
+        Get the attributes of the nodes as a polars DataFrame.
+        """
+        return self._node_attrs_from_node_ids(attr_keys=attr_keys, unpack=unpack)
 
     def edge_attrs(
         self,
@@ -1347,6 +1364,18 @@ class IndexedRXGraph(RustWorkXGraph):
         """
         return list(self._world_to_graph_id.keys())
 
+    def _node_attrs_from_node_ids(
+        self,
+        *,
+        node_ids: list[int] | None = None,
+        attr_keys: Sequence[str] | str | None = None,
+        unpack: bool = False,
+    ) -> pl.DataFrame:
+        node_ids = self.from_world_id(node_ids)
+        df = super()._node_attrs_from_node_ids(node_ids=node_ids, attr_keys=attr_keys, unpack=unpack)
+        df = self._df_to_world_id(df, [DEFAULT_ATTR_KEYS.NODE_ID])
+        return df
+
     def node_attrs(
         self,
         *,
@@ -1372,7 +1401,7 @@ class IndexedRXGraph(RustWorkXGraph):
             The node attributes of the graph.
         """
         node_ids = self.from_world_id(node_ids)
-        df = super().node_attrs(node_ids=node_ids, attr_keys=attr_keys, unpack=unpack)
+        df = super()._node_attrs_from_node_ids(node_ids=node_ids, attr_keys=attr_keys, unpack=unpack)
         df = self._df_to_world_id(df, [DEFAULT_ATTR_KEYS.NODE_ID])
         return df
 
