@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 
 class BaseFilter(abc.ABC):
     def __init__(self) -> None:
-        self._cache: dict[str, Any] = {}
+        self._cache: dict[tuple[str, Any, Any], Any] = {}
 
     def clear_cache(self) -> None:
         """
@@ -80,6 +80,16 @@ F = TypeVar("F", bound=Callable[..., Any])
 def cache_method(func: F) -> F:
     """
     Cache the result of a method.
+
+    Parameters
+    ----------
+    func : Callable[..., Any]
+        The method to cache.
+
+    Returns
+    -------
+    Callable[..., Any]
+        The wrapped method.
     """
 
     @functools.wraps(func)
