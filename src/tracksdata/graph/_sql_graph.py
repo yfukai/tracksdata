@@ -90,10 +90,14 @@ class SQLFilter(BaseFilter):
 
         if node_ids is not None:
             self._node_query = self._node_query.filter(self._graph.Node.node_id.in_(node_ids))
-            self._edge_query = self._edge_query.filter(
-                self._graph.Edge.source_id.in_(node_ids),
-                self._graph.Edge.target_id.in_(node_ids),
-            )
+            if not self._include_targets:
+                self._edge_query = self._edge_query.filter(
+                    self._graph.Edge.target_id.in_(node_ids),
+                )
+            if not self._include_sources:
+                self._edge_query = self._edge_query.filter(
+                    self._graph.Edge.source_id.in_(node_ids),
+                )
             node_filtered = True
 
         if self._node_attr_comps:
