@@ -9,7 +9,7 @@ from tabulate import tabulate
 from tracksdata.attrs import EdgeAttr, NodeAttr
 from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.edges import DistanceEdges
-from tracksdata.graph import RustWorkXGraph, SQLGraph
+from tracksdata.graph import IndexedRXGraph, RustWorkXGraph, SQLGraph
 from tracksdata.graph._base_graph import BaseGraph
 from tracksdata.nodes import RandomNodes
 from tracksdata.options import get_options, set_options
@@ -161,7 +161,7 @@ def main() -> None:
             for n_nodes in [1_000, 10_000, 100_000]:
                 n_nodes_per_tp = int(n_nodes / n_time_points)
                 pipeline = _build_pipeline(n_time_points, n_nodes_per_tp)
-                for backend in [RustWorkXGraph, SQLGraphWithMemory, SQLGraphDisk]:
+                for backend in [RustWorkXGraph, IndexedRXGraph, SQLGraphWithMemory, SQLGraphDisk]:
                     # SQLGraphWithMemory does not support multiprocessing
                     if backend == SQLGraphWithMemory and n_workers > 1:
                         continue

@@ -30,6 +30,10 @@ jobs:
         with:
           python-version: "3.12"
 
+      # these libraries enable testing on Qt on linux
+      - name: Set up Qt
+        uses: tlambert03/setup-qt-libs@v1
+
       - name: Install uv
         uses: astral-sh/setup-uv@v5
         with:
@@ -40,8 +44,9 @@ jobs:
           uv sync --extra test
 
       - name: Run tests
-        run: |
-          uv run pytest
+        uses: aganders3/headless-gui@v2
+        with:
+          run: uv run pytest
 
       - name: Build package
         run: |

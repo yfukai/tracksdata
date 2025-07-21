@@ -47,6 +47,7 @@ dependencies = [
   "typing-extensions",
   "ilpy >= 0.5.1",
   "pyarrow",
+  "bidict>=0.23.1",
 ]
 
 [project.optional-dependencies]
@@ -55,6 +56,9 @@ test = [
   "pytest-cov",
   "pytest-html",
   "py-ctcmetrics",
+  "pytest-qt",
+  "napari",
+  "pyqt5",
 ]
 docs = [
   "mkdocs",

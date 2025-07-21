@@ -1,7 +1,8 @@
 import operator
 from collections.abc import Callable, Sequence
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, overload
 
+import bidict
 import numpy as np
 import polars as pl
 import rustworkx as rx
@@ -329,6 +330,8 @@ class RustWorkXGraph(BaseGraph):
         self,
         attrs: dict[str, Any],
         validate_keys: bool = True,
+        *args: Any,
+        **kwargs: Any,
     ) -> int:
         """
         Add a node to the graph at time t.
@@ -346,6 +349,10 @@ class RustWorkXGraph(BaseGraph):
             Whether to check if the attributes keys are valid.
             If False, the attributes keys will not be checked,
             useful to speed up the operation when doing bulk insertions.
+        *args: Any
+            Unused arguments, included for compatibility with the child classes.
+        **kwargs: Any
+            Unused keyword arguments, included for compatibility with the child classes.
         """
         # avoiding copying attributes on purpose, it could be a problem in the future
         if validate_keys:
@@ -358,7 +365,7 @@ class RustWorkXGraph(BaseGraph):
         self._time_to_nodes.setdefault(attrs["t"], []).append(node_id)
         return node_id
 
-    def bulk_add_nodes(self, nodes: list[dict[str, Any]]) -> list[int]:
+    def bulk_add_nodes(self, nodes: list[dict[str, Any]], *args: Any, **kwargs: Any) -> list[int]:
         """
         Faster method to add multiple nodes to the graph with less overhead and fewer checks.
 
@@ -368,6 +375,10 @@ class RustWorkXGraph(BaseGraph):
             The data of the nodes to be added.
             The keys of the data will be used as the attributes of the nodes.
             Must have "t" key.
+        *args: Any
+            Unused arguments, included for compatibility with the child classes.
+        **kwargs: Any
+            Unused keyword arguments, included for compatibility with the child classes.
 
         Returns
         -------
@@ -1107,3 +1118,430 @@ class RustWorkXGraph(BaseGraph):
         graph_view = GraphView(rx_graph, node_map_to_root=node_map_to_root, root=self)
 
         return graph_view
+
+
+class IndexedRXGraph(RustWorkXGraph):
+    """
+    A graph that is indexed by node ids.
+
+    This graph is useful when you have a graph with arbitrary node ids.
+
+    Parameters
+    ----------
+    rx_graph : rx.PyDiGraph | None
+        The rustworkx graph to index.
+    node_id_map : dict[int, int] | None
+        A map of world ids to graph ids, must be provided if `rx_graph` is provided.
+
+    Examples
+    --------
+    ```python
+    graph = IndexedRXGraph(rx_graph=rx_graph, node_id_map=node_id_map)
+    ...
+    graph = IndexedRXGraph()
+    graph.add_node({"t": 0}, index=1355)
+    ```
+    """
+
+    def __init__(
+        self,
+        rx_graph: rx.PyDiGraph | None = None,
+        node_id_map: dict[int, int] | None = None,
+    ) -> None:
+        if rx_graph is not None and node_id_map is None:
+            raise ValueError("`node_id_map` must be provided when `rx_graph` is provided")
+
+        if rx_graph is None and node_id_map is not None:
+            raise ValueError("`rx_graph` must be provided when `node_id_map` is provided")
+
+        if rx_graph is None:
+            self._graph = rx.PyDiGraph()
+        else:
+            self._graph = rx_graph
+
+        if node_id_map is not None:
+            self._world_to_graph_id = bidict.bidict(node_id_map)
+
+        else:
+            self._world_to_graph_id = bidict.bidict()
+
+        self._graph_to_world_id = self._world_to_graph_id.inverse
+
+        super().__init__()
+
+    @overload
+    def from_world_id(self, world_id: None) -> list[int]: ...
+
+    @overload
+    def from_world_id(self, world_id: int) -> int: ...
+
+    @overload
+    def from_world_id(self, world_id: list[int]) -> list[int]: ...
+
+    def from_world_id(self, world_id: int | list[int] | None) -> int | list[int]:
+        """
+        Convert world ids to rustworkx graph ids.
+
+        Parameters
+        ----------
+        world_id : int | list[int] | None
+            The world ids to convert.
+
+        Returns
+        -------
+        int | list[int]
+            The rustworkx graph ids.
+        """
+        if world_id is None:
+            return list(self.rx_graph.node_indices())
+        vec_map = np.vectorize(self._world_to_graph_id.__getitem__, otypes=[int])
+        return vec_map(np.asarray(world_id, dtype=int)).tolist()
+
+    @overload
+    def to_world_id(self, graph_id: None) -> None: ...
+
+    @overload
+    def to_world_id(self, graph_id: int) -> int: ...
+
+    @overload
+    def to_world_id(self, graph_id: list[int]) -> list[int]: ...
+
+    def to_world_id(self, graph_id: int | list[int] | None) -> int | list[int] | None:
+        """
+        Convert rustworkx graph ids to world ids.
+
+        Parameters
+        ----------
+        graph_id : int | list[int] | None
+            The rustworkx graph ids to convert.
+
+        Returns
+        -------
+        int | list[int] | None
+            The world ids.
+        """
+        if graph_id is None:
+            return None
+        vec_map = np.vectorize(self._graph_to_world_id.__getitem__, otypes=[int])
+        return vec_map(np.asarray(graph_id, dtype=int)).tolist()
+
+    def _df_to_world_id(self, df: pl.DataFrame, columns: Sequence[str]) -> pl.DataFrame:
+        for col in columns:
+            if col in df.columns:
+                df = df.with_columns(
+                    pl.col(col).map_elements(self._graph_to_world_id.get, return_dtype=pl.Int64),
+                )
+        return df
+
+    def add_node(
+        self,
+        attrs: dict[str, Any],
+        validate_keys: bool = True,
+        index: int | None = None,
+    ) -> int:
+        """
+        Add a node to the graph.
+
+        Parameters
+        ----------
+        attrs : dict[str, Any]
+            The attributes of the node.
+        validate_keys : bool
+            Whether to validate the keys of the attributes.
+        index : int | None
+            The index of the node. If None, the node id will be used.
+            This might cause issues if the node id is not unique.
+
+        Returns
+        -------
+        int
+            The index of the node.
+        """
+        node_id = super().add_node(attrs, validate_keys)
+        if index is None:
+            index = node_id
+        self._world_to_graph_id.put(index, node_id)
+        return index
+
+    def bulk_add_nodes(
+        self,
+        nodes: list[dict[str, Any]],
+        indices: list[int] | None = None,
+    ) -> list[int]:
+        """
+        Add multiple nodes to the graph.
+
+        Parameters
+        ----------
+        nodes : list[dict[str, Any]]
+            The attributes of the nodes.
+        indices : list[int] | None
+            The indices of the nodes. If None, the node ids will be used.
+            This might cause issues if the node ids are not unique.
+
+        Returns
+        -------
+        list[int]
+            The indices of the nodes.
+        """
+        graph_ids = super().bulk_add_nodes(nodes)
+
+        if indices is None:
+            indices = graph_ids
+
+        self._world_to_graph_id.putall(zip(indices, graph_ids, strict=True))
+
+        return indices
+
+    def _rx_subgraph_with_nodemap(
+        self,
+        node_ids: Sequence[int] | None = None,
+    ) -> tuple[rx.PyDiGraph, rx.NodeMap]:
+        """
+        Get a subgraph of the graph.
+
+        Parameters
+        ----------
+        node_ids : Sequence[int] | None
+            The node ids to include in the subgraph.
+
+        Returns
+        -------
+        tuple[rx.PyDiGraph, rx.NodeMap]
+            The subgraph and the node map.
+        """
+        node_ids = self.from_world_id(node_ids)
+        rx_graph, node_map = super()._rx_subgraph_with_nodemap(node_ids)
+        node_map = {k: self._graph_to_world_id[v] for k, v in node_map.items()}
+        return rx_graph, node_map
+
+    def node_ids(self) -> list[int]:
+        """
+        Get the node ids of the graph.
+
+        Returns
+        -------
+        list[int]
+            The node ids of the graph.
+        """
+        return list(self._world_to_graph_id.keys())
+
+    def node_attrs(
+        self,
+        *,
+        node_ids: Sequence[int] | None = None,
+        attr_keys: Sequence[str] | str | None = None,
+        unpack: bool = False,
+    ) -> pl.DataFrame:
+        """
+        Get the node attributes of the graph.
+
+        Parameters
+        ----------
+        node_ids : Sequence[int] | None
+            The node ids to include in the subgraph.
+        attr_keys : Sequence[str] | str | None
+            The attributes to include in the subgraph.
+        unpack : bool
+            Whether to unpack the attributes.
+
+        Returns
+        -------
+        pl.DataFrame
+            The node attributes of the graph.
+        """
+        node_ids = self.from_world_id(node_ids)
+        df = super().node_attrs(node_ids=node_ids, attr_keys=attr_keys, unpack=unpack)
+        df = self._df_to_world_id(df, [DEFAULT_ATTR_KEYS.NODE_ID])
+        return df
+
+    def edge_attrs(
+        self,
+        *,
+        node_ids: Sequence[int] | None = None,
+        attr_keys: Sequence[str] | str | None = None,
+        include_targets: bool = False,
+        unpack: bool = False,
+    ) -> pl.DataFrame:
+        """
+        Get the edge attributes of the graph.
+
+        Parameters
+        ----------
+        node_ids : Sequence[int] | None
+            The node ids to include in the subgraph.
+        attr_keys : Sequence[str] | str | None
+            The attributes to include in the subgraph.
+        include_targets : bool
+            Whether to include the target node attributes.
+        unpack : bool
+            Whether to unpack the attributes.
+
+        Returns
+        -------
+        pl.DataFrame
+            The edge attributes of the graph.
+        """
+        node_ids = self.from_world_id(node_ids)
+        df = super().edge_attrs(node_ids=node_ids, attr_keys=attr_keys, include_targets=include_targets, unpack=unpack)
+        df = self._df_to_world_id(df, [DEFAULT_ATTR_KEYS.EDGE_SOURCE, DEFAULT_ATTR_KEYS.EDGE_TARGET])
+        return df
+
+    def in_degree(self, node_ids: list[int] | int | None = None) -> list[int] | int:
+        """
+        Get the in degree of the graph.
+
+        Parameters
+        ----------
+        node_ids : list[int] | int | None
+            The node ids to include in the subgraph.
+
+        Returns
+        -------
+        list[int] | int
+            The in degree of the graph.
+        """
+        node_ids = self.from_world_id(node_ids)
+        return super().in_degree(node_ids)
+
+    def out_degree(self, node_ids: list[int] | int | None = None) -> list[int] | int:
+        """
+        Get the out degree of the graph.
+
+        Parameters
+        ----------
+        node_ids : list[int] | int | None
+            The node ids to include in the subgraph.
+
+        Returns
+        -------
+        list[int] | int
+            The out degree of the graph.
+        """
+        node_ids = self.from_world_id(node_ids)
+        return super().out_degree(node_ids)
+
+    def add_edge(
+        self,
+        source_id: int,
+        target_id: int,
+        attrs: dict[str, Any],
+        validate_keys: bool = True,
+    ) -> int:
+        """
+        Add an edge to the graph.
+
+        Parameters
+        ----------
+        source_id : int
+            The source node id.
+        target_id : int
+            The target node id.
+        attrs : dict[str, Any]
+            The attributes of the edge.
+        validate_keys : bool
+            Whether to validate the keys of the attributes.
+
+        Returns
+        -------
+        int
+            The edge id.
+        """
+        source_id = self._world_to_graph_id[source_id]
+        target_id = self._world_to_graph_id[target_id]
+        return super().add_edge(source_id, target_id, attrs, validate_keys)
+
+    def add_overlap(self, source_id: int, target_id: int) -> int:
+        """
+        Add an overlap to the graph.
+
+        Parameters
+        ----------
+        source_id : int
+            The source node id.
+        target_id : int
+            The target node id.
+
+        Returns
+        -------
+        int
+            The overlap id.
+        """
+        source_id = self._world_to_graph_id[source_id]
+        target_id = self._world_to_graph_id[target_id]
+        return super().add_overlap(source_id, target_id)
+
+    def overlaps(self, node_ids: list[int] | int | None = None) -> list[list[int, 2]]:
+        """
+        Get the overlaps of the graph.
+
+        Parameters
+        ----------
+        node_ids : list[int] | int | None
+            The node ids to include in the subgraph.
+
+        Returns
+        -------
+        list[list[int, 2]]
+            The overlaps of the graph.
+        """
+        try:
+            node_ids = self.from_world_id(node_ids)
+        except KeyError:
+            LOG.warning(f"`node_ids` {node_ids} not found in index map.")
+            return []
+        overlaps = self.to_world_id(super().overlaps(node_ids))
+        return overlaps
+
+    def _get_neighbors(
+        self,
+        neighbors_func: Callable[[rx.PyDiGraph, int], rx.NodeIndices],
+        node_ids: list[int] | int | None = None,
+        attr_keys: Sequence[str] | str | None = None,
+    ) -> dict[int, pl.DataFrame] | pl.DataFrame:
+        node_ids = self.from_world_id(node_ids)
+        dfs = super()._get_neighbors(neighbors_func, node_ids, attr_keys)
+        if isinstance(dfs, pl.DataFrame):
+            dfs = self._df_to_world_id(dfs, [DEFAULT_ATTR_KEYS.NODE_ID])
+        else:
+            dfs = {
+                self._graph_to_world_id[node_id]: self._df_to_world_id(df, [DEFAULT_ATTR_KEYS.NODE_ID])
+                for node_id, df in dfs.items()
+            }
+        return dfs
+
+    def update_node_attrs(
+        self,
+        *,
+        attrs: dict[str, Any],
+        node_ids: Sequence[int] | None = None,
+    ) -> None:
+        """
+        Update the node attributes of the graph.
+
+        Parameters
+        ----------
+        attrs : dict[str, Any]
+            The attributes to update.
+        node_ids : Sequence[int] | None
+            The node ids to update.
+        """
+        node_ids = self.from_world_id(node_ids)
+        super().update_node_attrs(attrs=attrs, node_ids=node_ids)
+
+    def filter_nodes_by_attrs(self, *attrs: AttrComparison) -> list[int]:
+        """
+        Filter the nodes of the graph by attributes.
+
+        Parameters
+        ----------
+        attrs : AttrComparison
+            The attributes to filter by.
+
+        Returns
+        -------
+        list[int]
+            The filtered node ids.
+        """
+        node_ids = super().filter_nodes_by_attrs(*attrs)
+        return self.to_world_id(node_ids)
