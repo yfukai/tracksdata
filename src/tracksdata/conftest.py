@@ -39,7 +39,7 @@ def graph_backend(request) -> BaseGraph:
         ) -> int:
             while True:
                 new_index = rng.integers(0, max_index).item()
-                if new_index not in self._world_to_graph_id:
+                if new_index not in self._external_to_local:
                     break
             return orig_add_node(self, attrs, validate_keys, new_index)
 
