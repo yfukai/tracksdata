@@ -30,7 +30,7 @@ def test_single_path() -> None:
     assert tracks_graph.num_nodes() == 1 + 1  # Single track (includes null node (0))
 
 
-def test_assymetric_branching_path() -> None:
+def test_symmetric_branching_path() -> None:
     """Test graph with a valid branching path (two children)."""
     graph = rx.PyDiGraph()
 
@@ -56,7 +56,7 @@ def test_assymetric_branching_path() -> None:
     assert tracks_graph.num_nodes() == 3 + 1  # Three tracks (includes null node (0))
 
 
-def test_asymetric_branching_path() -> None:
+def test_asymmetric_branching_path() -> None:
     """Test graph with a valid branching path (two children)."""
     graph = rx.PyDiGraph()
 

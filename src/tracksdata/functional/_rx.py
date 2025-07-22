@@ -15,7 +15,7 @@ def _fast_path_transverse(
     dag: dict[int, int],
 ) -> list[int]:
     """
-    Transverse a path in the forest directed graph and add path (track) split into queue.
+    Traverse a path in the tracking directed graph following parent→child relationships.
 
     Parameters
     ----------
@@ -43,27 +43,33 @@ def _fast_path_transverse(
 
 @njit
 def _fast_dag_transverse(
-    roots: np.ndarray,
+    starts: np.ndarray,
     dag: dict[int, int],
 ) -> tuple[list[np.ndarray], np.ndarray, np.ndarray, dict[int, int], dict[int, int]]:
     """
-    Transverse the tracks DAG creating a distinct id to each path.
+    Traverse the tracks DAG creating a distinct id to each linear path.
+
+    This algorithm handles asymmetric division by treating each parent→child
+    relationship as a single linear path. Dividing edges (nodes with multiple
+    children) are processed separately as "long edges" to create proper track
+    relationships in the output graph.
 
     Parameters
     ----------
-    roots : np.ndarray
-        Forest roots.
+    starts : np.ndarray
+        Track starting points (nodes without parents).
     dag : dict[int, int]
-        Directed acyclic graph.
+        Directed acyclic graph mapping parent → child for linear paths only.
+        Dividing edges are excluded and handled separately.
 
     Returns
     -------
     tuple[list[np.ndarray], np.ndarray, np.ndarray, dict[int, int], dict[int, int]]
-        - sequence of paths
-        - their respective track_id
-        - length
-        - last_to_track_id: last node -> track_id
-        - first_to_track_id: first node -> track_id
+        - sequence of paths: List of numpy arrays, each containing node IDs in a linear path
+        - their respective track_id: Track ID for each path
+        - length: Length of each path
+        - last_to_track_id: Maps last node in each path to its track_id
+        - first_to_track_id: Maps first node in each path to its track_id
     """
     paths = []
     track_ids = []
@@ -73,7 +79,7 @@ def _fast_dag_transverse(
 
     track_id = 1
 
-    for start in roots:
+    for start in starts:
         path = _fast_path_transverse(start, dag)
         paths.append(path)
         track_ids.append(track_id)
@@ -118,20 +124,26 @@ def _numba_dag(node_ids: np.ndarray, parent_ids: np.ndarray) -> dict[int, int]:
 
 
 def _rx_graph_to_dict_dag(graph: rx.PyDiGraph) -> tuple[dict[int, int], np.ndarray, pl.DataFrame]:
-    """Creates the DAG of track lineages
+    """Creates the DAG of track lineages, separating linear paths from dividing edges.
+
+    This function implements the core logic for handling asymmetric division by:
+    1. Identifying dividing edges (nodes with multiple children)
+    2. Identifying temporal gaps (edges spanning > 1 time unit)
+    3. Creating a simplified DAG with only linear parent→child relationships
+    4. Returning dividing/long edges separately for track relationship creation
 
     Parameters
     ----------
     graph : rx.PyDiGraph
-        Directed acyclic graph of nodes.
+        Directed acyclic graph of nodes with time attributes.
 
     Returns
     -------
-    tuple[dict[int, int], list[int], pl.DataFrame]
-        - DAG where parent maps to their child (parent -> child)
-        - Roots of the DAG
-        - Edges (source, target) that requires a new track id (long edges and dividing edges)
-          Often referred to as "long edges"
+    tuple[dict[int, int], np.ndarray, pl.DataFrame]
+        - Linear DAG: Maps parent → child for linear paths only (excludes dividing edges)
+        - Starts: Array of track starting node IDs (nodes without parents)
+        - Long edges: DataFrame of (source, target) edges that create new track relationships
+          (includes both dividing edges and temporal gaps > 1 time unit)
     """
     # target are the children
     # source are the parents
@@ -170,13 +182,18 @@ def _rx_graph_to_dict_dag(graph: rx.PyDiGraph) -> tuple[dict[int, int], np.ndarr
         else:
             raise e
 
-    dividing_mask = edges_df["source"].is_duplicated()
-    long_edges_mask = (edges_df["t_target"] - edges_df["t_source"]).abs() > 1
+    # ASYMMETRIC DIVISION FIX:
+    # The key insight is to separate dividing edges (nodes with multiple children)
+    # from linear path edges. This prevents the algorithm from incorrectly handling
+    # asymmetric branching patterns where one branch continues linearly while
+    # another creates a new track.
+    dividing_mask = edges_df["source"].is_duplicated()  # Nodes with multiple children
+    long_edges_mask = (edges_df["t_target"] - edges_df["t_source"]).abs() > 1  # Temporal gaps
     both_mask = dividing_mask | long_edges_mask
 
-    long_edges_df = edges_df.filter(both_mask)
+    long_edges_df = edges_df.filter(both_mask)  # Edges that create new track relationships
 
-    edges_df = edges_df.filter(~both_mask)
+    edges_df = edges_df.filter(~both_mask)  # Only linear parent→child edges remain
     nodes_df = (
         nodes_df.with_columns(pl.col("node_id").alias("target"))
         .join(edges_df, on="target", how="left", validate="1:1")
@@ -189,9 +206,9 @@ def _rx_graph_to_dict_dag(graph: rx.PyDiGraph) -> tuple[dict[int, int], np.ndarr
     starts = nodes_df["target"].filter(~has_parent).cast(pl.Int64).to_numpy()
 
     nodes_arr = nodes_df.filter(has_parent).to_numpy(order="fortran").T
-    forest = _numba_dag(nodes_arr[0], nodes_arr[1])
+    linear_dag = _numba_dag(nodes_arr[0], nodes_arr[1])
 
-    return forest, starts, long_edges_df
+    return linear_dag, starts, long_edges_df
 
 
 @njit
@@ -253,9 +270,9 @@ def _assign_track_ids(
     LOG.info(f"Graph has {graph.num_nodes()} nodes and {graph.num_edges()} edges")
 
     # was it better (faster) when using a numpy array for the digraph as in ultrack?
-    dag, roots, long_edges_df = _rx_graph_to_dict_dag(graph)
+    linear_dag, starts, long_edges_df = _rx_graph_to_dict_dag(graph)
 
-    paths, track_ids, lengths, last_to_track_id, first_to_track_id = _fast_dag_transverse(roots, dag)
+    paths, track_ids, lengths, last_to_track_id, first_to_track_id = _fast_dag_transverse(starts, linear_dag)
 
     n_tracks = len(track_ids)
 
