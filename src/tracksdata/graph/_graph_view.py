@@ -95,9 +95,9 @@ class GraphView(RustWorkXGraph, MappedGraphMixin):
             self._time_to_nodes[t].append(idx)
 
         # Set up edge mapping (nodes handled by mixin)
-        self._edge_map_to_root: bidict.bidict[int, int] = bidict.bidict()
-        for idx, (_, _, data) in self.rx_graph.edge_index_map().items():
-            self._edge_map_to_root.put(idx, data[DEFAULT_ATTR_KEYS.EDGE_ID])
+        self._edge_map_to_root: bidict.bidict[int, int] = bidict.bidict(
+            (idx, data[DEFAULT_ATTR_KEYS.EDGE_ID]) for idx, (_, _, data) in self.rx_graph.edge_index_map().items()
+        )
         self._edge_map_from_root = self._edge_map_to_root.inverse
 
         self._root = root
@@ -521,13 +521,13 @@ class GraphView(RustWorkXGraph, MappedGraphMixin):
             )
 
         self._root = parent._root
-        self._local_to_external = bidict.bidict()
-        for k, v in self._local_to_external.items():
-            self._local_to_external.put(k, parent._local_to_external[v])
+        self._local_to_external = bidict.bidict(
+            (k, parent._local_to_external[v]) for k, v in self._local_to_external.items()
+        )
 
-        self._edge_map_to_root = bidict.bidict()
-        for k, v in self._edge_map_to_root.items():
-            self._edge_map_to_root.put(k, parent._edge_map_to_root[v])
+        self._edge_map_to_root = bidict.bidict(
+            (k, parent._edge_map_to_root[v]) for k, v in self._edge_map_to_root.items()
+        )
 
     def contract_nodes(
         self,
