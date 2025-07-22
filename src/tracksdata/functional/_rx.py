@@ -194,6 +194,40 @@ def _rx_graph_to_dict_dag(graph: rx.PyDiGraph) -> tuple[dict[int, int], np.ndarr
     return forest, starts, long_edges_df
 
 
+@njit
+def _track_id_edges_from_long_edges(
+    source: np.ndarray,
+    target: np.ndarray,
+    first_to_track_id: dict[int, int],
+    last_to_track_id: dict[int, int],
+) -> list[tuple[int, int]]:
+    """
+    Compute the track_id edges from the long edges.
+
+    Parameters
+    ----------
+    source : np.ndarray
+        Source nodes.
+    target : np.ndarray
+        Target nodes.
+    first_to_track_id : dict[int, int]
+        First node -> track_id.
+    last_to_track_id : dict[int, int]
+        Last node -> track_id.
+
+    Returns
+    -------
+    list[tuple[int, int]]
+        List of track_id edges.
+    """
+    edges = []
+    for i in range(len(source)):
+        child_track_id = first_to_track_id[target[i]]
+        parent_track_id = last_to_track_id[source[i]]
+        edges.append((parent_track_id, child_track_id))
+    return edges
+
+
 def _assign_track_ids(
     graph: rx.PyDiGraph,
 ) -> tuple[np.ndarray, np.ndarray, rx.PyDiGraph]:
@@ -229,11 +263,13 @@ def _assign_track_ids(
     tracks_graph.add_nodes_from([None] * (n_tracks + 1))
 
     if len(long_edges_df) > 0:
-        # assign long edges
-        for src, tgt in zip(long_edges_df["source"].to_list(), long_edges_df["target"].to_list(), strict=True):
-            child_track_id = first_to_track_id[tgt]
-            parent_track_id = last_to_track_id[src]
-            tracks_graph.add_edge(parent_track_id, child_track_id, None)
+        edges = _track_id_edges_from_long_edges(
+            long_edges_df["source"].to_numpy(),
+            long_edges_df["target"].to_numpy(),
+            first_to_track_id,
+            last_to_track_id,
+        )
+        tracks_graph.add_edges_from_no_data(edges)
 
     paths = np.concatenate(paths)
     nodes_track_ids = np.repeat(track_ids, lengths)
