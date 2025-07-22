@@ -9,11 +9,12 @@ from tracksdata.attrs import AttrComparison
 from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.functional._rx import _assign_track_ids
 from tracksdata.graph._base_graph import BaseGraph
+from tracksdata.graph._mapped_graph_mixin import MappedGraphMixin
 from tracksdata.graph._rustworkx_graph import RustWorkXGraph, RXFilter
-from tracksdata.graph.filters._indexed_filter import IndexRXFilter, _map_df_ids, map_ids
+from tracksdata.graph.filters._indexed_filter import IndexRXFilter
 
 
-class GraphView(RustWorkXGraph):
+class GraphView(RustWorkXGraph, MappedGraphMixin):
     """
     A filtered view of a graph that maintains bidirectional mapping to the root graph.
 
@@ -36,13 +37,13 @@ class GraphView(RustWorkXGraph):
 
     Attributes
     ----------
-    _node_map_to_root : dict[int, int]
-        Mapping from view node IDs to root graph node IDs.
-    _node_map_from_root : dict[int, int]
-        Mapping from root graph node IDs to view node IDs.
-    _edge_map_to_root : dict[int, int]
+    _local_to_external : bidict.bidict[int, int]
+        Mapping from local node IDs to external node IDs (via MappedGraphMixin).
+    _external_to_local : bidict.bidict[int, int]
+        Mapping from external node IDs to local node IDs (via MappedGraphMixin).
+    _edge_map_to_root : bidict.bidict[int, int]
         Mapping from view edge IDs to root graph edge IDs.
-    _edge_map_from_root : dict[int, int]
+    _edge_map_from_root : bidict.bidict[int, int]
         Mapping from root graph edge IDs to view edge IDs.
 
     See Also
@@ -80,18 +81,20 @@ class GraphView(RustWorkXGraph):
         root: BaseGraph,
         sync: bool = True,
     ) -> None:
-        super().__init__(rx_graph=rx_graph)
+        # Initialize RustWorkXGraph
+        RustWorkXGraph.__init__(self, rx_graph=rx_graph)
 
-        # setting up the time_to_nodes mapping
+        # Initialize MappedGraphMixin
+        MappedGraphMixin.__init__(self, node_map_to_root)
+
+        # Setting up the time_to_nodes mapping (this was removed accidentally)
         for idx in rx_graph.node_indices():
             t = self.rx_graph[idx][DEFAULT_ATTR_KEYS.T]
             if t not in self._time_to_nodes:
                 self._time_to_nodes[t] = []
             self._time_to_nodes[t].append(idx)
 
-        self._node_map_to_root = bidict.bidict(node_map_to_root)
-        self._node_map_from_root = self._node_map_to_root.inverse
-
+        # Set up edge mapping (nodes handled by mixin)
         self._edge_map_to_root: bidict.bidict[int, int] = bidict.bidict()
         for idx, (_, _, data) in self.rx_graph.edge_index_map().items():
             self._edge_map_to_root.put(idx, data[DEFAULT_ATTR_KEYS.EDGE_ID])
@@ -122,11 +125,14 @@ class GraphView(RustWorkXGraph):
 
     def node_ids(self) -> list[int]:
         indices = self.rx_graph.node_indices()
-        return map_ids(self._node_map_to_root, indices)
+        return self._map_to_external(indices)
 
     def edge_ids(self) -> list[int]:
         indices = self.rx_graph.edge_indices()
-        return map_ids(self._edge_map_to_root, indices)
+        # Map edge indices using the edge mapping
+        if indices is None:
+            return None
+        return [self._edge_map_to_root[idx] for idx in indices]
 
     def add_overlap(
         self,
@@ -204,8 +210,7 @@ class GraphView(RustWorkXGraph):
         return IndexRXFilter(
             *attr_filters,
             graph=self,
-            to_world_id_map=self._node_map_to_root,
-            node_ids=map_ids(self._node_map_from_root, node_ids),
+            node_ids=self._map_to_local(node_ids),
             include_targets=include_targets,
             include_sources=include_sources,
         )
@@ -250,11 +255,12 @@ class GraphView(RustWorkXGraph):
         )
 
         if self.sync:
-            node_id = super().add_node(
+            node_id = RustWorkXGraph.add_node(
+                self,
                 attrs=attrs,
                 validate_keys=validate_keys,
             )
-            self._node_map_to_root.put(node_id, parent_node_id)
+            self._add_id_mapping(node_id, parent_node_id)
         else:
             self._out_of_sync = True
 
@@ -263,9 +269,8 @@ class GraphView(RustWorkXGraph):
     def bulk_add_nodes(self, nodes: list[dict[str, Any]]) -> list[int]:
         parent_node_ids = self._root.bulk_add_nodes(nodes)
         if self.sync:
-            node_ids = super().bulk_add_nodes(nodes)
-            for node_id, parent_node_id in zip(node_ids, parent_node_ids, strict=True):
-                self._node_map_to_root.put(node_id, parent_node_id)
+            node_ids = RustWorkXGraph.bulk_add_nodes(self, nodes)
+            self._add_id_mappings(list(zip(node_ids, parent_node_ids, strict=True)))
         else:
             self._out_of_sync = True
         return parent_node_ids
@@ -288,8 +293,8 @@ class GraphView(RustWorkXGraph):
         if self.sync:
             # it does not set the EDGE_ID as attribute as the super().add_edge
             edge_id = self.rx_graph.add_edge(
-                self._node_map_from_root[source_id],
-                self._node_map_from_root[target_id],
+                self._map_to_local(source_id),
+                self._map_to_local(target_id),
                 attrs,
             )
             self._edge_map_to_root.put(edge_id, parent_edge_id)
@@ -312,13 +317,17 @@ class GraphView(RustWorkXGraph):
             node_ids = [node_ids]
             single_node = True
 
-        node_ids = map_ids(self._node_map_from_root, node_ids)
+        node_ids = self._map_to_local(node_ids)
         neighbors_data = super()._get_neighbors(neighbors_func, node_ids, attr_keys)
 
         out_data = {}
         for node_id in node_ids:
             df = neighbors_data[node_id]
-            out_data[self._node_map_to_root[node_id]] = _map_df_ids(df, self._node_map_to_root)
+            # Map DataFrame IDs from local to external using mixin method
+            mapped_df = self._map_df_to_external(
+                df, [DEFAULT_ATTR_KEYS.NODE_ID, DEFAULT_ATTR_KEYS.EDGE_SOURCE, DEFAULT_ATTR_KEYS.EDGE_TARGET]
+            )
+            out_data[self._map_to_external(node_id)] = mapped_df
 
         if single_node:
             return next(iter(out_data.values()))
@@ -351,11 +360,13 @@ class GraphView(RustWorkXGraph):
         unpack: bool = False,
     ) -> pl.DataFrame:
         node_dfs = super()._node_attrs_from_node_ids(
-            node_ids=map_ids(self._node_map_from_root, node_ids),
+            node_ids=self._map_to_local(node_ids),
             attr_keys=attr_keys,
             unpack=unpack,
         )
-        node_dfs = _map_df_ids(node_dfs, self._node_map_to_root)
+        node_dfs = self._map_df_to_external(
+            node_dfs, [DEFAULT_ATTR_KEYS.NODE_ID, DEFAULT_ATTR_KEYS.EDGE_SOURCE, DEFAULT_ATTR_KEYS.EDGE_TARGET]
+        )
         return node_dfs
 
     def node_attrs(
@@ -372,7 +383,7 @@ class GraphView(RustWorkXGraph):
         attr_keys: Sequence[str] | str | None = None,
         unpack: bool = False,
     ) -> pl.DataFrame:
-        node_ids = list(self._node_map_to_root.keys())
+        node_ids = self._get_local_ids()
         edges_df = (
             super()
             .filter(node_ids=node_ids)
@@ -381,7 +392,9 @@ class GraphView(RustWorkXGraph):
                 unpack=unpack,
             )
         )
-        edges_df = _map_df_ids(edges_df, self._node_map_to_root)
+        edges_df = self._map_df_to_external(
+            edges_df, [DEFAULT_ATTR_KEYS.NODE_ID, DEFAULT_ATTR_KEYS.EDGE_SOURCE, DEFAULT_ATTR_KEYS.EDGE_TARGET]
+        )
         return edges_df
 
     def update_node_attrs(
@@ -401,7 +414,7 @@ class GraphView(RustWorkXGraph):
         if not self._is_root_rx_graph:
             if self.sync:
                 super().update_node_attrs(
-                    node_ids=map_ids(self._node_map_from_root, node_ids),
+                    node_ids=self._map_to_local(node_ids),
                     attrs=attrs,
                 )
             else:
@@ -424,7 +437,7 @@ class GraphView(RustWorkXGraph):
         if not self._is_root_rx_graph:
             if self.sync:
                 super().update_edge_attrs(
-                    edge_ids=map_ids(self._edge_map_from_root, edge_ids),
+                    edge_ids=[self._edge_map_from_root[eid] for eid in edge_ids],
                     attrs=attrs,
                 )
             else:
@@ -459,7 +472,7 @@ class GraphView(RustWorkXGraph):
                 "Often used from `graph.subgraph(edge_attr_filter={'solution': True})`"
             ) from e
 
-        node_ids = map_ids(self._node_map_to_root, node_ids)
+        node_ids = self._map_to_external(node_ids)
 
         if output_key not in self.node_attr_keys:
             self.add_node_attr_key(output_key, -1)
@@ -481,8 +494,8 @@ class GraphView(RustWorkXGraph):
             node_ids = self.node_ids()
         rx_graph = self.rx_graph
         if isinstance(node_ids, int):
-            return rx_graph.in_degree(self._node_map_from_root[node_ids])
-        return [rx_graph.in_degree(self._node_map_from_root[node_id]) for node_id in node_ids]
+            return rx_graph.in_degree(self._map_to_local(node_ids))
+        return [rx_graph.in_degree(self._map_to_local(node_id)) for node_id in node_ids]
 
     def out_degree(self, node_ids: list[int] | int | None = None) -> list[int] | int:
         """
@@ -492,8 +505,8 @@ class GraphView(RustWorkXGraph):
             node_ids = self.node_ids()
         rx_graph = self.rx_graph
         if isinstance(node_ids, int):
-            return rx_graph.out_degree(self._node_map_from_root[node_ids])
-        return [rx_graph.out_degree(self._node_map_from_root[node_id]) for node_id in node_ids]
+            return rx_graph.out_degree(self._map_to_local(node_ids))
+        return [rx_graph.out_degree(self._map_to_local(node_id)) for node_id in node_ids]
 
     def _replace_parent_graph_with_root(self) -> None:
         """
@@ -508,9 +521,9 @@ class GraphView(RustWorkXGraph):
             )
 
         self._root = parent._root
-        self._node_map_to_root = bidict.bidict()
-        for k, v in self._node_map_to_root.items():
-            self._node_map_to_root.put(k, parent._node_map_to_root[v])
+        self._local_to_external = bidict.bidict()
+        for k, v in self._local_to_external.items():
+            self._local_to_external.put(k, parent._local_to_external[v])
 
         self._edge_map_to_root = bidict.bidict()
         for k, v in self._edge_map_to_root.items():
@@ -554,7 +567,7 @@ class GraphView(RustWorkXGraph):
             A view of the contracted graph.
         """
         subgraph = super().contract_nodes(
-            permanent_node_ids=map_ids(self._node_map_from_root, permanent_node_ids),
+            permanent_node_ids=self._map_to_local(permanent_node_ids),
         )
         subgraph._replace_parent_graph_with_root()
 
@@ -584,7 +597,7 @@ class GraphView(RustWorkXGraph):
         tuple[rx.PyDiGraph, rx.NodeMap]
             The subgraph and the node map.
         """
-        node_ids = map_ids(self._node_map_from_root, node_ids)
+        node_ids = self._map_to_local(node_ids)
         rx_graph, node_map = super()._rx_subgraph_with_nodemap(node_ids)
-        node_map = {k: self._node_map_to_root[v] for k, v in node_map.items()}
+        node_map = {k: self._map_to_external(v) for k, v in node_map.items()}
         return rx_graph, node_map
