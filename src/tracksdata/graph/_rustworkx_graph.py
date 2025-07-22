@@ -1237,7 +1237,7 @@ class IndexedRXGraph(RustWorkXGraph, MappedGraphMixin):
         return self._map_to_external(graph_id)
 
     def _df_to_world_id(self, df: pl.DataFrame, columns: Sequence[str]) -> pl.DataFrame:
-        return self._map_df_ids(df, columns)
+        return self._map_df_to_external(df, columns)
 
     def add_node(
         self,

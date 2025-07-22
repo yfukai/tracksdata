@@ -327,7 +327,7 @@ class GraphView(RustWorkXGraph, MappedGraphMixin):
         for node_id in node_ids:
             df = neighbors_data[node_id]
             # Map DataFrame IDs from local to external using mixin method
-            mapped_df = self._map_df_ids(
+            mapped_df = self._map_df_to_external(
                 df, [DEFAULT_ATTR_KEYS.NODE_ID, DEFAULT_ATTR_KEYS.EDGE_SOURCE, DEFAULT_ATTR_KEYS.EDGE_TARGET]
             )
             out_data[self._map_to_external(node_id)] = mapped_df
@@ -367,7 +367,7 @@ class GraphView(RustWorkXGraph, MappedGraphMixin):
             attr_keys=attr_keys,
             unpack=unpack,
         )
-        node_dfs = self._map_df_ids(
+        node_dfs = self._map_df_to_external(
             node_dfs, [DEFAULT_ATTR_KEYS.NODE_ID, DEFAULT_ATTR_KEYS.EDGE_SOURCE, DEFAULT_ATTR_KEYS.EDGE_TARGET]
         )
         return node_dfs
@@ -395,7 +395,7 @@ class GraphView(RustWorkXGraph, MappedGraphMixin):
                 unpack=unpack,
             )
         )
-        edges_df = self._map_df_ids(
+        edges_df = self._map_df_to_external(
             edges_df, [DEFAULT_ATTR_KEYS.NODE_ID, DEFAULT_ATTR_KEYS.EDGE_SOURCE, DEFAULT_ATTR_KEYS.EDGE_TARGET]
         )
         return edges_df

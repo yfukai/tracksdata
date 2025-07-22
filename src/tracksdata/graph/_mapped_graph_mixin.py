@@ -101,7 +101,7 @@ class MappedGraphMixin:
             return self._external_to_local[external_ids]
         return [self._external_to_local[eid] for eid in external_ids]
 
-    def _map_df_ids(self, df: pl.DataFrame, columns: Sequence[str]) -> pl.DataFrame:
+    def _map_df_to_external(self, df: pl.DataFrame, columns: Sequence[str]) -> pl.DataFrame:
         """
         Transform node IDs in DataFrame columns from local to external coordinates.
 
@@ -120,7 +120,7 @@ class MappedGraphMixin:
         for col in columns:
             if col in df.columns:
                 df = df.with_columns(
-                    pl.col(col).map_elements(self._local_to_external.get, return_dtype=pl.Int64).alias(col)
+                    pl.col(col).map_elements(self._local_to_external.__getitem__, return_dtype=pl.Int64).alias(col)
                 )
         return df
 
