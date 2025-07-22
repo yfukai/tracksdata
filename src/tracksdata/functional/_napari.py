@@ -70,6 +70,15 @@ def to_napari_format(
     mask_key : str | None, optional
         The key of the mask attribute.
 
+    Examples
+    --------
+
+    ```python
+    labels = ...
+    graph = ...
+    tracks_data, dict_graph, array_view = to_napari_format(graph, labels.shape, mask_key="mask")
+    ```
+
     Returns
     -------
     tuple[pl.DataFrame, dict[int, int], GraphArrayView] | tuple[pl.DataFrame, dict[int, int]]

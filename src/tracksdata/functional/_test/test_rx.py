@@ -30,7 +30,7 @@ def test_single_path() -> None:
     assert tracks_graph.num_nodes() == 1 + 1  # Single track (includes null node (0))
 
 
-def test_branching_path() -> None:
+def test_symmetric_branching_path() -> None:
     """Test graph with a valid branching path (two children)."""
     graph = rx.PyDiGraph()
 
@@ -51,6 +51,36 @@ def test_branching_path() -> None:
     # Should create 2 tracks: one for each branch
     assert len(node_ids) == 3
     assert len(track_ids) == 3
+    assert len(np.unique(track_ids)) == 3  # Three unique track IDs
+    assert isinstance(tracks_graph, rx.PyDiGraph)
+    assert tracks_graph.num_nodes() == 3 + 1  # Three tracks (includes null node (0))
+
+
+def test_asymmetric_branching_path() -> None:
+    """Test graph with a valid branching path (two children)."""
+    graph = rx.PyDiGraph()
+
+    # Add nodes:
+    #     0
+    #    / \
+    #   1   \
+    #  / .   \
+    # 2 .     3
+    nodes = [
+        graph.add_node({DEFAULT_ATTR_KEYS.T: 0}),
+        graph.add_node({DEFAULT_ATTR_KEYS.T: 1}),
+        graph.add_node({DEFAULT_ATTR_KEYS.T: 2}),
+        graph.add_node({DEFAULT_ATTR_KEYS.T: 2}),
+    ]
+    graph.add_edge(nodes[0], nodes[1], None)
+    graph.add_edge(nodes[1], nodes[2], None)
+    graph.add_edge(nodes[0], nodes[3], None)
+
+    node_ids, track_ids, tracks_graph = _assign_track_ids(graph)
+
+    # Should create 2 tracks: one for each branch
+    assert len(node_ids) == 4
+    assert len(track_ids) == 4
     assert len(np.unique(track_ids)) == 3  # Three unique track IDs
     assert isinstance(tracks_graph, rx.PyDiGraph)
     assert tracks_graph.num_nodes() == 3 + 1  # Three tracks (includes null node (0))
@@ -106,11 +136,11 @@ def test_complex_valid_branching() -> None:
 
     # this order is an implementation detail, it could change
     # then the track ids should change accordingly
-    np.testing.assert_array_equal(node_ids, [0, 2, 1, 3, 4, 5])
-    np.testing.assert_array_equal(track_ids, [1, 2, 3, 3, 3, 4])
+    np.testing.assert_array_equal(node_ids, [0, 1, 3, 4, 2, 5])
+    np.testing.assert_array_equal(track_ids, [1, 2, 2, 2, 3, 4])
 
     assert set(tracks_graph.successor_indices(1)) == {2, 3}
-    assert set(tracks_graph.successor_indices(2)) == {4}
+    assert set(tracks_graph.successor_indices(3)) == {4}
     assert tracks_graph.num_edges() == 3
 
     assert len(node_ids) == 6

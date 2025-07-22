@@ -29,6 +29,7 @@ def test_ilp_solver_init_custom() -> None:
         disappearance_weight=-0.5,
         division_weight=2.0,
         output_key="custom_solution",
+        timeout=60.0,
     )
 
     assert solver.output_key == "custom_solution"
