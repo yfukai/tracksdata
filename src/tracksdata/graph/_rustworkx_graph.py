@@ -1,8 +1,7 @@
 import operator
 from collections.abc import Callable, Sequence
-from typing import TYPE_CHECKING, Any, overload
+from typing import TYPE_CHECKING, Any
 
-import bidict
 import numpy as np
 import polars as pl
 import rustworkx as rx
@@ -1175,69 +1174,10 @@ class IndexedRXGraph(RustWorkXGraph, MappedGraphMixin):
         # Initialize MappedGraphMixin with inverted mapping (external -> local)
         inverted_map = None
         if node_id_map is not None:
-            # Validate for duplicate values before inverting
-            # This will raise bidict.ValueDuplicationError if there are duplicates
-            bidict.bidict(node_id_map)
-            # node_id_map is world_id -> graph_id, we need external -> local
             inverted_map = {v: k for k, v in node_id_map.items()}
         MappedGraphMixin.__init__(self, inverted_map)
 
         # ID mapping handled by MappedGraphMixin
-
-    @overload
-    def from_world_id(self, world_id: None) -> list[int]: ...
-
-    @overload
-    def from_world_id(self, world_id: int) -> int: ...
-
-    @overload
-    def from_world_id(self, world_id: list[int]) -> list[int]: ...
-
-    def from_world_id(self, world_id: int | list[int] | None) -> int | list[int]:
-        """
-        Convert world ids to rustworkx graph ids.
-
-        Parameters
-        ----------
-        world_id : int | list[int] | None
-            The world ids to convert.
-
-        Returns
-        -------
-        int | list[int]
-            The rustworkx graph ids.
-        """
-        if world_id is None:
-            return list(self.rx_graph.node_indices())
-        return self._map_to_local(world_id)
-
-    @overload
-    def to_world_id(self, graph_id: None) -> None: ...
-
-    @overload
-    def to_world_id(self, graph_id: int) -> int: ...
-
-    @overload
-    def to_world_id(self, graph_id: list[int]) -> list[int]: ...
-
-    def to_world_id(self, graph_id: int | list[int] | None) -> int | list[int] | None:
-        """
-        Convert rustworkx graph ids to world ids.
-
-        Parameters
-        ----------
-        graph_id : int | list[int] | None
-            The rustworkx graph ids to convert.
-
-        Returns
-        -------
-        int | list[int] | None
-            The world ids.
-        """
-        return self._map_to_external(graph_id)
-
-    def _df_to_world_id(self, df: pl.DataFrame, columns: Sequence[str]) -> pl.DataFrame:
-        return self._map_df_to_external(df, columns)
 
     def add_node(
         self,
@@ -1318,7 +1258,7 @@ class IndexedRXGraph(RustWorkXGraph, MappedGraphMixin):
             The subgraph and the node map.
         """
         # TODO: fix this, too many back and forth between world and graph ids within FilterRX
-        node_ids = self.from_world_id(node_ids)
+        node_ids = self._get_local_ids() if node_ids is None else self._map_to_local(node_ids)
         rx_graph, node_map = super()._rx_subgraph_with_nodemap(node_ids)
         node_map = {k: self._map_to_external(v) for k, v in node_map.items()}
         return rx_graph, node_map
@@ -1341,9 +1281,9 @@ class IndexedRXGraph(RustWorkXGraph, MappedGraphMixin):
         attr_keys: Sequence[str] | str | None = None,
         unpack: bool = False,
     ) -> pl.DataFrame:
-        node_ids = self.from_world_id(node_ids)
+        node_ids = self._get_local_ids() if node_ids is None else self._map_to_local(node_ids)
         df = super()._node_attrs_from_node_ids(node_ids=node_ids, attr_keys=attr_keys, unpack=unpack)
-        df = self._df_to_world_id(df, [DEFAULT_ATTR_KEYS.NODE_ID])
+        df = self._map_df_to_external(df, [DEFAULT_ATTR_KEYS.NODE_ID])
         return df
 
     def node_attrs(
@@ -1370,9 +1310,9 @@ class IndexedRXGraph(RustWorkXGraph, MappedGraphMixin):
         pl.DataFrame
             The node attributes of the graph.
         """
-        node_ids = self.from_world_id(node_ids)
+        node_ids = self._get_local_ids() if node_ids is None else self._map_to_local(node_ids)
         df = super()._node_attrs_from_node_ids(node_ids=node_ids, attr_keys=attr_keys, unpack=unpack)
-        df = self._df_to_world_id(df, [DEFAULT_ATTR_KEYS.NODE_ID])
+        df = self._map_df_to_external(df, [DEFAULT_ATTR_KEYS.NODE_ID])
         return df
 
     def edge_attrs(
@@ -1398,7 +1338,7 @@ class IndexedRXGraph(RustWorkXGraph, MappedGraphMixin):
         """
         node_ids = self._get_local_ids()
         df = super().filter(node_ids=node_ids).edge_attrs(attr_keys=attr_keys, unpack=unpack)
-        df = self._df_to_world_id(df, [DEFAULT_ATTR_KEYS.EDGE_SOURCE, DEFAULT_ATTR_KEYS.EDGE_TARGET])
+        df = self._map_df_to_external(df, [DEFAULT_ATTR_KEYS.EDGE_SOURCE, DEFAULT_ATTR_KEYS.EDGE_TARGET])
         return df
 
     def in_degree(self, node_ids: list[int] | int | None = None) -> list[int] | int:
@@ -1415,7 +1355,7 @@ class IndexedRXGraph(RustWorkXGraph, MappedGraphMixin):
         list[int] | int
             The in degree of the graph.
         """
-        node_ids = self.from_world_id(node_ids)
+        node_ids = self._get_local_ids() if node_ids is None else self._map_to_local(node_ids)
         return super().in_degree(node_ids)
 
     def out_degree(self, node_ids: list[int] | int | None = None) -> list[int] | int:
@@ -1432,7 +1372,7 @@ class IndexedRXGraph(RustWorkXGraph, MappedGraphMixin):
         list[int] | int
             The out degree of the graph.
         """
-        node_ids = self.from_world_id(node_ids)
+        node_ids = self._get_local_ids() if node_ids is None else self._map_to_local(node_ids)
         return super().out_degree(node_ids)
 
     def add_edge(
@@ -1500,14 +1440,14 @@ class IndexedRXGraph(RustWorkXGraph, MappedGraphMixin):
             The overlaps of the graph.
         """
         try:
-            node_ids = self.from_world_id(node_ids)
+            node_ids = self._get_local_ids() if node_ids is None else self._map_to_local(node_ids)
         except KeyError:
             LOG.warning(f"`node_ids` {node_ids} not found in index map.")
             return []
         overlaps = super().overlaps(node_ids)
         # Convert each pair of node IDs in the overlaps list
         if len(overlaps) > 0:
-            overlaps = [[self.to_world_id(overlap[0]), self.to_world_id(overlap[1])] for overlap in overlaps]
+            overlaps = self._vectorized_map_to_external(np.asarray(overlaps)).tolist()
         return overlaps
 
     def _get_neighbors(
@@ -1516,13 +1456,13 @@ class IndexedRXGraph(RustWorkXGraph, MappedGraphMixin):
         node_ids: list[int] | int | None = None,
         attr_keys: Sequence[str] | str | None = None,
     ) -> dict[int, pl.DataFrame] | pl.DataFrame:
-        node_ids = self.from_world_id(node_ids)
+        node_ids = self._get_local_ids() if node_ids is None else self._map_to_local(node_ids)
         dfs = super()._get_neighbors(neighbors_func, node_ids, attr_keys)
         if isinstance(dfs, pl.DataFrame):
-            dfs = self._df_to_world_id(dfs, [DEFAULT_ATTR_KEYS.NODE_ID])
+            dfs = self._map_df_to_external(dfs, [DEFAULT_ATTR_KEYS.NODE_ID])
         else:
             dfs = {
-                self._map_to_external(node_id): self._df_to_world_id(df, [DEFAULT_ATTR_KEYS.NODE_ID])
+                self._map_to_external(node_id): self._map_df_to_external(df, [DEFAULT_ATTR_KEYS.NODE_ID])
                 for node_id, df in dfs.items()
             }
         return dfs
@@ -1543,7 +1483,7 @@ class IndexedRXGraph(RustWorkXGraph, MappedGraphMixin):
         node_ids : Sequence[int] | None
             The node ids to update.
         """
-        node_ids = self.from_world_id(node_ids)
+        node_ids = self._get_local_ids() if node_ids is None else self._map_to_local(node_ids)
         super().update_node_attrs(attrs=attrs, node_ids=node_ids)
 
     def filter(
@@ -1558,8 +1498,7 @@ class IndexedRXGraph(RustWorkXGraph, MappedGraphMixin):
         return IndexRXFilter(
             *attr_filters,
             graph=self,
-            to_world_id_map=self._local_to_external,
-            node_ids=None if node_ids is None else self.from_world_id(node_ids),
+            node_ids=None if node_ids is None else self._map_to_local(node_ids),
             include_targets=include_targets,
             include_sources=include_sources,
         )

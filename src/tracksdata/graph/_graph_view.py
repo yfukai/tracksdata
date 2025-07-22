@@ -210,7 +210,6 @@ class GraphView(RustWorkXGraph, MappedGraphMixin):
         return IndexRXFilter(
             *attr_filters,
             graph=self,
-            to_world_id_map=self._local_to_external,
             node_ids=self._map_to_local(node_ids),
             include_targets=include_targets,
             include_sources=include_sources,
