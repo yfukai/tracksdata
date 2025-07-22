@@ -270,9 +270,7 @@ class GraphView(RustWorkXGraph, MappedGraphMixin):
         parent_node_ids = self._root.bulk_add_nodes(nodes)
         if self.sync:
             node_ids = RustWorkXGraph.bulk_add_nodes(self, nodes)
-            self._add_id_mappings(
-                [(node_id, parent_node_id) for node_id, parent_node_id in zip(node_ids, parent_node_ids, strict=True)]
-            )
+            self._add_id_mappings(list(zip(node_ids, parent_node_ids, strict=True)))
         else:
             self._out_of_sync = True
         return parent_node_ids

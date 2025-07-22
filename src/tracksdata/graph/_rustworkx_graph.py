@@ -1174,6 +1174,11 @@ class IndexedRXGraph(RustWorkXGraph, MappedGraphMixin):
         # Initialize MappedGraphMixin with inverted mapping (external -> local)
         inverted_map = None
         if node_id_map is not None:
+            # Validate for duplicate values before inverting
+            # This will raise bidict.ValueDuplicationError if there are duplicates
+            import bidict
+
+            bidict.bidict(node_id_map)
             inverted_map = {v: k for k, v in node_id_map.items()}
         MappedGraphMixin.__init__(self, inverted_map)
 
@@ -1236,7 +1241,7 @@ class IndexedRXGraph(RustWorkXGraph, MappedGraphMixin):
         if indices is None:
             indices = graph_ids
 
-        self._add_id_mappings([(g_id, idx) for g_id, idx in zip(graph_ids, indices, strict=True)])
+        self._add_id_mappings(list(zip(graph_ids, indices, strict=True)))
 
         return indices
 
