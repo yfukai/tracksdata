@@ -15,7 +15,7 @@ from tracksdata.utils._logging import LOG
 from tracksdata.utils._multiprocessing import multiprocessing_apply
 
 if TYPE_CHECKING:
-    from tracksdata.graph._graph_view import GraphView
+    from tracksdata.graph.filters._base_filter import BaseFilter
 
 
 T = TypeVar("T", bound="BaseGraph")
@@ -346,28 +346,6 @@ class BaseGraph(abc.ABC):
             The predecessors of the nodes indexed by node ID if a list of nodes is provided.
         """
 
-    @abc.abstractmethod
-    def filter_nodes_by_attrs(
-        self,
-        *attrs: AttrComparison,
-    ) -> list[int]:
-        """
-        Filter nodes by attributes.
-
-        Parameters
-        ----------
-        attrs : AttrComparison
-            Attributes to filter by, for example:
-            ```python
-            graph.filter_nodes_by_attrs(Attr("t") == 0, Attr("label") == "A")
-            ```
-
-        Returns
-        -------
-        list[int]
-            The IDs of the filtered nodes.
-        """
-
     def _validate_subgraph_args(
         self,
         node_ids: Sequence[int] | None = None,
@@ -390,36 +368,34 @@ class BaseGraph(abc.ABC):
         """
 
     @abc.abstractmethod
-    def subgraph(
+    def filter(
         self,
         *attr_filters: AttrComparison,
         node_ids: Sequence[int] | None = None,
-        node_attr_keys: Sequence[str] | str | None = None,
-        edge_attr_keys: Sequence[str] | str | None = None,
-    ) -> "GraphView":
+        include_targets: bool = False,
+        include_sources: bool = False,
+    ) -> "BaseFilter":
         """
-        Create a subgraph from the graph from the given node IDs
-        or attributes' filters.
-
-        Node IDs or a single attribute filter can be used to create a subgraph.
+        Creates a filter object that can be used to create a subgraph or query ids and attributes.
 
         Parameters
         ----------
-        node_ids : Sequence[int]
-            The IDs of the nodes to include in the subgraph.
         *attr_filters : AttrComparison
             The attributes to filter the nodes by.
-        node_attr_keys : Sequence[str] | str | None
-            The attribute keys to get.
-            If None, all attributesare used.
-        edge_attr_keys : Sequence[str] | str | None
-            The attribute keys to get.
-            If None, all attributesare used.
+        node_ids : Sequence[int] | None
+            The IDs of the nodes to include in the filter.
+            If None, all nodes are used.
+        include_targets : bool
+            Whether to include edges out-going from the given node_ids even
+            if the target node is not in the given node_ids.
+        include_sources : bool
+            Whether to include edges incoming to the given node_ids even
+            if the source node is not in the given node_ids.
 
         Returns
         -------
-        GraphView
-            A view of the graph with the specified nodes.
+        BaseFilter
+            A filter object that can be used to create a subgraph or query attributes.
         """
 
     @abc.abstractmethod
@@ -432,7 +408,6 @@ class BaseGraph(abc.ABC):
     def node_attrs(
         self,
         *,
-        node_ids: Sequence[int] | None = None,
         attr_keys: Sequence[str] | str | None = None,
         unpack: bool = False,
     ) -> pl.DataFrame:
@@ -441,9 +416,6 @@ class BaseGraph(abc.ABC):
 
         Parameters
         ----------
-        node_ids : list[int] | None
-            The IDs of the nodes to get the attributes for.
-            If None, all nodes are used.
         attr_keys : Sequence[str] | str | None
             The attribute keys to get.
             If None, all attributesare used.
@@ -460,9 +432,7 @@ class BaseGraph(abc.ABC):
     def edge_attrs(
         self,
         *,
-        node_ids: list[int] | None = None,
         attr_keys: Sequence[str] | None = None,
-        include_targets: bool = False,
         unpack: bool = False,
     ) -> pl.DataFrame:
         """
@@ -470,15 +440,9 @@ class BaseGraph(abc.ABC):
 
         Parameters
         ----------
-        node_ids : list[int] | None
-            The IDs of the subgraph to get the edge attributesfor.
-            If None, all edges of the graph are used.
         attr_keys : Sequence[str] | None
             The attribute keys to get.
             If None, all attributesare used.
-        include_targets : bool
-            Whether to include edges out-going from the given node_ids even
-            if the target node is not in the given node_ids.
         unpack : bool
             Whether to unpack array attributesinto multiple scalar attributes.
         """
@@ -866,8 +830,11 @@ class BaseGraph(abc.ABC):
             raise ValueError("iou_threshold must be between 0.0 and 1.0")
 
         def _estimate_overlaps(t: int) -> list[list[int, 2]]:
-            node_ids = self.filter_nodes_by_attrs(NodeAttr(DEFAULT_ATTR_KEYS.T) == t)
-            masks = self.node_attrs(node_ids=node_ids, attr_keys=[DEFAULT_ATTR_KEYS.MASK])[DEFAULT_ATTR_KEYS.MASK]
+            node_attrs = self.filter(NodeAttr(DEFAULT_ATTR_KEYS.T) == t).node_attrs(
+                attr_keys=[DEFAULT_ATTR_KEYS.NODE_ID, DEFAULT_ATTR_KEYS.MASK],
+            )
+            node_ids = node_attrs[DEFAULT_ATTR_KEYS.NODE_ID].to_list()
+            masks = node_attrs[DEFAULT_ATTR_KEYS.MASK].to_list()
             overlaps = []
             for i in range(len(masks)):
                 mask_i = masks[i]

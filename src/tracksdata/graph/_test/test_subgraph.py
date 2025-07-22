@@ -32,9 +32,9 @@ def create_test_graph(graph_backend: BaseGraph, use_subgraph: bool = False) -> B
         Either the original graph or a subgraph with test data.
     """
     # Add attribute keys
-    graph_backend.add_node_attr_key("x", None)
-    graph_backend.add_node_attr_key("y", None)
-    graph_backend.add_node_attr_key("label", None)
+    graph_backend.add_node_attr_key("x", -1.0)
+    graph_backend.add_node_attr_key("y", -1.0)
+    graph_backend.add_node_attr_key("label", "0")
     graph_backend.add_edge_attr_key("weight", 0.0)
     graph_backend.add_edge_attr_key("new_attribute", 0.0)
 
@@ -56,7 +56,7 @@ def create_test_graph(graph_backend: BaseGraph, use_subgraph: bool = False) -> B
     if use_subgraph:
         # Create subgraph with nodes 1, 2, 4 in UNSORTED order to test robustness
         subgraph_nodes = [node4, node1, node2]  # Intentionally unsorted order
-        subgraph = graph_backend.subgraph(node_ids=subgraph_nodes)
+        subgraph = graph_backend.filter(node_ids=subgraph_nodes).subgraph()
 
         # Store the subgraph nodes for testing (keep original order for assertions)
         subgraph._test_nodes = [node2, node4, node1]  # type: ignore
@@ -83,29 +83,62 @@ def test_node_ids_with_data(graph_backend: BaseGraph, use_subgraph: bool) -> Non
 
 
 @parametrize_subgraph_tests
-def test_filter_nodes_by_attr_with_data(graph_backend: BaseGraph, use_subgraph: bool) -> None:
-    """Test filtering nodes by attributes on both original graphs and subgraphs."""
+def test_filter_nodes_and_edges_by_attr_with_data(
+    graph_backend: BaseGraph,
+    use_subgraph: bool,
+) -> None:
+    """Test filtering nodes and edges by attributes on both original graphs and subgraphs."""
     graph_with_data = create_test_graph(graph_backend, use_subgraph)
+    node_attrs = graph_with_data.node_attrs()
 
     # Filter by time
-    nodes = graph_with_data.filter_nodes_by_attrs(NodeAttr("t") == 0)
-    # Should find nodes with t=0 that are in this graph
-    expected_t0_nodes = [
-        n
-        for n in graph_with_data._test_nodes  # type: ignore
-        if graph_with_data.node_attrs(node_ids=[n])["t"].to_list()[0] == 0
-    ]
+    nodes = graph_with_data.filter(NodeAttr("t") == 2).node_ids()
+    # Should find nodes with t=2 that are in this graph
+    expected_t0_nodes = node_attrs.filter(pl.col("t") == 2)[DEFAULT_ATTR_KEYS.NODE_ID].to_list()
     assert set(nodes) == set(expected_t0_nodes)
 
     # Filter by label
-    nodes = graph_with_data.filter_nodes_by_attrs(NodeAttr("label") == "A")
+    nodes = graph_with_data.filter(NodeAttr("label") == "A").node_ids()
     # Should find nodes with label="A" that are in this graph
-    expected_label_a_nodes = [
-        n
-        for n in graph_with_data._test_nodes  # type: ignore
-        if graph_with_data.node_attrs(node_ids=[n])["label"].to_list()[0] == "A"
-    ]
+    expected_label_a_nodes = node_attrs.filter(pl.col("label") == "A")[DEFAULT_ATTR_KEYS.NODE_ID].to_list()
     assert set(nodes) == set(expected_label_a_nodes)
+
+    edge_attrs = graph_with_data.edge_attrs()
+
+    # including targets
+    nodes = graph_with_data.filter(NodeAttr("label") == "A", include_targets=True).node_ids()
+    expected_label_a_nodes.extend(
+        edge_attrs.filter(pl.col(DEFAULT_ATTR_KEYS.EDGE_SOURCE) == expected_label_a_nodes[0])[
+            DEFAULT_ATTR_KEYS.EDGE_TARGET
+        ].to_list()
+    )
+    assert set(nodes) == set(expected_label_a_nodes)
+
+    # Filter by edge weight
+    edge_filter = graph_with_data.filter(EdgeAttr("weight") >= 0.4)
+
+    # testing edges
+    subgraph_edge_attrs = edge_filter.edge_attrs()
+    # Should find edges with weight=0.4 that are in this graph
+    expected_weight_0_4_edges = edge_attrs.filter(pl.col("weight") >= 0.4)[DEFAULT_ATTR_KEYS.EDGE_ID].to_list()  # type: ignore
+    assert set(subgraph_edge_attrs[DEFAULT_ATTR_KEYS.EDGE_ID].to_list()) == set(expected_weight_0_4_edges)
+
+    # testing edge_attrs
+    nodes = edge_filter.node_ids()
+    expected_nodes = (
+        edge_attrs.filter(pl.col("weight") >= 0.4)
+        .select(DEFAULT_ATTR_KEYS.EDGE_SOURCE, DEFAULT_ATTR_KEYS.EDGE_TARGET)
+        .to_numpy()
+        .ravel()
+        .tolist()
+    )
+    assert set(nodes) == set(expected_nodes)
+
+    edge_tuples = set(subgraph_edge_attrs.iter_rows())
+    expected_edge_tuples = set(
+        edge_attrs.filter(pl.col("weight") >= 0.4).select(subgraph_edge_attrs.columns).iter_rows()
+    )
+    assert edge_tuples == expected_edge_tuples
 
 
 @parametrize_subgraph_tests
@@ -117,7 +150,7 @@ def test_time_points_with_data(graph_backend: BaseGraph, use_subgraph: bool) -> 
     # Get unique time points from the nodes in this graph
     expected_times = set()
     for node in graph_with_data._test_nodes:  # type: ignore
-        node_data = graph_with_data.node_attrs(node_ids=[node])
+        node_data = graph_with_data.filter(node_ids=[node]).node_attrs()
         expected_times.add(node_data["t"].to_list()[0])
 
     assert set(time_points) == expected_times
@@ -129,14 +162,14 @@ def test_node_attrs_with_data(graph_backend: BaseGraph, use_subgraph: bool) -> N
     graph_with_data = create_test_graph(graph_backend, use_subgraph)
     nodes = graph_with_data._test_nodes[:2]  # Test with first two nodes  # type: ignore
 
-    df = graph_with_data.node_attrs(node_ids=nodes, attr_keys=["x", "y"])
+    df = graph_with_data.filter(node_ids=nodes).node_attrs(attr_keys=["x", "y"])
     assert isinstance(df, pl.DataFrame)
     assert len(df) == len(nodes)
     assert "x" in df.columns
     assert "y" in df.columns
 
     # Test with single attribute key as string
-    df_single = graph_with_data.node_attrs(node_ids=nodes, attr_keys="x")
+    df_single = graph_with_data.filter(node_ids=nodes).node_attrs(attr_keys=["x"])
     assert "x" in df_single.columns
     assert len(df_single) == len(nodes)
 
@@ -165,7 +198,7 @@ def test_add_node_attr_key_with_data(graph_backend: BaseGraph, use_subgraph: boo
 
     # Check that all nodes have this attribute with the default value
     nodes = graph_with_data._test_nodes  # type: ignore
-    df = graph_with_data.node_attrs(node_ids=nodes, attr_keys=["new_node_attribute"])
+    df = graph_with_data.filter(node_ids=nodes).node_attrs(attr_keys=["new_node_attribute"])
 
     assert all(val == 42 for val in df["new_node_attribute"].to_list())
 
@@ -194,13 +227,13 @@ def test_update_node_attrs_with_data(graph_backend: BaseGraph, use_subgraph: boo
     # Update with single value
     graph_with_data.update_node_attrs(node_ids=[nodes[0]], attrs={"x": 99.0})
 
-    df = graph_with_data.node_attrs(node_ids=[nodes[0]], attr_keys=["x"])
+    df = graph_with_data.filter(node_ids=[nodes[0]]).node_attrs(attr_keys=["x"])
     assert df["x"].to_list()[0] == 99.0
 
     # Update with list of values
     graph_with_data.update_node_attrs(node_ids=nodes, attrs={"x": [100.0, 101.0]})
 
-    df = graph_with_data.node_attrs(node_ids=nodes, attr_keys=["x"])
+    df = graph_with_data.filter(node_ids=nodes).node_attrs(attr_keys=["x"])
     assert df["x"].to_list() == [100.0, 101.0]
 
     # test updating all nodes
@@ -265,7 +298,7 @@ def test_subgraph_creation(graph_backend: BaseGraph) -> None:
     original_nodes = graph_with_data._test_nodes  # type: ignore
     subgraph_nodes_unsorted = [original_nodes[1], original_nodes[0]]  # Reverse order
 
-    subgraph = graph_with_data.subgraph(node_ids=subgraph_nodes_unsorted)
+    subgraph = graph_with_data.filter(node_ids=subgraph_nodes_unsorted).subgraph()
 
     # Test that subgraph has correct number of nodes
     assert subgraph.num_nodes == len(subgraph_nodes_unsorted)
@@ -276,8 +309,8 @@ def test_subgraph_creation(graph_backend: BaseGraph) -> None:
 
     # Test that subgraph has correct node attributes
     for node in subgraph_nodes_unsorted:
-        original_attrs = graph_with_data.node_attrs(node_ids=[node])
-        subgraph_attrs = subgraph.node_attrs(node_ids=[node])
+        original_attrs = graph_with_data.filter(node_ids=[node]).node_attrs()
+        subgraph_attrs = subgraph.filter(node_ids=[node]).node_attrs()
 
         # Compare all columns
         for col in original_attrs.columns:
@@ -304,7 +337,7 @@ def test_subgraph_edge_preservation(graph_backend: BaseGraph) -> None:
             expected_edges_count += 1
 
     # Create subgraph
-    subgraph = graph_with_data.subgraph(node_ids=subgraph_nodes)
+    subgraph = graph_with_data.filter(node_ids=subgraph_nodes).subgraph()
     subgraph_edges = subgraph.edge_attrs()
 
     # Check that subgraph has the correct number of edges
@@ -326,12 +359,12 @@ def test_subgraph_attr_consistency(graph_backend: BaseGraph) -> None:
     subgraph_nodes = [original_nodes[1], original_nodes[0]]
 
     # Create subgraph
-    subgraph = graph_with_data.subgraph(node_ids=subgraph_nodes)
+    subgraph = graph_with_data.filter(node_ids=subgraph_nodes).subgraph()
 
     # Test node attribute consistency
     for node in subgraph_nodes:
-        original_node_attrs = graph_with_data.node_attrs(node_ids=[node])
-        subgraph_node_attrs = subgraph.node_attrs(node_ids=[node])
+        original_node_attrs = graph_with_data.filter(node_ids=[node]).node_attrs()
+        subgraph_node_attrs = subgraph.filter(node_ids=[node]).node_attrs()
 
         # All columns should match
         assert set(original_node_attrs.columns) == set(subgraph_node_attrs.columns)
@@ -382,7 +415,7 @@ def test_subgraph_with_unsorted_node_ids(graph_backend: BaseGraph) -> None:
 
     for unsorted_nodes in test_cases:
         # Create subgraph with unsorted node IDs
-        subgraph = graph_with_data.subgraph(node_ids=unsorted_nodes)
+        subgraph = graph_with_data.filter(node_ids=unsorted_nodes).subgraph()
 
         # Verify the subgraph contains exactly the expected nodes
         subgraph_node_ids = set(subgraph.node_ids())
@@ -400,8 +433,8 @@ def test_subgraph_with_unsorted_node_ids(graph_backend: BaseGraph) -> None:
 
         # Verify node attributesare preserved correctly
         for node in unsorted_nodes:
-            original_attrs = graph_with_data.node_attrs(node_ids=[node])
-            subgraph_attrs = subgraph.node_attrs(node_ids=[node])
+            original_attrs = graph_with_data.filter(node_ids=[node]).node_attrs()
+            subgraph_attrs = subgraph.filter(node_ids=[node]).node_attrs()
 
             for col in original_attrs.columns:
                 msg = f"Node {node} attribute {col} mismatch in subgraph with order {unsorted_nodes}"
@@ -415,7 +448,7 @@ def test_subgraph_add_node(graph_backend: BaseGraph) -> None:
 
     # Create a subgraph with two nodes
     subgraph_nodes = [original_nodes[1], original_nodes[3]]
-    subgraph = graph_with_data.subgraph(node_ids=subgraph_nodes)
+    subgraph = graph_with_data.filter(node_ids=subgraph_nodes).subgraph()
 
     initial_counts = (subgraph.num_nodes, graph_with_data.num_nodes)
 
@@ -430,7 +463,7 @@ def test_subgraph_add_node(graph_backend: BaseGraph) -> None:
 
     # Verify attributes in both graphs
     for graph in [subgraph, graph_with_data]:
-        attributes = graph.node_attrs(node_ids=[new_node_id])
+        attributes = graph.filter(node_ids=[new_node_id]).node_attrs()
         assert attributes["t"].to_list()[0] == 10
         assert attributes["label"].to_list()[0] == "NEW"
 
@@ -442,7 +475,7 @@ def test_subgraph_add_edge(graph_backend: BaseGraph) -> None:
 
     # Create a subgraph with three nodes
     subgraph_nodes = original_nodes[:3]
-    subgraph = graph_with_data.subgraph(node_ids=subgraph_nodes)
+    subgraph = graph_with_data.filter(node_ids=subgraph_nodes).subgraph()
 
     initial_counts = (subgraph.num_edges, graph_with_data.num_edges)
     node_a, node_b = subgraph_nodes[0], subgraph_nodes[2]
@@ -478,7 +511,7 @@ def test_subgraph_add_node_then_edge(graph_backend: BaseGraph) -> None:
 
     # Create a subgraph with two nodes
     subgraph_nodes = [original_nodes[3], original_nodes[1]]
-    subgraph = graph_with_data.subgraph(node_ids=subgraph_nodes)
+    subgraph = graph_with_data.filter(node_ids=subgraph_nodes).subgraph()
 
     # Add node and edge
     new_node_id = subgraph.add_node({"t": 20, "x": 20.0, "y": 20.0, "label": "ADDED"})
@@ -504,8 +537,9 @@ def test_nested_subgraph_creation(graph_backend: BaseGraph) -> None:
     original_nodes = graph_with_data._test_nodes  # type: ignore
 
     # Create nested subgraphs
-    first_subgraph = graph_with_data.subgraph(node_ids=original_nodes[:4])
-    second_subgraph = first_subgraph.subgraph(node_ids=original_nodes[:2])
+    first_subgraph = graph_with_data.filter(node_ids=original_nodes[:4]).subgraph()
+
+    second_subgraph = first_subgraph.filter(node_ids=original_nodes[:2]).subgraph()
 
     # Verify nested subgraph properties
     assert second_subgraph.num_nodes == 2
@@ -514,7 +548,7 @@ def test_nested_subgraph_creation(graph_backend: BaseGraph) -> None:
     # Verify node attributesare preserved through all levels
     for node_id in original_nodes[:2]:
         graphs = [graph_with_data, first_subgraph, second_subgraph]
-        attributes = [g.node_attrs(node_ids=[node_id]) for g in graphs]
+        attributes = [g.filter(node_ids=[node_id]).node_attrs() for g in graphs]
 
         # All should have identical attributes
         for col in attributes[0].columns:
@@ -528,8 +562,8 @@ def test_nested_subgraph_edge_preservation(graph_backend: BaseGraph) -> None:
     original_nodes = graph_with_data._test_nodes  # type: ignore
 
     # Create nested subgraphs: original -> first (3 nodes) -> nested (2 nodes)
-    first_subgraph = graph_with_data.subgraph(node_ids=original_nodes[:3])
-    nested_subgraph = first_subgraph.subgraph(node_ids=original_nodes[:2])
+    first_subgraph = graph_with_data.filter(node_ids=original_nodes[:3]).subgraph()
+    nested_subgraph = first_subgraph.filter(node_ids=original_nodes[:2]).subgraph()
 
     # Verify the nested subgraph has exactly one edge: 0->1
     nested_edges = nested_subgraph.edge_attrs()
@@ -547,8 +581,8 @@ def test_nested_subgraph_modifications(graph_backend: BaseGraph) -> None:
     original_nodes = graph_with_data._test_nodes  # type: ignore
 
     # Create nested subgraphs
-    first_subgraph = graph_with_data.subgraph(node_ids=original_nodes[:3])
-    nested_subgraph = first_subgraph.subgraph(node_ids=original_nodes[:2])
+    first_subgraph = graph_with_data.filter(node_ids=original_nodes[:3]).subgraph()
+    nested_subgraph = first_subgraph.filter(node_ids=original_nodes[:2]).subgraph()
 
     initial_counts = (nested_subgraph.num_nodes, graph_with_data.num_nodes)
 
@@ -581,29 +615,29 @@ def test_subgraph_node_attr_filter(graph_backend: BaseGraph) -> None:
     graph_with_data = create_test_graph(graph_backend, use_subgraph=False)
 
     # Test filtering by time point
-    subgraph_t2 = graph_with_data.subgraph(NodeAttr("t") == 2)
+    subgraph_t2 = graph_with_data.filter(NodeAttr("t") == 2).subgraph()
 
     # Should contain nodes with t=2 (nodes 2 and 3 from create_test_graph)
-    expected_nodes = graph_with_data.filter_nodes_by_attrs(NodeAttr("t") == 2)
+    expected_nodes = graph_with_data.filter(NodeAttr("t") == 2).node_ids()
     assert set(subgraph_t2.node_ids()) == set(expected_nodes)
     assert subgraph_t2.num_nodes == len(expected_nodes)
 
     # Verify node attributes are preserved
     for node_id in expected_nodes:
-        original_attrs = graph_with_data.node_attrs(node_ids=[node_id])
-        subgraph_attrs = subgraph_t2.node_attrs(node_ids=[node_id])
+        original_attrs = graph_with_data.filter(node_ids=[node_id]).node_attrs()
+        subgraph_attrs = subgraph_t2.filter(node_ids=[node_id]).node_attrs()
 
         for col in original_attrs.columns:
             assert original_attrs[col].to_list() == subgraph_attrs[col].to_list()
 
     # Test filtering by label
-    subgraph_label_a = graph_with_data.subgraph(NodeAttr("label") == "A")
-    expected_label_a_nodes = graph_with_data.filter_nodes_by_attrs(NodeAttr("label") == "A")
+    subgraph_label_a = graph_with_data.filter(NodeAttr("label") == "A").subgraph()
+    expected_label_a_nodes = graph_with_data.filter(NodeAttr("label") == "A").node_ids()
     assert set(subgraph_label_a.node_ids()) == set(expected_label_a_nodes)
 
     # Test filtering with multiple attributes
-    subgraph_multi = graph_with_data.subgraph(NodeAttr("t") == 2, NodeAttr("label") == "A")
-    expected_multi_nodes = graph_with_data.filter_nodes_by_attrs(NodeAttr("t") == 2, NodeAttr("label") == "A")
+    subgraph_multi = graph_with_data.filter(NodeAttr("t") == 2, NodeAttr("label") == "A").subgraph()
+    expected_multi_nodes = graph_with_data.filter(NodeAttr("t") == 2, NodeAttr("label") == "A").node_ids()
     assert set(subgraph_multi.node_ids()) == set(expected_multi_nodes)
 
 
@@ -612,7 +646,7 @@ def test_subgraph_edge_attr_filter(graph_backend: BaseGraph) -> None:
     graph_with_data = create_test_graph(graph_backend, use_subgraph=False)
 
     # Test filtering by edge weight
-    subgraph_weight_05 = graph_with_data.subgraph(EdgeAttr("weight") == 0.5)
+    subgraph_weight_05 = graph_with_data.filter(EdgeAttr("weight") == 0.5).subgraph()
 
     # Verify the subgraph contains nodes connected by edges with weight=0.5
     edges = subgraph_weight_05.edge_attrs()
@@ -628,14 +662,14 @@ def test_subgraph_edge_attr_filter(graph_backend: BaseGraph) -> None:
     assert set(subgraph_weight_05.node_ids()) == expected_nodes
 
     # Test filtering by new_attribute
-    subgraph_attr_2 = graph_with_data.subgraph(EdgeAttr("new_attribute") == 2.0)
+    subgraph_attr_2 = graph_with_data.filter(EdgeAttr("new_attribute") == 2.0).subgraph()
     edges_attr_2 = subgraph_attr_2.edge_attrs()
 
     # All edges should have new_attribute=2.0
     assert all(f == 2.0 for f in edges_attr_2["new_attribute"].to_list())
 
     # Test filtering with multiple edge attributes
-    subgraph_multi_edge = graph_with_data.subgraph(EdgeAttr("weight") == 0.7, EdgeAttr("new_attribute") == 2.0)
+    subgraph_multi_edge = graph_with_data.filter(EdgeAttr("weight") == 0.7, EdgeAttr("new_attribute") == 2.0).subgraph()
     edges_multi = subgraph_multi_edge.edge_attrs()
 
     # All edges should match both criteria
@@ -649,7 +683,7 @@ def test_subgraph_attr_filter_edge_preservation(graph_backend: BaseGraph) -> Non
     graph_with_data = create_test_graph(graph_backend, use_subgraph=False)
 
     # Create subgraph with edge filter that should include specific edges
-    subgraph = graph_with_data.subgraph(EdgeAttr("weight") == 0.9)
+    subgraph = graph_with_data.filter(EdgeAttr("weight") == 0.9).subgraph()
 
     # Get original edges matching the filter
     original_edges = graph_with_data.edge_attrs()
@@ -677,27 +711,29 @@ def test_subgraph_attr_filter_empty_results(graph_backend: BaseGraph) -> None:
     graph_with_data = create_test_graph(graph_backend, use_subgraph=False)
 
     # Test node filter with non-existent value
-    empty_subgraph_node = graph_with_data.subgraph(NodeAttr("t") == 999)
+    empty_subgraph_node = graph_with_data.filter(NodeAttr("t") == 999).subgraph()
     assert empty_subgraph_node.num_nodes == 0
     assert empty_subgraph_node.num_edges == 0
 
     # Test edge filter with non-existent value
-    empty_subgraph_edge = graph_with_data.subgraph(EdgeAttr("weight") == 999.0)
+    empty_subgraph_edge = graph_with_data.filter(EdgeAttr("weight") == 999.0).subgraph()
     assert empty_subgraph_edge.num_nodes == 0
     assert empty_subgraph_edge.num_edges == 0
 
     # Test node filter with impossible combination
-    empty_subgraph_multi = graph_with_data.subgraph(NodeAttr("t") == 0, NodeAttr("label") == "NONEXISTENT")
+    empty_subgraph_multi = graph_with_data.filter(NodeAttr("t") == 0, NodeAttr("label") == "NONEXISTENT").subgraph()
     assert empty_subgraph_multi.num_nodes == 0
     assert empty_subgraph_multi.num_edges == 0
 
 
-def test_subgraph_attr_filter_error_condition(graph_backend: BaseGraph) -> None:
-    """Test error condition for subgraph attribute filtering."""
+def test_homemorphism(graph_backend: BaseGraph) -> None:
+    """Test that filtering with no arguments returns the same graph."""
     graph_with_data = create_test_graph(graph_backend, use_subgraph=False)
 
-    with pytest.raises(ValueError, match="Either node IDs or one of the attributes' comparisons must be provided"):
-        graph_with_data.subgraph()
+    same_graph = graph_with_data.filter().subgraph()
+
+    assert same_graph.node_ids() == graph_with_data.node_ids()
+    assert same_graph.edge_ids() == graph_with_data.edge_ids()
 
 
 @parametrize_subgraph_tests
@@ -734,7 +770,7 @@ def test_subgraph_overlaps_propagation(graph_backend: BaseGraph) -> None:
 
     # Create subgraph with subset of nodes
     subgraph_nodes = [original_nodes[0], original_nodes[1], original_nodes[2]]
-    subgraph = graph_with_data.subgraph(node_ids=subgraph_nodes)
+    subgraph = graph_with_data.filter(node_ids=subgraph_nodes).subgraph()
 
     # Test that overlaps are accessible from subgraph
     assert subgraph.has_overlaps()
@@ -845,7 +881,7 @@ def test_bulk_add_nodes_returned_ids(graph_backend: BaseGraph, use_subgraph: boo
 
     # Test that nodes have correct attributes
     for i, node_id in enumerate(returned_ids):
-        node_attrs = graph_with_data.node_attrs(node_ids=[node_id])
+        node_attrs = graph_with_data.filter(node_ids=[node_id]).node_attrs()
         expected_attrs = nodes_to_add[i]
 
         assert node_attrs["t"].to_list()[0] == expected_attrs["t"]

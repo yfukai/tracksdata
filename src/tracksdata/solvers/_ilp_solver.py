@@ -398,7 +398,7 @@ class ILPSolver(BaseSolver):
         )
 
         if self.return_solution:
-            return graph.subgraph(
+            return graph.filter(
                 NodeAttr(self.output_key) == True,
                 EdgeAttr(self.output_key) == True,
-            )
+            ).subgraph()

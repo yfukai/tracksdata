@@ -1,21 +1,17 @@
 import operator
 from collections.abc import Callable, Sequence
-from typing import TYPE_CHECKING, Any, overload
+from typing import TYPE_CHECKING, Any
 
-import bidict
 import numpy as np
 import polars as pl
 import rustworkx as rx
 
-from tracksdata.attrs import (
-    AttrComparison,
-    attr_comps_to_strs,
-    polars_reduce_attr_comps,
-    split_attr_comps,
-)
+from tracksdata.attrs import AttrComparison, split_attr_comps
 from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.functional._rx import _assign_track_ids
 from tracksdata.graph._base_graph import BaseGraph
+from tracksdata.graph._mapped_graph_mixin import MappedGraphMixin
+from tracksdata.graph.filters._base_filter import BaseFilter, cache_method
 from tracksdata.utils._dataframe import unpack_array_attrs
 from tracksdata.utils._logging import LOG
 
@@ -56,6 +52,8 @@ def _pop_time_eq(
 def _create_filter_func(
     attr_comps: Sequence[AttrComparison],
 ) -> Callable[[dict[str, Any]], bool]:
+    LOG.info(f"Creating filter function for {attr_comps}")
+
     def _filter(attrs: dict[str, Any]) -> bool:
         for attr_op in attr_comps:
             if not attr_op.op(attrs[str(attr_op.column)], attr_op.other):
@@ -63,6 +61,179 @@ def _create_filter_func(
         return True
 
     return _filter
+
+
+class RXFilter(BaseFilter):
+    def __init__(
+        self,
+        *attr_comps: AttrComparison,
+        graph: "RustWorkXGraph",
+        node_ids: Sequence[int] | None = None,
+        include_targets: bool = False,
+        include_sources: bool = False,
+    ) -> None:
+        super().__init__()
+        self._graph = graph
+        self._attr_comps = attr_comps
+        self._node_ids = node_ids
+        self._include_targets = include_targets
+        self._include_sources = include_sources
+        self._node_attr_comps, self._edge_attr_comps = split_attr_comps(attr_comps)
+
+    @cache_method
+    def _current_node_ids(self) -> list[int]:
+        """
+        Get the node IDs without considering their `source` or `target` neighbors.
+        """
+        if len(self._node_attr_comps) == 0:
+            if self._node_ids is None:
+                node_ids = self._graph.rx_graph.node_indices()
+            else:
+                node_ids = self._node_ids
+        else:
+            # only nodes are filtered return nodes that pass node filters
+            node_ids = self._graph._filter_nodes_by_attrs(*self._node_attr_comps, node_ids=self._node_ids)
+
+        return node_ids
+
+    @cache_method
+    def node_ids(self) -> list[int]:
+        # if there are no edge filters, we can return the current node ids
+        if not self._edge_attr_comps and (not self._include_targets and not self._include_sources):
+            return self._current_node_ids()
+
+        # find nodes that are connected to edges that pass the edge filters
+        node_ids = []
+        edge_node_ids = (
+            self._edge_attrs()
+            .select(
+                DEFAULT_ATTR_KEYS.EDGE_SOURCE,
+                DEFAULT_ATTR_KEYS.EDGE_TARGET,
+            )
+            .to_numpy()
+            .ravel()
+        )
+        node_ids.append(edge_node_ids)
+
+        if self._node_attr_comps:
+            # if there are node filters, we need to add the nodes that pass the node filters
+            node_ids.append(self._current_node_ids())
+
+        node_ids = [v for v in node_ids if len(v) > 0]
+
+        if len(node_ids) == 0:
+            return []
+
+        node_ids = np.unique(np.concatenate(node_ids, dtype=int))
+        return node_ids.tolist()
+
+    @cache_method
+    def _edge_attrs(self) -> pl.DataFrame:
+        node_ids = self._current_node_ids()
+
+        _filter_func = _create_filter_func(self._edge_attr_comps)
+        neigh_funcs = [self._graph.rx_graph.out_edges]
+
+        if self._include_sources:
+            neigh_funcs.append(self._graph.rx_graph.in_edges)
+
+        # only edges are filtered return nodes that pass edge filters
+        sources = []
+        targets = []
+        data = {k: [] for k in self._graph.edge_attr_keys}
+        data[DEFAULT_ATTR_KEYS.EDGE_ID] = []
+
+        check_node_ids = None
+        if self._node_ids is not None and not (self._include_targets or self._include_sources):
+            check_node_ids = set(node_ids)
+
+        # TODO: at this point I think we are better creating a rx subgraph
+        # and using the filter method
+        for node_id in node_ids:
+            for nf in neigh_funcs:
+                for src, tgt, attr in nf(node_id):
+                    if _filter_func(attr):
+                        if check_node_ids is not None:
+                            if src not in check_node_ids or tgt not in check_node_ids:
+                                continue
+
+                        sources.append(src)
+                        targets.append(tgt)
+                        for k in data.keys():
+                            data[k].append(attr[k])
+
+        df = pl.DataFrame(data).with_columns(
+            pl.Series(sources, dtype=pl.Int64).alias(DEFAULT_ATTR_KEYS.EDGE_SOURCE),
+            pl.Series(targets, dtype=pl.Int64).alias(DEFAULT_ATTR_KEYS.EDGE_TARGET),
+        )
+        return df
+
+    @cache_method
+    def edge_ids(self) -> list[int]:
+        return self._edge_attrs()[DEFAULT_ATTR_KEYS.EDGE_ID].to_list()
+
+    @cache_method
+    def node_attrs(
+        self,
+        attr_keys: list[str] | None = None,
+        unpack: bool = False,
+    ) -> pl.DataFrame:
+        return self._graph._node_attrs_from_node_ids(
+            node_ids=self.node_ids(),
+            attr_keys=attr_keys,
+            unpack=unpack,
+        )
+
+    @cache_method
+    def edge_attrs(
+        self,
+        attr_keys: list[str] | None = None,
+        unpack: bool = False,
+    ) -> pl.DataFrame:
+        df = self._edge_attrs()
+        if df.is_empty():
+            return df
+
+        if attr_keys is None:
+            attr_keys = self._graph.edge_attr_keys
+
+        attr_keys = [
+            DEFAULT_ATTR_KEYS.EDGE_ID,
+            DEFAULT_ATTR_KEYS.EDGE_SOURCE,
+            DEFAULT_ATTR_KEYS.EDGE_TARGET,
+            *attr_keys,
+        ]
+        attr_keys = list(dict.fromkeys(attr_keys))
+
+        df = df.select(attr_keys)
+        if unpack:
+            df = unpack_array_attrs(df)
+        return df
+
+    @cache_method
+    def subgraph(
+        self,
+        node_attr_keys: Sequence[str] | str | None = None,
+        edge_attr_keys: Sequence[str] | str | None = None,
+    ) -> "GraphView":
+        from tracksdata.graph._graph_view import GraphView
+
+        node_ids = self.node_ids()
+
+        rx_graph, node_map = self._graph._rx_subgraph_with_nodemap(node_ids)
+        if self._edge_attr_comps:
+            _filter_func = _create_filter_func(self._edge_attr_comps)
+            for src, tgt, attr in rx_graph.weighted_edge_list():
+                if not _filter_func(attr):
+                    rx_graph.remove_edge(src, tgt)
+
+        graph_view = GraphView(
+            rx_graph,
+            node_map_to_root=dict(node_map.items()),
+            root=self._graph,
+        )
+
+        return graph_view
 
 
 class RustWorkXGraph(BaseGraph):
@@ -119,13 +290,13 @@ class RustWorkXGraph(BaseGraph):
     ```python
     from tracksdata.attrs import NodeAttr
 
-    node_ids = graph.filter_nodes_by_attrs(NodeAttr("t") == 0)
+    node_ids = graph.filter(NodeAttr("t") == 0).node_ids()
     ```
 
     Create subgraphs:
 
     ```python
-    subgraph = graph.subgraph(NodeAttr("t") == 0)
+    subgraph = graph.filter(NodeAttr("t") == 0).subgraph()
     ```
     """
 
@@ -145,6 +316,21 @@ class RustWorkXGraph(BaseGraph):
     @property
     def rx_graph(self) -> rx.PyDiGraph:
         return self._graph
+
+    def filter(
+        self,
+        *attr_filters: AttrComparison,
+        node_ids: Sequence[int] | None = None,
+        include_targets: bool = False,
+        include_sources: bool = False,
+    ) -> RXFilter:
+        return RXFilter(
+            *attr_filters,
+            graph=self,
+            node_ids=node_ids,
+            include_targets=include_targets,
+            include_sources=include_sources,
+        )
 
     def add_node(
         self,
@@ -454,9 +640,10 @@ class RustWorkXGraph(BaseGraph):
             attr_keys,
         )
 
-    def filter_nodes_by_attrs(
+    def _filter_nodes_by_attrs(
         self,
         *attrs: AttrComparison,
+        node_ids: Sequence[int] | None = None,
     ) -> list[int]:
         """
         Filter nodes by attributes.
@@ -465,9 +652,9 @@ class RustWorkXGraph(BaseGraph):
         ----------
         *attrs : AttrComparison
             The attributes to filter by, for example:
-            ```python
-            graph.filter_nodes_by_attrs(Attr("t") == 0, Attr("label") == "A")
-            ```
+        node_ids : list[int] | None
+            The IDs of the nodes to include in the filter.
+            If None, all nodes are used.
 
         Returns
         -------
@@ -478,12 +665,21 @@ class RustWorkXGraph(BaseGraph):
         node_map = None
         # entire graph
         attrs, time = _pop_time_eq(attrs)
+        selected_nodes = None
 
         if time is not None:
             selected_nodes = self._time_to_nodes.get(time, [])
+
+            if node_ids is not None:
+                selected_nodes = np.intersect1d(selected_nodes, node_ids).tolist()
+
             if len(attrs) == 0:
                 return selected_nodes
 
+        elif node_ids is not None:
+            selected_nodes = node_ids
+
+        if selected_nodes is not None:
             # subgraph of selected nodes
             rx_graph, node_map = rx_graph.subgraph_with_nodemap(selected_nodes)
 
@@ -505,82 +701,6 @@ class RustWorkXGraph(BaseGraph):
         Get the IDs of all edges in the graph.
         """
         return [int(i) for i in self.rx_graph.edge_indices()]
-
-    def _rx_subgraph_with_nodemap(
-        self,
-        node_ids: Sequence[int] | None = None,
-    ) -> tuple[rx.PyDiGraph, rx.NodeMap]:
-        return self.rx_graph.subgraph_with_nodemap(node_ids)
-
-    def subgraph(
-        self,
-        *attr_filters: AttrComparison,
-        node_ids: Sequence[int] | None = None,
-        node_attr_keys: Sequence[str] | str | None = None,
-        edge_attr_keys: Sequence[str] | str | None = None,
-    ) -> "GraphView":
-        """
-        Create a subgraph from the graph from the given node IDs
-        or attributes' filters.
-
-        Node IDs or a single attribute filter can be used to create a subgraph.
-
-        Parameters
-        ----------
-        *attr_filters : AttrComparison
-            The attributes to filter the nodes and edges by.
-        node_ids : Sequence[int] | None
-            The IDs of the nodes to include in the subgraph.
-        node_attr_keys : Sequence[str] | str | None
-            The attribute keys to include in the subgraph.
-        edge_attr_keys : Sequence[str] | str | None
-            The attribute keys to include in the subgraph.
-
-        Returns
-        -------
-        RustWorkXGraph
-            A new graph with the specified nodes.
-        """
-        from tracksdata.graph._graph_view import GraphView
-
-        node_attr_comps, edge_attr_comps = split_attr_comps(attr_filters)
-        self._validate_subgraph_args(node_ids, node_attr_comps, edge_attr_comps)
-
-        if node_attr_comps:
-            filtered_node_ids = self.filter_nodes_by_attrs(*node_attr_comps)
-            if node_ids is not None:
-                node_ids = np.intersect1d(node_ids, filtered_node_ids).tolist()
-            else:
-                node_ids = filtered_node_ids
-
-        if node_ids is None and edge_attr_comps:
-            edges_df = self.edge_attrs(node_ids=node_ids, attr_keys=attr_comps_to_strs(edge_attr_comps))
-            mask = polars_reduce_attr_comps(edges_df, edge_attr_comps, operator.and_)
-            node_ids = np.unique(
-                edges_df.filter(mask)
-                .select(
-                    DEFAULT_ATTR_KEYS.EDGE_SOURCE,
-                    DEFAULT_ATTR_KEYS.EDGE_TARGET,
-                )
-                .to_numpy()
-            )
-
-        rx_graph, node_map = self._rx_subgraph_with_nodemap(node_ids)
-
-        if edge_attr_comps:
-            LOG.info("Removing edges without attributes %s", edge_attr_comps)
-            _filter_func = _create_filter_func(edge_attr_comps)
-            for source, target, edge_attr in rx_graph.weighted_edge_list():
-                if not _filter_func(edge_attr):
-                    rx_graph.remove_edge(source, target)
-
-        graph_view = GraphView(
-            rx_graph=rx_graph,
-            node_map_to_root=dict(node_map.items()),
-            root=self,
-        )
-
-        return graph_view
 
     def time_points(self) -> list[int]:
         """
@@ -641,10 +761,10 @@ class RustWorkXGraph(BaseGraph):
         for _, _, edge_attr in self.rx_graph.weighted_edge_list():
             edge_attr[key] = default_value
 
-    def node_attrs(
+    def _node_attrs_from_node_ids(
         self,
         *,
-        node_ids: Sequence[int] | None = None,
+        node_ids: list[int] | None = None,
         attr_keys: Sequence[str] | str | None = None,
         unpack: bool = False,
     ) -> pl.DataFrame:
@@ -708,12 +828,21 @@ class RustWorkXGraph(BaseGraph):
 
         return df
 
+    def node_attrs(
+        self,
+        *,
+        attr_keys: Sequence[str] | str | None = None,
+        unpack: bool = False,
+    ) -> pl.DataFrame:
+        """
+        Get the attributes of the nodes as a polars DataFrame.
+        """
+        return self._node_attrs_from_node_ids(attr_keys=attr_keys, unpack=unpack)
+
     def edge_attrs(
         self,
         *,
-        node_ids: list[int] | None = None,
         attr_keys: Sequence[str] | str | None = None,
-        include_targets: bool = False,
         unpack: bool = False,
     ) -> pl.DataFrame:
         """
@@ -721,15 +850,9 @@ class RustWorkXGraph(BaseGraph):
 
         Parameters
         ----------
-        node_ids : list[int] | None
-            The IDs of the subgraph to get the edge attributesfor.
-            If None, all edges of the graph are used.
         attr_keys : Sequence[str] | str | None
             The attribute keys to get.
             If None, all attributesare used.
-        include_targets : bool
-            Whether to include edges out-going from the given node_ids even
-            if the target node is not in the given node_ids.
         unpack : bool
             Whether to unpack array attributesinto multiple scalar attributes.
         """
@@ -739,18 +862,7 @@ class RustWorkXGraph(BaseGraph):
         attr_keys = [DEFAULT_ATTR_KEYS.EDGE_ID, *attr_keys]
         attr_keys = list(dict.fromkeys(attr_keys))
 
-        if node_ids is None:
-            rx_graph = self.rx_graph
-            node_map = None
-        else:
-            if include_targets:
-                selected_nodes = set(node_ids)
-                for node_id in node_ids:
-                    neighbors = self.rx_graph.neighbors(node_id)
-                    selected_nodes.update(neighbors)
-                node_ids = list(selected_nodes)
-
-            rx_graph, node_map = self.rx_graph.subgraph_with_nodemap(node_ids)
+        rx_graph = self.rx_graph
 
         edge_map = rx_graph.edge_index_map()
         if len(edge_map) == 0:
@@ -766,10 +878,6 @@ class RustWorkXGraph(BaseGraph):
             )
 
         source, target, data = zip(*edge_map.values(), strict=False)
-
-        if node_map is not None:
-            source = [node_map[s] for s in source]
-            target = [node_map[t] for t in target]
 
         columns = {key: [] for key in attr_keys}
 
@@ -1005,8 +1113,28 @@ class RustWorkXGraph(BaseGraph):
 
         return graph_view
 
+    def _rx_subgraph_with_nodemap(
+        self,
+        node_ids: Sequence[int] | None = None,
+    ) -> tuple[rx.PyDiGraph, rx.NodeMap]:
+        """
+        Get a subgraph of the graph.
 
-class IndexedRXGraph(RustWorkXGraph):
+        Parameters
+        ----------
+        node_ids : Sequence[int] | None
+            The node ids to include in the subgraph.
+
+        Returns
+        -------
+        tuple[rx.PyDiGraph, rx.NodeMap]
+            The subgraph and the node map.
+        """
+        rx_graph, node_map = self.rx_graph.subgraph_with_nodemap(node_ids)
+        return rx_graph, node_map
+
+
+class IndexedRXGraph(RustWorkXGraph, MappedGraphMixin):
     """
     A graph that is indexed by node ids.
 
@@ -1040,84 +1168,21 @@ class IndexedRXGraph(RustWorkXGraph):
         if rx_graph is None and node_id_map is not None:
             raise ValueError("`rx_graph` must be provided when `node_id_map` is provided")
 
-        if rx_graph is None:
-            self._graph = rx.PyDiGraph()
-        else:
-            self._graph = rx_graph
+        # Initialize RustWorkXGraph
+        RustWorkXGraph.__init__(self, rx_graph)
 
+        # Initialize MappedGraphMixin with inverted mapping (external -> local)
+        inverted_map = None
         if node_id_map is not None:
-            self._world_to_graph_id = bidict.bidict(node_id_map)
+            # Validate for duplicate values before inverting
+            # This will raise bidict.ValueDuplicationError if there are duplicates
+            import bidict
 
-        else:
-            self._world_to_graph_id = bidict.bidict()
+            bidict.bidict(node_id_map)
+            inverted_map = {v: k for k, v in node_id_map.items()}
+        MappedGraphMixin.__init__(self, inverted_map)
 
-        self._graph_to_world_id = self._world_to_graph_id.inverse
-
-        super().__init__()
-
-    @overload
-    def from_world_id(self, world_id: None) -> list[int]: ...
-
-    @overload
-    def from_world_id(self, world_id: int) -> int: ...
-
-    @overload
-    def from_world_id(self, world_id: list[int]) -> list[int]: ...
-
-    def from_world_id(self, world_id: int | list[int] | None) -> int | list[int]:
-        """
-        Convert world ids to rustworkx graph ids.
-
-        Parameters
-        ----------
-        world_id : int | list[int] | None
-            The world ids to convert.
-
-        Returns
-        -------
-        int | list[int]
-            The rustworkx graph ids.
-        """
-        if world_id is None:
-            return list(self.rx_graph.node_indices())
-        vec_map = np.vectorize(self._world_to_graph_id.__getitem__, otypes=[int])
-        return vec_map(np.asarray(world_id, dtype=int)).tolist()
-
-    @overload
-    def to_world_id(self, graph_id: None) -> None: ...
-
-    @overload
-    def to_world_id(self, graph_id: int) -> int: ...
-
-    @overload
-    def to_world_id(self, graph_id: list[int]) -> list[int]: ...
-
-    def to_world_id(self, graph_id: int | list[int] | None) -> int | list[int] | None:
-        """
-        Convert rustworkx graph ids to world ids.
-
-        Parameters
-        ----------
-        graph_id : int | list[int] | None
-            The rustworkx graph ids to convert.
-
-        Returns
-        -------
-        int | list[int] | None
-            The world ids.
-        """
-        if graph_id is None:
-            return None
-        vec_map = np.vectorize(self._graph_to_world_id.__getitem__, otypes=[int])
-        return vec_map(np.asarray(graph_id, dtype=int)).tolist()
-
-    def _df_to_world_id(self, df: pl.DataFrame, columns: Sequence[str]) -> pl.DataFrame:
-        for col in columns:
-            if col in df.columns:
-                df = df.with_columns(
-                    pl.col(col).map_elements(self._graph_to_world_id.get, return_dtype=pl.Int64),
-                )
-        return df
+        # ID mapping handled by MappedGraphMixin
 
     def add_node(
         self,
@@ -1146,7 +1211,8 @@ class IndexedRXGraph(RustWorkXGraph):
         node_id = super().add_node(attrs, validate_keys)
         if index is None:
             index = node_id
-        self._world_to_graph_id.put(index, node_id)
+        # Add mapping using mixin
+        self._add_id_mapping(node_id, index)
         return index
 
     def bulk_add_nodes(
@@ -1175,7 +1241,7 @@ class IndexedRXGraph(RustWorkXGraph):
         if indices is None:
             indices = graph_ids
 
-        self._world_to_graph_id.putall(zip(indices, graph_ids, strict=True))
+        self._add_id_mappings(list(zip(graph_ids, indices, strict=True)))
 
         return indices
 
@@ -1196,9 +1262,10 @@ class IndexedRXGraph(RustWorkXGraph):
         tuple[rx.PyDiGraph, rx.NodeMap]
             The subgraph and the node map.
         """
-        node_ids = self.from_world_id(node_ids)
+        # TODO: fix this, too many back and forth between world and graph ids within FilterRX
+        node_ids = self._get_local_ids() if node_ids is None else self._map_to_local(node_ids)
         rx_graph, node_map = super()._rx_subgraph_with_nodemap(node_ids)
-        node_map = {k: self._graph_to_world_id[v] for k, v in node_map.items()}
+        node_map = {k: self._map_to_external(v) for k, v in node_map.items()}
         return rx_graph, node_map
 
     def node_ids(self) -> list[int]:
@@ -1210,7 +1277,19 @@ class IndexedRXGraph(RustWorkXGraph):
         list[int]
             The node ids of the graph.
         """
-        return list(self._world_to_graph_id.keys())
+        return self._get_external_ids()
+
+    def _node_attrs_from_node_ids(
+        self,
+        *,
+        node_ids: list[int] | None = None,
+        attr_keys: Sequence[str] | str | None = None,
+        unpack: bool = False,
+    ) -> pl.DataFrame:
+        node_ids = self._get_local_ids() if node_ids is None else self._map_to_local(node_ids)
+        df = super()._node_attrs_from_node_ids(node_ids=node_ids, attr_keys=attr_keys, unpack=unpack)
+        df = self._map_df_to_external(df, [DEFAULT_ATTR_KEYS.NODE_ID])
+        return df
 
     def node_attrs(
         self,
@@ -1236,17 +1315,15 @@ class IndexedRXGraph(RustWorkXGraph):
         pl.DataFrame
             The node attributes of the graph.
         """
-        node_ids = self.from_world_id(node_ids)
-        df = super().node_attrs(node_ids=node_ids, attr_keys=attr_keys, unpack=unpack)
-        df = self._df_to_world_id(df, [DEFAULT_ATTR_KEYS.NODE_ID])
+        node_ids = self._get_local_ids() if node_ids is None else self._map_to_local(node_ids)
+        df = super()._node_attrs_from_node_ids(node_ids=node_ids, attr_keys=attr_keys, unpack=unpack)
+        df = self._map_df_to_external(df, [DEFAULT_ATTR_KEYS.NODE_ID])
         return df
 
     def edge_attrs(
         self,
         *,
-        node_ids: Sequence[int] | None = None,
         attr_keys: Sequence[str] | str | None = None,
-        include_targets: bool = False,
         unpack: bool = False,
     ) -> pl.DataFrame:
         """
@@ -1254,12 +1331,8 @@ class IndexedRXGraph(RustWorkXGraph):
 
         Parameters
         ----------
-        node_ids : Sequence[int] | None
-            The node ids to include in the subgraph.
         attr_keys : Sequence[str] | str | None
             The attributes to include in the subgraph.
-        include_targets : bool
-            Whether to include the target node attributes.
         unpack : bool
             Whether to unpack the attributes.
 
@@ -1268,9 +1341,9 @@ class IndexedRXGraph(RustWorkXGraph):
         pl.DataFrame
             The edge attributes of the graph.
         """
-        node_ids = self.from_world_id(node_ids)
-        df = super().edge_attrs(node_ids=node_ids, attr_keys=attr_keys, include_targets=include_targets, unpack=unpack)
-        df = self._df_to_world_id(df, [DEFAULT_ATTR_KEYS.EDGE_SOURCE, DEFAULT_ATTR_KEYS.EDGE_TARGET])
+        node_ids = self._get_local_ids()
+        df = super().filter(node_ids=node_ids).edge_attrs(attr_keys=attr_keys, unpack=unpack)
+        df = self._map_df_to_external(df, [DEFAULT_ATTR_KEYS.EDGE_SOURCE, DEFAULT_ATTR_KEYS.EDGE_TARGET])
         return df
 
     def in_degree(self, node_ids: list[int] | int | None = None) -> list[int] | int:
@@ -1287,7 +1360,7 @@ class IndexedRXGraph(RustWorkXGraph):
         list[int] | int
             The in degree of the graph.
         """
-        node_ids = self.from_world_id(node_ids)
+        node_ids = self._get_local_ids() if node_ids is None else self._map_to_local(node_ids)
         return super().in_degree(node_ids)
 
     def out_degree(self, node_ids: list[int] | int | None = None) -> list[int] | int:
@@ -1304,7 +1377,7 @@ class IndexedRXGraph(RustWorkXGraph):
         list[int] | int
             The out degree of the graph.
         """
-        node_ids = self.from_world_id(node_ids)
+        node_ids = self._get_local_ids() if node_ids is None else self._map_to_local(node_ids)
         return super().out_degree(node_ids)
 
     def add_edge(
@@ -1333,8 +1406,8 @@ class IndexedRXGraph(RustWorkXGraph):
         int
             The edge id.
         """
-        source_id = self._world_to_graph_id[source_id]
-        target_id = self._world_to_graph_id[target_id]
+        source_id = self._map_to_local(source_id)
+        target_id = self._map_to_local(target_id)
         return super().add_edge(source_id, target_id, attrs, validate_keys)
 
     def add_overlap(self, source_id: int, target_id: int) -> int:
@@ -1353,8 +1426,8 @@ class IndexedRXGraph(RustWorkXGraph):
         int
             The overlap id.
         """
-        source_id = self._world_to_graph_id[source_id]
-        target_id = self._world_to_graph_id[target_id]
+        source_id = self._map_to_local(source_id)
+        target_id = self._map_to_local(target_id)
         return super().add_overlap(source_id, target_id)
 
     def overlaps(self, node_ids: list[int] | int | None = None) -> list[list[int, 2]]:
@@ -1372,11 +1445,14 @@ class IndexedRXGraph(RustWorkXGraph):
             The overlaps of the graph.
         """
         try:
-            node_ids = self.from_world_id(node_ids)
+            node_ids = self._get_local_ids() if node_ids is None else self._map_to_local(node_ids)
         except KeyError:
             LOG.warning(f"`node_ids` {node_ids} not found in index map.")
             return []
-        overlaps = self.to_world_id(super().overlaps(node_ids))
+        overlaps = super().overlaps(node_ids)
+        # Convert each pair of node IDs in the overlaps list
+        if len(overlaps) > 0:
+            overlaps = self._vectorized_map_to_external(np.asarray(overlaps)).tolist()
         return overlaps
 
     def _get_neighbors(
@@ -1385,13 +1461,13 @@ class IndexedRXGraph(RustWorkXGraph):
         node_ids: list[int] | int | None = None,
         attr_keys: Sequence[str] | str | None = None,
     ) -> dict[int, pl.DataFrame] | pl.DataFrame:
-        node_ids = self.from_world_id(node_ids)
+        node_ids = self._get_local_ids() if node_ids is None else self._map_to_local(node_ids)
         dfs = super()._get_neighbors(neighbors_func, node_ids, attr_keys)
         if isinstance(dfs, pl.DataFrame):
-            dfs = self._df_to_world_id(dfs, [DEFAULT_ATTR_KEYS.NODE_ID])
+            dfs = self._map_df_to_external(dfs, [DEFAULT_ATTR_KEYS.NODE_ID])
         else:
             dfs = {
-                self._graph_to_world_id[node_id]: self._df_to_world_id(df, [DEFAULT_ATTR_KEYS.NODE_ID])
+                self._map_to_external(node_id): self._map_df_to_external(df, [DEFAULT_ATTR_KEYS.NODE_ID])
                 for node_id, df in dfs.items()
             }
         return dfs
@@ -1412,22 +1488,22 @@ class IndexedRXGraph(RustWorkXGraph):
         node_ids : Sequence[int] | None
             The node ids to update.
         """
-        node_ids = self.from_world_id(node_ids)
+        node_ids = self._get_local_ids() if node_ids is None else self._map_to_local(node_ids)
         super().update_node_attrs(attrs=attrs, node_ids=node_ids)
 
-    def filter_nodes_by_attrs(self, *attrs: AttrComparison) -> list[int]:
-        """
-        Filter the nodes of the graph by attributes.
+    def filter(
+        self,
+        *attr_filters: AttrComparison,
+        node_ids: Sequence[int] | None = None,
+        include_targets: bool = False,
+        include_sources: bool = False,
+    ) -> RXFilter:
+        from tracksdata.graph.filters._indexed_filter import IndexRXFilter
 
-        Parameters
-        ----------
-        attrs : AttrComparison
-            The attributes to filter by.
-
-        Returns
-        -------
-        list[int]
-            The filtered node ids.
-        """
-        node_ids = super().filter_nodes_by_attrs(*attrs)
-        return self.to_world_id(node_ids)
+        return IndexRXFilter(
+            *attr_filters,
+            graph=self,
+            node_ids=None if node_ids is None else self._map_to_local(node_ids),
+            include_targets=include_targets,
+            include_sources=include_sources,
+        )
