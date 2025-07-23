@@ -75,6 +75,10 @@ class RXFilter(BaseFilter):
         super().__init__()
         self._graph = graph
         self._attr_comps = attr_comps
+
+        if node_ids is not None and hasattr(node_ids, "tolist"):
+            node_ids = node_ids.tolist()
+
         self._node_ids = node_ids
         self._include_targets = include_targets
         self._include_sources = include_sources
