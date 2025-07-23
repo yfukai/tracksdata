@@ -30,13 +30,13 @@ def test_spatial_filter_initialization(sample_graph: RustWorkXGraph) -> None:
     """Test SpatialFilter initialization with default and custom attributes."""
     # Test default attributes
     spatial_filter = SpatialFilter(sample_graph)
-    assert spatial_filter._attrs_keys == ["t", "z", "y", "x"]
-    assert spatial_filter._sg_graph is not None
+    assert spatial_filter._df_filter._attrs_keys == ["t", "z", "y", "x"]
+    assert spatial_filter._df_filter._sg_graph is not None
 
     # Test custom attributes
     custom_attrs = ["t", "y", "x"]
     spatial_filter = SpatialFilter(sample_graph, attrs_keys=custom_attrs)
-    assert spatial_filter._attrs_keys == custom_attrs
+    assert spatial_filter._df_filter._attrs_keys == custom_attrs
 
 
 def test_spatial_filter_querying(sample_graph: RustWorkXGraph) -> None:
@@ -69,13 +69,13 @@ def test_spatial_filter_dimensions() -> None:
 
     # Test 2D coordinates
     spatial_filter_2d = SpatialFilter(graph, attrs_keys=["y", "x"])
-    assert spatial_filter_2d._attrs_keys == ["y", "x"]
+    assert spatial_filter_2d._df_filter._attrs_keys == ["y", "x"]
     result = spatial_filter_2d[0:50, 0:50]
     assert not result.node_attrs().is_empty()
 
     # Test 3D coordinates
     spatial_filter_3d = SpatialFilter(graph, attrs_keys=["z", "y", "x"])
-    assert spatial_filter_3d._attrs_keys == ["z", "y", "x"]
+    assert spatial_filter_3d._df_filter._attrs_keys == ["z", "y", "x"]
     result = spatial_filter_3d[0:2, 0:100, 0:100]
     assert not result.node_attrs().is_empty()
 
