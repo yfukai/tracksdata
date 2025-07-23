@@ -89,6 +89,9 @@ class SQLFilter(BaseFilter):
         node_filtered = False
 
         if node_ids is not None:
+            if hasattr(node_ids, "tolist"):
+                node_ids = node_ids.tolist()
+
             self._node_query = self._node_query.filter(self._graph.Node.node_id.in_(node_ids))
             if not self._include_targets:
                 self._edge_query = self._edge_query.filter(
