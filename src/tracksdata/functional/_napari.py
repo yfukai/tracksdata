@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 def to_napari_format(
     graph: BaseGraph,
     shape: tuple[int, ...],
-    solution_key: str,
+    solution_key: str | None,
     output_track_id_key: str,
     mask_key: None,
 ) -> tuple[pl.DataFrame, dict[int, int]]: ...
@@ -24,7 +24,7 @@ def to_napari_format(
 def to_napari_format(
     graph: BaseGraph,
     shape: tuple[int, ...],
-    solution_key: str,
+    solution_key: str | None,
     output_track_id_key: str,
     mask_key: str,
 ) -> tuple[pl.DataFrame, dict[int, int], "GraphArrayView"]: ...
@@ -33,7 +33,7 @@ def to_napari_format(
 def to_napari_format(
     graph: BaseGraph,
     shape: tuple[int, ...],
-    solution_key: str = DEFAULT_ATTR_KEYS.SOLUTION,
+    solution_key: str | None = DEFAULT_ATTR_KEYS.SOLUTION,
     output_track_id_key: str = DEFAULT_ATTR_KEYS.TRACK_ID,
     mask_key: str | None = None,
 ) -> (
@@ -64,7 +64,7 @@ def to_napari_format(
     shape : tuple[int, ...]
         The shape of the labels layer.
     solution_key : str, optional
-        The key of the solution attribute.
+        The key of the solution attribute. If None, the graph is not filtered by the solution attribute.
     output_track_id_key : str, optional
         The key of the output track id attribute.
     mask_key : str | None, optional
@@ -86,10 +86,14 @@ def to_napari_format(
         - dict_graph: A dictionary of parent -> child relationships.
         - array_view: The array view of the solution graph if `mask_key` is provided.
     """
-    solution_graph = graph.filter(
-        NodeAttr(solution_key) == True,
-        EdgeAttr(solution_key) == True,
-    ).subgraph()
+    if solution_key is not None:
+        solution_graph = graph.filter(
+            NodeAttr(solution_key) == True,
+            EdgeAttr(solution_key) == True,
+        ).subgraph()
+
+    else:
+        solution_graph = graph
 
     tracks_graph = solution_graph.assign_track_ids(output_track_id_key)
     dict_graph = {child: parent for parent, child in tracks_graph.edge_list()}
