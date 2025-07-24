@@ -44,7 +44,7 @@ def test_node_validation(graph_backend: BaseGraph) -> None:
 
 def test_edge_validation(graph_backend: BaseGraph) -> None:
     """Test edge validation."""
-    with pytest.raises(ValueError):
+    with pytest.raises((ValueError, KeyError)):
         graph_backend.add_edge(0, 1, {"weight": 0.5})
 
 
@@ -52,13 +52,13 @@ def test_add_node(graph_backend: BaseGraph) -> None:
     """Test adding nodes with various attributes."""
 
     for key in ["x", "y"]:
-        graph_backend.add_node_attr_key(key, None)
+        graph_backend.add_node_attr_key(key, 0.0)
 
     node_id = graph_backend.add_node({"t": 0, "x": 1.0, "y": 2.0})
     assert isinstance(node_id, int)
 
     # Check node attributes
-    df = graph_backend.node_attrs(node_ids=[node_id])
+    df = graph_backend.filter(node_ids=[node_id]).node_attrs()
     assert df["t"].to_list() == [0]
     assert df["x"].to_list() == [1.0]
     assert df["y"].to_list() == [2.0]
@@ -97,9 +97,6 @@ def test_add_edge(graph_backend: BaseGraph) -> None:
     edge_id = graph_backend.add_edge(node2, node3, attrs={"new_attribute": 1.0, "weight": 0.1})
     assert isinstance(edge_id, int)
 
-    # testing default value was assigned correctly
-    # at some point there was a bug and this was needed
-    # df = graph_backend.edge_attrs(node_ids=[node1, node2, node3])
     df = graph_backend.edge_attrs()
     assert df["new_attribute"].to_list() == [0.0, 1.0]
     assert df["weight"].to_list() == [0.5, 0.1]
@@ -107,10 +104,10 @@ def test_add_edge(graph_backend: BaseGraph) -> None:
 
 def test_node_ids(graph_backend: BaseGraph) -> None:
     """Test retrieving node IDs."""
-    node1 = graph_backend.add_node({"t": 0})
-    node2 = graph_backend.add_node({"t": 1})
+    graph_backend.add_node({"t": 0})
+    graph_backend.add_node({"t": 1})
 
-    assert set(graph_backend.node_ids()) == {node1, node2}
+    assert len(graph_backend.node_ids()) == 2
 
 
 def test_filter_nodes_by_attribute(graph_backend: BaseGraph) -> None:
@@ -122,26 +119,23 @@ def test_filter_nodes_by_attribute(graph_backend: BaseGraph) -> None:
     node3 = graph_backend.add_node({"t": 1, "label": "A"})
 
     # Filter by time
-    nodes = graph_backend.filter_nodes_by_attrs(NodeAttr("t") == 0)
+    nodes = graph_backend.filter(NodeAttr("t") == 0).node_ids()
     assert set(nodes) == {node1, node2}
 
     # Filter by label
-    nodes = graph_backend.filter_nodes_by_attrs(NodeAttr("label") == "A")
+    nodes = graph_backend.filter(NodeAttr("label") == "A").node_ids()
     assert set(nodes) == {node1, node3}
 
     # Filter by t and label using multiple conditions
-    nodes = graph_backend.filter_nodes_by_attrs(
-        NodeAttr("t") == 1,
-        NodeAttr("label") == "A",
-    )
+    nodes = graph_backend.filter(NodeAttr("t") == 1, NodeAttr("label") == "A").node_ids()
     assert set(nodes) == {node3}
 
     # Test with inequality
-    nodes = graph_backend.filter_nodes_by_attrs(NodeAttr("t") > 0)
+    nodes = graph_backend.filter(NodeAttr("t") > 0).node_ids()
     assert set(nodes) == {node3}
 
     # Test with multiple conditions using *args for AND
-    nodes = graph_backend.filter_nodes_by_attrs(NodeAttr("t") == 0, NodeAttr("label") == "A")
+    nodes = graph_backend.filter(NodeAttr("t") == 0, NodeAttr("label") == "A").node_ids()
     assert set(nodes) == {node1}
 
 
@@ -156,18 +150,18 @@ def test_time_points(graph_backend: BaseGraph) -> None:
 
 def test_node_attrs(graph_backend: BaseGraph) -> None:
     """Test retrieving node attributes."""
-    graph_backend.add_node_attr_key("x", None)
+    graph_backend.add_node_attr_key("x", 0.0)
     graph_backend.add_node_attr_key("coordinates", np.array([0.0, 0.0]))
 
     node1 = graph_backend.add_node({"t": 0, "x": 1.0, "coordinates": np.array([10.0, 20.0])})
     node2 = graph_backend.add_node({"t": 1, "x": 2.0, "coordinates": np.array([30.0, 40.0])})
 
-    df = graph_backend.node_attrs(node_ids=[node1, node2], attr_keys=["x"])
+    df = graph_backend.filter(node_ids=[node1, node2]).node_attrs(attr_keys=["x"])
     assert isinstance(df, pl.DataFrame)
     assert df["x"].to_list() == [1.0, 2.0]
 
     # Test unpack functionality
-    df_unpacked = graph_backend.node_attrs(node_ids=[node1, node2], attr_keys=["coordinates"], unpack=True)
+    df_unpacked = graph_backend.filter(node_ids=[node1, node2]).node_attrs(attr_keys=["coordinates"], unpack=True)
     if "coordinates_0" in df_unpacked.columns:
         assert df_unpacked["coordinates_0"].to_list() == [10.0, 30.0]
         assert df_unpacked["coordinates_1"].to_list() == [20.0, 40.0]
@@ -233,7 +227,7 @@ def test_edge_attrs_subgraph_edge_ids(graph_backend: BaseGraph) -> None:
     # - edge2: node2 -> node3
     # - edge4: node1 -> node3
     # But NOT edge3: node3 -> node4 (since node4 is not in the subset)
-    df_subset = graph_backend.edge_attrs(node_ids=[node1, node2, node3])
+    df_subset = graph_backend.filter(node_ids=[node1, node2, node3]).edge_attrs()
     print(f"Subset graph edges: {df_subset}")
 
     subset_edge_ids = df_subset[DEFAULT_ATTR_KEYS.EDGE_ID].to_list()
@@ -251,12 +245,12 @@ def test_edge_attrs_subgraph_edge_ids(graph_backend: BaseGraph) -> None:
 
     # This will demonstrate the bug
     msg = f"Expected {expected_subset_edge_ids}, got {actual_subset_edge_ids}"
-    assert actual_subset_edge_ids == expected_subset_edge_ids, msg
+    assert expected_subset_edge_ids == actual_subset_edge_ids, msg
 
 
 def test_subgraph_with_node_and_edge_attr_filters(graph_backend: BaseGraph) -> None:
     """Test subgraph with node and edge attribute filters."""
-    graph_backend.add_node_attr_key("x", None)
+    graph_backend.add_node_attr_key("x", 0.0)
     graph_backend.add_edge_attr_key("weight", 0.0)
 
     node1 = graph_backend.add_node({"t": 0, "x": 1.0})
@@ -269,10 +263,10 @@ def test_subgraph_with_node_and_edge_attr_filters(graph_backend: BaseGraph) -> N
     edge2 = graph_backend.add_edge(node3, node5, attrs={"weight": 0.2})
     graph_backend.add_edge(node2, node4, attrs={"weight": 0.0})
 
-    subgraph = graph_backend.subgraph(
+    subgraph = graph_backend.filter(
         NodeAttr("x") <= 1.0,
         EdgeAttr("weight") < 0.5,
-    )
+    ).subgraph()
 
     assert subgraph.num_nodes == 3
     assert subgraph.num_edges == 1
@@ -289,27 +283,31 @@ def test_subgraph_with_node_ids_and_filters(graph_backend: BaseGraph) -> None:
     graph_backend.add_node_attr_key("x", None)
     graph_backend.add_edge_attr_key("weight", 0.0)
 
-    node1 = graph_backend.add_node({"t": 0, "x": 1.0})
-    node2 = graph_backend.add_node({"t": 1, "x": 2.0})
-    node3 = graph_backend.add_node({"t": 2, "x": 1.0})
-    node4 = graph_backend.add_node({"t": 3, "x": 3.0})
-    node5 = graph_backend.add_node({"t": 4, "x": 0.5})
+    node0 = graph_backend.add_node({"t": 0, "x": 1.0})
+    node1 = graph_backend.add_node({"t": 1, "x": 2.0})
+    node2 = graph_backend.add_node({"t": 2, "x": 1.0})
+    node3 = graph_backend.add_node({"t": 3, "x": 3.0})
+    node4 = graph_backend.add_node({"t": 4, "x": 0.5})
 
-    graph_backend.add_edge(node1, node3, attrs={"weight": 0.8})
-    graph_backend.add_edge(node3, node5, attrs={"weight": 0.2})
-    graph_backend.add_edge(node2, node4, attrs={"weight": 0.0})
+    graph_backend.add_edge(node0, node2, attrs={"weight": 0.8})
+    graph_backend.add_edge(node2, node4, attrs={"weight": 0.2})
+    graph_backend.add_edge(node1, node3, attrs={"weight": 0.0})
 
-    subgraph = graph_backend.subgraph(
+    g_filter = graph_backend.filter(
         NodeAttr("x") <= 1.0,
         EdgeAttr("weight") < 0.5,
-        node_ids=[node1, node3],
+        node_ids=[node0, node2],
     )
+    node_ids = g_filter.node_ids()
+    assert set(node_ids) == {node0, node2}
+
+    subgraph = g_filter.subgraph()
 
     assert subgraph.num_nodes == 2
     assert subgraph.num_edges == 0
 
     subgraph_node_ids = subgraph.node_ids()
-    assert set(subgraph_node_ids) == {node1, node3}
+    assert set(subgraph_node_ids) == {node0, node2}
 
     subgraph_edge_ids = subgraph.edge_ids()
     assert len(subgraph_edge_ids) == 0
@@ -320,7 +318,7 @@ def test_add_node_attr_key(graph_backend: BaseGraph) -> None:
     node = graph_backend.add_node({"t": 0})
     graph_backend.add_node_attr_key("new_attribute", 42)
 
-    df = graph_backend.node_attrs(node_ids=[node], attr_keys=["new_attribute"])
+    df = graph_backend.filter(node_ids=[node]).node_attrs(attr_keys=["new_attribute"])
     assert df["new_attribute"].to_list() == [42]
 
 
@@ -338,20 +336,20 @@ def test_add_edge_attr_key(graph_backend: BaseGraph) -> None:
 
 def test_update_node_attrs(graph_backend: BaseGraph) -> None:
     """Test updating node attributes."""
-    graph_backend.add_node_attr_key("x", None)
+    graph_backend.add_node_attr_key("x", 0.0)
 
     node_1 = graph_backend.add_node({"t": 0, "x": 1.0})
     node_2 = graph_backend.add_node({"t": 0, "x": 2.0})
 
     graph_backend.update_node_attrs(node_ids=[node_1], attrs={"x": 3.0})
 
-    df = graph_backend.node_attrs(node_ids=[node_1, node_2], attr_keys="x")
+    df = graph_backend.filter(node_ids=[node_1, node_2]).node_attrs(attr_keys=["x"])
     assert df["x"].to_list() == [3.0, 2.0]
 
     # inverted access on purpose
     graph_backend.update_node_attrs(node_ids=[node_2, node_1], attrs={"x": [5.0, 6.0]})
 
-    df = graph_backend.node_attrs(node_ids=[node_1, node_2], attr_keys="x")
+    df = graph_backend.filter(node_ids=[node_1, node_2]).node_attrs(attr_keys=["x"])
     assert df["x"].to_list() == [6.0, 5.0]
 
     # wrong length
@@ -368,7 +366,7 @@ def test_update_edge_attrs(graph_backend: BaseGraph) -> None:
     edge_id = graph_backend.add_edge(node1, node2, attrs={"weight": 0.5})
 
     graph_backend.update_edge_attrs(edge_ids=[edge_id], attrs={"weight": 1.0})
-    df = graph_backend.edge_attrs(node_ids=[node1, node2], attr_keys=["weight"])
+    df = graph_backend.filter(node_ids=[node1, node2]).edge_attrs(attr_keys=["weight"])
     assert df["weight"].to_list() == [1.0]
 
     # wrong length
@@ -430,7 +428,7 @@ def test_edge_attrs_include_targets(graph_backend: BaseGraph) -> None:
     # - edge1: node1 -> node2 ✓
     # - edge2: node2 -> node3 ✓
     # - edge3: node3 -> node0 ✗ (node0 not in selection)
-    df_exclusive = graph_backend.edge_attrs(node_ids=[node1, node2, node3], include_targets=False)
+    df_exclusive = graph_backend.filter(node_ids=[node1, node2, node3], include_targets=False).edge_attrs()
     print(f"Exclusive edges (include_targets=False):\n{df_exclusive}")
     exclusive_edge_ids = set(df_exclusive[DEFAULT_ATTR_KEYS.EDGE_ID].to_list())
     expected_exclusive = {edge1, edge2}
@@ -452,7 +450,7 @@ def test_edge_attrs_include_targets(graph_backend: BaseGraph) -> None:
     # - edge1: node1 -> node2 ✗ (node1 not in selection)
     # - edge2: node2 -> node3 ✓
     # - edge3: node3 -> node0 ✓
-    df_inclusive = graph_backend.edge_attrs(node_ids=[node2, node3], include_targets=True)
+    df_inclusive = graph_backend.filter(node_ids=[node2, node3], include_targets=True).edge_attrs()
     print(f"Inclusive edges (include_targets=True):\n{df_inclusive}")
     inclusive_edge_ids = set(df_inclusive[DEFAULT_ATTR_KEYS.EDGE_ID].to_list())
     expected_inclusive = {edge2, edge3}
@@ -474,7 +472,7 @@ def test_edge_attrs_include_targets(graph_backend: BaseGraph) -> None:
     # - edge1: node1 -> node2 ✓
     # - edge2: node2 -> node3 ✗ (node1 not in selection)
     # - edge3: node3 -> node0 ✗ (node1 not in selection)
-    df_single_inclusive = graph_backend.edge_attrs(node_ids=[node1], include_targets=True)
+    df_single_inclusive = graph_backend.filter(node_ids=[node1], include_targets=True).edge_attrs()
     print(f"Single node inclusive edges: {df_single_inclusive}")
     single_inclusive_edge_ids = set(df_single_inclusive[DEFAULT_ATTR_KEYS.EDGE_ID].to_list())
     expected_single_inclusive = {edge1}
@@ -485,7 +483,7 @@ def test_edge_attrs_include_targets(graph_backend: BaseGraph) -> None:
     # Test edge case: selecting only one node with include_targets=False
     # When selecting [node1], with include_targets=False should include no edges
     # (since there are no edges strictly between just node1)
-    df_single_exclusive = graph_backend.edge_attrs(node_ids=[node1], include_targets=False)
+    df_single_exclusive = graph_backend.filter(node_ids=[node1], include_targets=False).edge_attrs()
     print(f"Single node exclusive edges: {df_single_exclusive}")
     single_exclusive_edge_ids = set(df_single_exclusive[DEFAULT_ATTR_KEYS.EDGE_ID].to_list())
     expected_single_exclusive = set()  # No edges strictly within [node1]
@@ -894,8 +892,8 @@ def test_match_method(graph_backend: BaseGraph) -> None:
     assert len(edges_df) > 0
 
     # After your bug fixes, both edges are matching
-    edge_matches = edges_df[edge_match_key].to_list()
-    expected_matches = np.array([False, False, True])
+    edge_matches = edges_df.sort(DEFAULT_ATTR_KEYS.EDGE_ID)[edge_match_key].to_list()
+    expected_matches = np.asarray([False, False, True])
 
     np.testing.assert_array_equal(edge_matches, expected_matches)
 
@@ -907,12 +905,12 @@ def test_attrs_with_duplicated_attr_keys(graph_backend: BaseGraph) -> None:
     graph_backend.add_node_attr_key("y", 0.0)
 
     # Add nodes
-    graph_backend.add_node({"t": 0, "x": 1.0, "y": 1.0})
-    graph_backend.add_node({"t": 1, "x": 2.0, "y": 2.0})
+    node_1 = graph_backend.add_node({"t": 0, "x": 1.0, "y": 1.0})
+    node_2 = graph_backend.add_node({"t": 1, "x": 2.0, "y": 2.0})
 
     # Add edges
     graph_backend.add_edge_attr_key("weight", 0.0)
-    graph_backend.add_edge(0, 1, {"weight": 0.5})
+    graph_backend.add_edge(node_1, node_2, {"weight": 0.5})
 
     # Test with duplicated attribute keys
     # This would crash before

@@ -6,15 +6,12 @@ import numpy as np
 import polars as pl
 import rustworkx as rx
 
-from tracksdata.attrs import (
-    AttrComparison,
-    attr_comps_to_strs,
-    polars_reduce_attr_comps,
-    split_attr_comps,
-)
+from tracksdata.attrs import AttrComparison, split_attr_comps
 from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.functional._rx import _assign_track_ids
 from tracksdata.graph._base_graph import BaseGraph
+from tracksdata.graph._mapped_graph_mixin import MappedGraphMixin
+from tracksdata.graph.filters._base_filter import BaseFilter, cache_method
 from tracksdata.utils._dataframe import unpack_array_attrs
 from tracksdata.utils._logging import LOG
 
@@ -55,6 +52,8 @@ def _pop_time_eq(
 def _create_filter_func(
     attr_comps: Sequence[AttrComparison],
 ) -> Callable[[dict[str, Any]], bool]:
+    LOG.info(f"Creating filter function for {attr_comps}")
+
     def _filter(attrs: dict[str, Any]) -> bool:
         for attr_op in attr_comps:
             if not attr_op.op(attrs[str(attr_op.column)], attr_op.other):
@@ -62,6 +61,183 @@ def _create_filter_func(
         return True
 
     return _filter
+
+
+class RXFilter(BaseFilter):
+    def __init__(
+        self,
+        *attr_comps: AttrComparison,
+        graph: "RustWorkXGraph",
+        node_ids: Sequence[int] | None = None,
+        include_targets: bool = False,
+        include_sources: bool = False,
+    ) -> None:
+        super().__init__()
+        self._graph = graph
+        self._attr_comps = attr_comps
+
+        if node_ids is not None and hasattr(node_ids, "tolist"):
+            node_ids = node_ids.tolist()
+
+        self._node_ids = node_ids
+        self._include_targets = include_targets
+        self._include_sources = include_sources
+        self._node_attr_comps, self._edge_attr_comps = split_attr_comps(attr_comps)
+
+    @cache_method
+    def _current_node_ids(self) -> list[int]:
+        """
+        Get the node IDs without considering their `source` or `target` neighbors.
+        """
+        if len(self._node_attr_comps) == 0:
+            if self._node_ids is None:
+                node_ids = self._graph.rx_graph.node_indices()
+            else:
+                node_ids = self._node_ids
+        else:
+            # only nodes are filtered return nodes that pass node filters
+            node_ids = self._graph._filter_nodes_by_attrs(*self._node_attr_comps, node_ids=self._node_ids)
+
+        return node_ids
+
+    @cache_method
+    def node_ids(self) -> list[int]:
+        # if there are no edge filters, we can return the current node ids
+        if not self._edge_attr_comps and (not self._include_targets and not self._include_sources):
+            return self._current_node_ids()
+
+        # find nodes that are connected to edges that pass the edge filters
+        node_ids = []
+        edge_node_ids = (
+            self._edge_attrs()
+            .select(
+                DEFAULT_ATTR_KEYS.EDGE_SOURCE,
+                DEFAULT_ATTR_KEYS.EDGE_TARGET,
+            )
+            .to_numpy()
+            .ravel()
+        )
+        node_ids.append(edge_node_ids)
+
+        if self._node_attr_comps:
+            # if there are node filters, we need to add the nodes that pass the node filters
+            node_ids.append(self._current_node_ids())
+
+        node_ids = [v for v in node_ids if len(v) > 0]
+
+        if len(node_ids) == 0:
+            return []
+
+        node_ids = np.unique(np.concatenate(node_ids, dtype=int))
+        return node_ids.tolist()
+
+    @cache_method
+    def _edge_attrs(self) -> pl.DataFrame:
+        node_ids = self._current_node_ids()
+
+        _filter_func = _create_filter_func(self._edge_attr_comps)
+        neigh_funcs = [self._graph.rx_graph.out_edges]
+
+        if self._include_sources:
+            neigh_funcs.append(self._graph.rx_graph.in_edges)
+
+        # only edges are filtered return nodes that pass edge filters
+        sources = []
+        targets = []
+        data = {k: [] for k in self._graph.edge_attr_keys}
+        data[DEFAULT_ATTR_KEYS.EDGE_ID] = []
+
+        check_node_ids = None
+        if self._node_ids is not None and not (self._include_targets or self._include_sources):
+            check_node_ids = set(node_ids)
+
+        # TODO: at this point I think we are better creating a rx subgraph
+        # and using the filter method
+        for node_id in node_ids:
+            for nf in neigh_funcs:
+                for src, tgt, attr in nf(node_id):
+                    if _filter_func(attr):
+                        if check_node_ids is not None:
+                            if src not in check_node_ids or tgt not in check_node_ids:
+                                continue
+
+                        sources.append(src)
+                        targets.append(tgt)
+                        for k in data.keys():
+                            data[k].append(attr[k])
+
+        df = pl.DataFrame(data).with_columns(
+            pl.Series(sources, dtype=pl.Int64).alias(DEFAULT_ATTR_KEYS.EDGE_SOURCE),
+            pl.Series(targets, dtype=pl.Int64).alias(DEFAULT_ATTR_KEYS.EDGE_TARGET),
+        )
+        return df
+
+    @cache_method
+    def edge_ids(self) -> list[int]:
+        return self._edge_attrs()[DEFAULT_ATTR_KEYS.EDGE_ID].to_list()
+
+    @cache_method
+    def node_attrs(
+        self,
+        attr_keys: list[str] | None = None,
+        unpack: bool = False,
+    ) -> pl.DataFrame:
+        return self._graph._node_attrs_from_node_ids(
+            node_ids=self.node_ids(),
+            attr_keys=attr_keys,
+            unpack=unpack,
+        )
+
+    @cache_method
+    def edge_attrs(
+        self,
+        attr_keys: list[str] | None = None,
+        unpack: bool = False,
+    ) -> pl.DataFrame:
+        df = self._edge_attrs()
+        if df.is_empty():
+            return df
+
+        if attr_keys is None:
+            attr_keys = self._graph.edge_attr_keys
+
+        attr_keys = [
+            DEFAULT_ATTR_KEYS.EDGE_ID,
+            DEFAULT_ATTR_KEYS.EDGE_SOURCE,
+            DEFAULT_ATTR_KEYS.EDGE_TARGET,
+            *attr_keys,
+        ]
+        attr_keys = list(dict.fromkeys(attr_keys))
+
+        df = df.select(attr_keys)
+        if unpack:
+            df = unpack_array_attrs(df)
+        return df
+
+    @cache_method
+    def subgraph(
+        self,
+        node_attr_keys: Sequence[str] | str | None = None,
+        edge_attr_keys: Sequence[str] | str | None = None,
+    ) -> "GraphView":
+        from tracksdata.graph._graph_view import GraphView
+
+        node_ids = self.node_ids()
+
+        rx_graph, node_map = self._graph._rx_subgraph_with_nodemap(node_ids)
+        if self._edge_attr_comps:
+            _filter_func = _create_filter_func(self._edge_attr_comps)
+            for src, tgt, attr in rx_graph.weighted_edge_list():
+                if not _filter_func(attr):
+                    rx_graph.remove_edge(src, tgt)
+
+        graph_view = GraphView(
+            rx_graph,
+            node_map_to_root=dict(node_map.items()),
+            root=self._graph,
+        )
+
+        return graph_view
 
 
 class RustWorkXGraph(BaseGraph):
@@ -118,13 +294,13 @@ class RustWorkXGraph(BaseGraph):
     ```python
     from tracksdata.attrs import NodeAttr
 
-    node_ids = graph.filter_nodes_by_attrs(NodeAttr("t") == 0)
+    node_ids = graph.filter(NodeAttr("t") == 0).node_ids()
     ```
 
     Create subgraphs:
 
     ```python
-    subgraph = graph.subgraph(NodeAttr("t") == 0)
+    subgraph = graph.filter(NodeAttr("t") == 0).subgraph()
     ```
     """
 
@@ -145,10 +321,27 @@ class RustWorkXGraph(BaseGraph):
     def rx_graph(self) -> rx.PyDiGraph:
         return self._graph
 
+    def filter(
+        self,
+        *attr_filters: AttrComparison,
+        node_ids: Sequence[int] | None = None,
+        include_targets: bool = False,
+        include_sources: bool = False,
+    ) -> RXFilter:
+        return RXFilter(
+            *attr_filters,
+            graph=self,
+            node_ids=node_ids,
+            include_targets=include_targets,
+            include_sources=include_sources,
+        )
+
     def add_node(
         self,
         attrs: dict[str, Any],
         validate_keys: bool = True,
+        *args: Any,
+        **kwargs: Any,
     ) -> int:
         """
         Add a node to the graph at time t.
@@ -166,6 +359,10 @@ class RustWorkXGraph(BaseGraph):
             Whether to check if the attributes keys are valid.
             If False, the attributes keys will not be checked,
             useful to speed up the operation when doing bulk insertions.
+        *args: Any
+            Unused arguments, included for compatibility with the child classes.
+        **kwargs: Any
+            Unused keyword arguments, included for compatibility with the child classes.
         """
         # avoiding copying attributes on purpose, it could be a problem in the future
         if validate_keys:
@@ -178,7 +375,7 @@ class RustWorkXGraph(BaseGraph):
         self._time_to_nodes.setdefault(attrs["t"], []).append(node_id)
         return node_id
 
-    def bulk_add_nodes(self, nodes: list[dict[str, Any]]) -> list[int]:
+    def bulk_add_nodes(self, nodes: list[dict[str, Any]], *args: Any, **kwargs: Any) -> list[int]:
         """
         Faster method to add multiple nodes to the graph with less overhead and fewer checks.
 
@@ -188,6 +385,10 @@ class RustWorkXGraph(BaseGraph):
             The data of the nodes to be added.
             The keys of the data will be used as the attributes of the nodes.
             Must have "t" key.
+        *args: Any
+            Unused arguments, included for compatibility with the child classes.
+        **kwargs: Any
+            Unused keyword arguments, included for compatibility with the child classes.
 
         Returns
         -------
@@ -443,9 +644,10 @@ class RustWorkXGraph(BaseGraph):
             attr_keys,
         )
 
-    def filter_nodes_by_attrs(
+    def _filter_nodes_by_attrs(
         self,
         *attrs: AttrComparison,
+        node_ids: Sequence[int] | None = None,
     ) -> list[int]:
         """
         Filter nodes by attributes.
@@ -454,9 +656,9 @@ class RustWorkXGraph(BaseGraph):
         ----------
         *attrs : AttrComparison
             The attributes to filter by, for example:
-            ```python
-            graph.filter_nodes_by_attrs(Attr("t") == 0, Attr("label") == "A")
-            ```
+        node_ids : list[int] | None
+            The IDs of the nodes to include in the filter.
+            If None, all nodes are used.
 
         Returns
         -------
@@ -467,12 +669,21 @@ class RustWorkXGraph(BaseGraph):
         node_map = None
         # entire graph
         attrs, time = _pop_time_eq(attrs)
+        selected_nodes = None
 
         if time is not None:
             selected_nodes = self._time_to_nodes.get(time, [])
+
+            if node_ids is not None:
+                selected_nodes = np.intersect1d(selected_nodes, node_ids).tolist()
+
             if len(attrs) == 0:
                 return selected_nodes
 
+        elif node_ids is not None:
+            selected_nodes = node_ids
+
+        if selected_nodes is not None:
             # subgraph of selected nodes
             rx_graph, node_map = rx_graph.subgraph_with_nodemap(selected_nodes)
 
@@ -494,76 +705,6 @@ class RustWorkXGraph(BaseGraph):
         Get the IDs of all edges in the graph.
         """
         return [int(i) for i in self.rx_graph.edge_indices()]
-
-    def subgraph(
-        self,
-        *attr_filters: AttrComparison,
-        node_ids: Sequence[int] | None = None,
-        node_attr_keys: Sequence[str] | str | None = None,
-        edge_attr_keys: Sequence[str] | str | None = None,
-    ) -> "GraphView":
-        """
-        Create a subgraph from the graph from the given node IDs
-        or attributes' filters.
-
-        Node IDs or a single attribute filter can be used to create a subgraph.
-
-        Parameters
-        ----------
-        *attr_filters : AttrComparison
-            The attributes to filter the nodes and edges by.
-        node_ids : Sequence[int] | None
-            The IDs of the nodes to include in the subgraph.
-        node_attr_keys : Sequence[str] | str | None
-            The attribute keys to include in the subgraph.
-        edge_attr_keys : Sequence[str] | str | None
-            The attribute keys to include in the subgraph.
-
-        Returns
-        -------
-        RustWorkXGraph
-            A new graph with the specified nodes.
-        """
-        from tracksdata.graph._graph_view import GraphView
-
-        node_attr_comps, edge_attr_comps = split_attr_comps(attr_filters)
-        self._validate_subgraph_args(node_ids, node_attr_comps, edge_attr_comps)
-
-        if node_attr_comps:
-            filtered_node_ids = self.filter_nodes_by_attrs(*node_attr_comps)
-            if node_ids is not None:
-                node_ids = np.intersect1d(node_ids, filtered_node_ids).tolist()
-            else:
-                node_ids = filtered_node_ids
-
-        if node_ids is None and edge_attr_comps:
-            edges_df = self.edge_attrs(node_ids=node_ids, attr_keys=attr_comps_to_strs(edge_attr_comps))
-            mask = polars_reduce_attr_comps(edges_df, edge_attr_comps, operator.and_)
-            node_ids = np.unique(
-                edges_df.filter(mask)
-                .select(
-                    DEFAULT_ATTR_KEYS.EDGE_SOURCE,
-                    DEFAULT_ATTR_KEYS.EDGE_TARGET,
-                )
-                .to_numpy()
-            )
-
-        rx_graph, node_map = self.rx_graph.subgraph_with_nodemap(node_ids)
-
-        if edge_attr_comps:
-            LOG.info("Removing edges without attributes %s", edge_attr_comps)
-            _filter_func = _create_filter_func(edge_attr_comps)
-            for source, target, edge_attr in rx_graph.weighted_edge_list():
-                if not _filter_func(edge_attr):
-                    rx_graph.remove_edge(source, target)
-
-        graph_view = GraphView(
-            rx_graph=rx_graph,
-            node_map_to_root=dict(node_map.items()),
-            root=self,
-        )
-
-        return graph_view
 
     def time_points(self) -> list[int]:
         """
@@ -624,10 +765,10 @@ class RustWorkXGraph(BaseGraph):
         for _, _, edge_attr in self.rx_graph.weighted_edge_list():
             edge_attr[key] = default_value
 
-    def node_attrs(
+    def _node_attrs_from_node_ids(
         self,
         *,
-        node_ids: Sequence[int] | None = None,
+        node_ids: list[int] | None = None,
         attr_keys: Sequence[str] | str | None = None,
         unpack: bool = False,
     ) -> pl.DataFrame:
@@ -691,12 +832,21 @@ class RustWorkXGraph(BaseGraph):
 
         return df
 
+    def node_attrs(
+        self,
+        *,
+        attr_keys: Sequence[str] | str | None = None,
+        unpack: bool = False,
+    ) -> pl.DataFrame:
+        """
+        Get the attributes of the nodes as a polars DataFrame.
+        """
+        return self._node_attrs_from_node_ids(attr_keys=attr_keys, unpack=unpack)
+
     def edge_attrs(
         self,
         *,
-        node_ids: list[int] | None = None,
         attr_keys: Sequence[str] | str | None = None,
-        include_targets: bool = False,
         unpack: bool = False,
     ) -> pl.DataFrame:
         """
@@ -704,15 +854,9 @@ class RustWorkXGraph(BaseGraph):
 
         Parameters
         ----------
-        node_ids : list[int] | None
-            The IDs of the subgraph to get the edge attributesfor.
-            If None, all edges of the graph are used.
         attr_keys : Sequence[str] | str | None
             The attribute keys to get.
             If None, all attributesare used.
-        include_targets : bool
-            Whether to include edges out-going from the given node_ids even
-            if the target node is not in the given node_ids.
         unpack : bool
             Whether to unpack array attributesinto multiple scalar attributes.
         """
@@ -722,18 +866,7 @@ class RustWorkXGraph(BaseGraph):
         attr_keys = [DEFAULT_ATTR_KEYS.EDGE_ID, *attr_keys]
         attr_keys = list(dict.fromkeys(attr_keys))
 
-        if node_ids is None:
-            rx_graph = self.rx_graph
-            node_map = None
-        else:
-            if include_targets:
-                selected_nodes = set(node_ids)
-                for node_id in node_ids:
-                    neighbors = self.rx_graph.neighbors(node_id)
-                    selected_nodes.update(neighbors)
-                node_ids = list(selected_nodes)
-
-            rx_graph, node_map = self.rx_graph.subgraph_with_nodemap(node_ids)
+        rx_graph = self.rx_graph
 
         edge_map = rx_graph.edge_index_map()
         if len(edge_map) == 0:
@@ -749,10 +882,6 @@ class RustWorkXGraph(BaseGraph):
             )
 
         source, target, data = zip(*edge_map.values(), strict=False)
-
-        if node_map is not None:
-            source = [node_map[s] for s in source]
-            target = [node_map[t] for t in target]
 
         columns = {key: [] for key in attr_keys}
 
@@ -987,3 +1116,398 @@ class RustWorkXGraph(BaseGraph):
         graph_view = GraphView(rx_graph, node_map_to_root=node_map_to_root, root=self)
 
         return graph_view
+
+    def _rx_subgraph_with_nodemap(
+        self,
+        node_ids: Sequence[int] | None = None,
+    ) -> tuple[rx.PyDiGraph, rx.NodeMap]:
+        """
+        Get a subgraph of the graph.
+
+        Parameters
+        ----------
+        node_ids : Sequence[int] | None
+            The node ids to include in the subgraph.
+
+        Returns
+        -------
+        tuple[rx.PyDiGraph, rx.NodeMap]
+            The subgraph and the node map.
+        """
+        rx_graph, node_map = self.rx_graph.subgraph_with_nodemap(node_ids)
+        return rx_graph, node_map
+
+
+class IndexedRXGraph(RustWorkXGraph, MappedGraphMixin):
+    """
+    A graph that is indexed by node ids.
+
+    This graph is useful when you have a graph with arbitrary node ids.
+
+    Parameters
+    ----------
+    rx_graph : rx.PyDiGraph | None
+        The rustworkx graph to index.
+    node_id_map : dict[int, int] | None
+        A map of world ids to graph ids, must be provided if `rx_graph` is provided.
+
+    Examples
+    --------
+    ```python
+    graph = IndexedRXGraph(rx_graph=rx_graph, node_id_map=node_id_map)
+    ...
+    graph = IndexedRXGraph()
+    graph.add_node({"t": 0}, index=1355)
+    ```
+    """
+
+    def __init__(
+        self,
+        rx_graph: rx.PyDiGraph | None = None,
+        node_id_map: dict[int, int] | None = None,
+    ) -> None:
+        if rx_graph is not None and node_id_map is None:
+            raise ValueError("`node_id_map` must be provided when `rx_graph` is provided")
+
+        if rx_graph is None and node_id_map is not None:
+            raise ValueError("`rx_graph` must be provided when `node_id_map` is provided")
+
+        # Initialize RustWorkXGraph
+        RustWorkXGraph.__init__(self, rx_graph)
+
+        # Initialize MappedGraphMixin with inverted mapping (external -> local)
+        inverted_map = None
+        if node_id_map is not None:
+            # Validate for duplicate values before inverting
+            # This will raise bidict.ValueDuplicationError if there are duplicates
+            import bidict
+
+            bidict.bidict(node_id_map)
+            inverted_map = {v: k for k, v in node_id_map.items()}
+        MappedGraphMixin.__init__(self, inverted_map)
+
+        # ID mapping handled by MappedGraphMixin
+
+    def add_node(
+        self,
+        attrs: dict[str, Any],
+        validate_keys: bool = True,
+        index: int | None = None,
+    ) -> int:
+        """
+        Add a node to the graph.
+
+        Parameters
+        ----------
+        attrs : dict[str, Any]
+            The attributes of the node.
+        validate_keys : bool
+            Whether to validate the keys of the attributes.
+        index : int | None
+            The index of the node. If None, the node id will be used.
+            This might cause issues if the node id is not unique.
+
+        Returns
+        -------
+        int
+            The index of the node.
+        """
+        node_id = super().add_node(attrs, validate_keys)
+        if index is None:
+            index = node_id
+        # Add mapping using mixin
+        self._add_id_mapping(node_id, index)
+        return index
+
+    def bulk_add_nodes(
+        self,
+        nodes: list[dict[str, Any]],
+        indices: list[int] | None = None,
+    ) -> list[int]:
+        """
+        Add multiple nodes to the graph.
+
+        Parameters
+        ----------
+        nodes : list[dict[str, Any]]
+            The attributes of the nodes.
+        indices : list[int] | None
+            The indices of the nodes. If None, the node ids will be used.
+            This might cause issues if the node ids are not unique.
+
+        Returns
+        -------
+        list[int]
+            The indices of the nodes.
+        """
+        graph_ids = super().bulk_add_nodes(nodes)
+
+        if indices is None:
+            indices = graph_ids
+
+        self._add_id_mappings(list(zip(graph_ids, indices, strict=True)))
+
+        return indices
+
+    def _rx_subgraph_with_nodemap(
+        self,
+        node_ids: Sequence[int] | None = None,
+    ) -> tuple[rx.PyDiGraph, rx.NodeMap]:
+        """
+        Get a subgraph of the graph.
+
+        Parameters
+        ----------
+        node_ids : Sequence[int] | None
+            The node ids to include in the subgraph.
+
+        Returns
+        -------
+        tuple[rx.PyDiGraph, rx.NodeMap]
+            The subgraph and the node map.
+        """
+        # TODO: fix this, too many back and forth between world and graph ids within FilterRX
+        node_ids = self._get_local_ids() if node_ids is None else self._map_to_local(node_ids)
+        rx_graph, node_map = super()._rx_subgraph_with_nodemap(node_ids)
+        node_map = {k: self._map_to_external(v) for k, v in node_map.items()}
+        return rx_graph, node_map
+
+    def node_ids(self) -> list[int]:
+        """
+        Get the node ids of the graph.
+
+        Returns
+        -------
+        list[int]
+            The node ids of the graph.
+        """
+        return self._get_external_ids()
+
+    def _node_attrs_from_node_ids(
+        self,
+        *,
+        node_ids: list[int] | None = None,
+        attr_keys: Sequence[str] | str | None = None,
+        unpack: bool = False,
+    ) -> pl.DataFrame:
+        node_ids = self._get_local_ids() if node_ids is None else self._map_to_local(node_ids)
+        df = super()._node_attrs_from_node_ids(node_ids=node_ids, attr_keys=attr_keys, unpack=unpack)
+        df = self._map_df_to_external(df, [DEFAULT_ATTR_KEYS.NODE_ID])
+        return df
+
+    def node_attrs(
+        self,
+        *,
+        node_ids: Sequence[int] | None = None,
+        attr_keys: Sequence[str] | str | None = None,
+        unpack: bool = False,
+    ) -> pl.DataFrame:
+        """
+        Get the node attributes of the graph.
+
+        Parameters
+        ----------
+        node_ids : Sequence[int] | None
+            The node ids to include in the subgraph.
+        attr_keys : Sequence[str] | str | None
+            The attributes to include in the subgraph.
+        unpack : bool
+            Whether to unpack the attributes.
+
+        Returns
+        -------
+        pl.DataFrame
+            The node attributes of the graph.
+        """
+        node_ids = self._get_local_ids() if node_ids is None else self._map_to_local(node_ids)
+        df = super()._node_attrs_from_node_ids(node_ids=node_ids, attr_keys=attr_keys, unpack=unpack)
+        df = self._map_df_to_external(df, [DEFAULT_ATTR_KEYS.NODE_ID])
+        return df
+
+    def edge_attrs(
+        self,
+        *,
+        attr_keys: Sequence[str] | str | None = None,
+        unpack: bool = False,
+    ) -> pl.DataFrame:
+        """
+        Get the edge attributes of the graph.
+
+        Parameters
+        ----------
+        attr_keys : Sequence[str] | str | None
+            The attributes to include in the subgraph.
+        unpack : bool
+            Whether to unpack the attributes.
+
+        Returns
+        -------
+        pl.DataFrame
+            The edge attributes of the graph.
+        """
+        node_ids = self._get_local_ids()
+        df = super().filter(node_ids=node_ids).edge_attrs(attr_keys=attr_keys, unpack=unpack)
+        df = self._map_df_to_external(df, [DEFAULT_ATTR_KEYS.EDGE_SOURCE, DEFAULT_ATTR_KEYS.EDGE_TARGET])
+        return df
+
+    def in_degree(self, node_ids: list[int] | int | None = None) -> list[int] | int:
+        """
+        Get the in degree of the graph.
+
+        Parameters
+        ----------
+        node_ids : list[int] | int | None
+            The node ids to include in the subgraph.
+
+        Returns
+        -------
+        list[int] | int
+            The in degree of the graph.
+        """
+        node_ids = self._get_local_ids() if node_ids is None else self._map_to_local(node_ids)
+        return super().in_degree(node_ids)
+
+    def out_degree(self, node_ids: list[int] | int | None = None) -> list[int] | int:
+        """
+        Get the out degree of the graph.
+
+        Parameters
+        ----------
+        node_ids : list[int] | int | None
+            The node ids to include in the subgraph.
+
+        Returns
+        -------
+        list[int] | int
+            The out degree of the graph.
+        """
+        node_ids = self._get_local_ids() if node_ids is None else self._map_to_local(node_ids)
+        return super().out_degree(node_ids)
+
+    def add_edge(
+        self,
+        source_id: int,
+        target_id: int,
+        attrs: dict[str, Any],
+        validate_keys: bool = True,
+    ) -> int:
+        """
+        Add an edge to the graph.
+
+        Parameters
+        ----------
+        source_id : int
+            The source node id.
+        target_id : int
+            The target node id.
+        attrs : dict[str, Any]
+            The attributes of the edge.
+        validate_keys : bool
+            Whether to validate the keys of the attributes.
+
+        Returns
+        -------
+        int
+            The edge id.
+        """
+        source_id = self._map_to_local(source_id)
+        target_id = self._map_to_local(target_id)
+        return super().add_edge(source_id, target_id, attrs, validate_keys)
+
+    def add_overlap(self, source_id: int, target_id: int) -> int:
+        """
+        Add an overlap to the graph.
+
+        Parameters
+        ----------
+        source_id : int
+            The source node id.
+        target_id : int
+            The target node id.
+
+        Returns
+        -------
+        int
+            The overlap id.
+        """
+        source_id = self._map_to_local(source_id)
+        target_id = self._map_to_local(target_id)
+        return super().add_overlap(source_id, target_id)
+
+    def overlaps(self, node_ids: list[int] | int | None = None) -> list[list[int, 2]]:
+        """
+        Get the overlaps of the graph.
+
+        Parameters
+        ----------
+        node_ids : list[int] | int | None
+            The node ids to include in the subgraph.
+
+        Returns
+        -------
+        list[list[int, 2]]
+            The overlaps of the graph.
+        """
+        try:
+            node_ids = self._get_local_ids() if node_ids is None else self._map_to_local(node_ids)
+        except KeyError:
+            LOG.warning(f"`node_ids` {node_ids} not found in index map.")
+            return []
+        overlaps = super().overlaps(node_ids)
+        # Convert each pair of node IDs in the overlaps list
+        if len(overlaps) > 0:
+            overlaps = self._vectorized_map_to_external(np.asarray(overlaps)).tolist()
+        return overlaps
+
+    def _get_neighbors(
+        self,
+        neighbors_func: Callable[[rx.PyDiGraph, int], rx.NodeIndices],
+        node_ids: list[int] | int | None = None,
+        attr_keys: Sequence[str] | str | None = None,
+    ) -> dict[int, pl.DataFrame] | pl.DataFrame:
+        node_ids = self._get_local_ids() if node_ids is None else self._map_to_local(node_ids)
+        dfs = super()._get_neighbors(neighbors_func, node_ids, attr_keys)
+        if isinstance(dfs, pl.DataFrame):
+            dfs = self._map_df_to_external(dfs, [DEFAULT_ATTR_KEYS.NODE_ID])
+        else:
+            dfs = {
+                self._map_to_external(node_id): self._map_df_to_external(df, [DEFAULT_ATTR_KEYS.NODE_ID])
+                for node_id, df in dfs.items()
+            }
+        return dfs
+
+    def update_node_attrs(
+        self,
+        *,
+        attrs: dict[str, Any],
+        node_ids: Sequence[int] | None = None,
+    ) -> None:
+        """
+        Update the node attributes of the graph.
+
+        Parameters
+        ----------
+        attrs : dict[str, Any]
+            The attributes to update.
+        node_ids : Sequence[int] | None
+            The node ids to update.
+        """
+        node_ids = self._get_local_ids() if node_ids is None else self._map_to_local(node_ids)
+        super().update_node_attrs(attrs=attrs, node_ids=node_ids)
+
+    def filter(
+        self,
+        *attr_filters: AttrComparison,
+        node_ids: Sequence[int] | None = None,
+        include_targets: bool = False,
+        include_sources: bool = False,
+    ) -> RXFilter:
+        from tracksdata.graph.filters._indexed_filter import IndexRXFilter
+
+        return IndexRXFilter(
+            *attr_filters,
+            graph=self,
+            node_ids=None if node_ids is None else self._map_to_local(node_ids),
+            include_targets=include_targets,
+            include_sources=include_sources,
+        )
