@@ -64,6 +64,10 @@ class GraphArrayView(BaseReadOnlyArray):
         The attribute key to view as an array.
     offset : int | np.ndarray, optional
         The offset to apply to the array.
+    chunk_shape : tuple[int] | None, optional
+        The chunk shape for the array. If None, the default chunk size is used.
+    max_buffers : int, optional
+        The maximum number of buffers to keep in the cache for the array.
     """
 
     def __init__(
@@ -97,18 +101,20 @@ class GraphArrayView(BaseReadOnlyArray):
         self.original_shape = shape
         if chunk_shape is None:
             chunk_shape = tuple([DEFAULT_CHUNK_SIZE] * (len(shape) - 1))  # Default chunk shape
+        self.chunk_shape = chunk_shape
         self.max_buffers = max_buffers
-        self.cache = NDChunkCache(
-            compute_func=self._fill_array,
-            shape=shape[1:],
-            chunk_shape=chunk_shape,
-            max_buffers=max_buffers,
-            dtype=np.dtype(self._dtype),
+        self._cache = NDChunkCache(
+                compute_func=self._fill_array,
+                shape=self.shape[1:],
+                chunk_shape=self.chunk_shape,
+                max_buffers=self.max_buffers,
+                dtype=self.dtype,
         )
         self._indices = tuple(slice(0, s) for s in shape)
 
     @property
     def shape(self) -> tuple[int, ...]:
+        """Returns the shape of the array."""
         def _get_size(ind: ArrayIndex, size: int) -> int | None:
             if isinstance(ind, slice):
                 return len(range(ind.start or 0, ind.stop or size))
@@ -128,21 +134,28 @@ class GraphArrayView(BaseReadOnlyArray):
 
     @property
     def dtype(self) -> np.dtype:
+        """Returns the dtype of the array."""
         return self._dtype
 
     def __getitem__(self, index: ArrayIndex) -> "GraphArrayView":
-        """Get the sliced view of the array.
+        """Return a sliced view of the GraphArrayView.
 
-        Args:
-            index (ArrayIndex): _description_
+        Parameters
+        ----------
+        index : ArrayIndex
+            The indices to slice the array.
 
-        Returns:
-            ArrayLike: _description_
+        Returns
+        -------
+        GraphArrayView
+            A new GraphArrayView object with updated indices.
         """
         obj = copy(self)
         normalized_index = []
         if not isinstance(index, tuple):
             index = (index,)
+        if None in index:
+            raise ValueError("None is not allowed for GraphArrayView indexing.")
         jj = 0
         for oi in self._indices:
             if np.isscalar(oi):
@@ -155,9 +168,20 @@ class GraphArrayView(BaseReadOnlyArray):
                 jj += 1
 
         obj._indices = tuple(merge_indices(i1, i2) for i1, i2 in zip(self._indices, normalized_index, strict=False))
+        obj._cache = None  # Reset the cache to force recomputation
         return obj
 
     def __array__(self, dtype=None, copy=None) -> np.ndarray:
+        """Convert the GraphArrayView to a numpy array.
+
+        Parameters
+        ----------
+        dtype : np.dtype, optional
+            The desired dtype of the output array. If None, the dtype of the GraphArrayView is used.
+        copy : bool, optional
+            This parameter is ignored, as the GraphArrayView is read-only.
+        """
+
         time = self._indices[0]
         volume_slicing = self._indices[1:]
         if isinstance(time, Sequence):  # if all time points are requested
@@ -167,7 +191,7 @@ class GraphArrayView(BaseReadOnlyArray):
                     self.__getitem__((t, *volume_slicing)).__array__()
                     for t in range(*time.indices(self.original_shape[0]))
                 ]
-            )
+            ).astype(dtype or self.dtype)
         else:
             try:
                 time = time.item()  # convert from numpy.int to int
@@ -177,7 +201,7 @@ class GraphArrayView(BaseReadOnlyArray):
         return self.cache.get(
             time=time,
             volume_slicing=volume_slicing,
-        )
+        ).astype(dtype or self.dtype)
 
     def _fill_array(self, time: int, volume_slicing: ArrayIndex, buffer: np.ndarray) -> np.ndarray:
         # TODO handling the slices for volume_slicing
