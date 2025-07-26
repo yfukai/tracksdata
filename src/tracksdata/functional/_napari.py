@@ -36,6 +36,8 @@ def to_napari_format(
     solution_key: str | None = DEFAULT_ATTR_KEYS.SOLUTION,
     output_track_id_key: str = DEFAULT_ATTR_KEYS.TRACK_ID,
     mask_key: str | None = None,
+    chunk_shape: tuple[int] | None = None,
+    max_buffers: int = 32,
 ) -> (
     tuple[
         pl.DataFrame,
@@ -114,6 +116,8 @@ def to_napari_format(
             solution_graph,
             shape,
             attr_key=output_track_id_key,
+            chunk_shape=chunk_shape,
+            max_buffers=max_buffers,
         )
 
         return tracks_data, dict_graph, array_view

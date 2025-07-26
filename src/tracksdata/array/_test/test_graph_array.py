@@ -4,7 +4,7 @@ from pytest import fixture
 
 from tracksdata.nodes import RegionPropsNodes
 from tracksdata.array import GraphArrayView
-from tracksdata.array._graph_array import DEFAULT_DTYPE
+from tracksdata.array._graph_array import DEFAULT_DTYPE, merge_indices
 from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.graph import RustWorkXGraph
 from tracksdata.nodes._mask import Mask
@@ -12,6 +12,17 @@ from tracksdata.nodes._mask import Mask
 # NOTE: this could be generic test for all array backends
 # when more slicing operations are implemented we could test as in:
 #  - https://github.com/royerlab/ultrack/blob/main/ultrack/utils/_test/test_utils_array.py
+
+
+def test_merge_indices() -> None:
+    assert merge_indices(slice(3, 20), slice(5, 15)) == slice(8, 18, 1)
+    assert merge_indices(slice(3, 20), slice(5, None)) == slice(8, 20, 1)
+    assert merge_indices(slice(3, 20), slice(None, 15)) == slice(3, 18, 1)
+    assert merge_indices(slice(3, 20), 4) == 7
+    assert merge_indices(slice(3, 20, 3), 2) == 9
+    assert merge_indices(slice(3, 20, 3), slice(2, 6, 2)) == slice(9, 21, 6)
+    assert merge_indices(slice(3, 20), [4, 5]) == [7, 8]
+    assert merge_indices((5,6,7,8,9,10),[3, 5]) == [8, 10]
 
 
 def test_graph_array_view_init() -> None:
@@ -52,7 +63,7 @@ def test_graph_array_view_getitem_empty_time() -> None:
 
     # Should return zeros with correct shape
     assert result.shape == (100, 100)
-    assert np.all(result == 0)
+    assert np.all(np.asarray(result) == 0)
     assert result.dtype == DEFAULT_DTYPE
 
 
@@ -81,14 +92,14 @@ def test_graph_array_view_getitem_with_nodes() -> None:
 
     # Check that the mask was painted with the label value
     # The mask should be painted at the bbox location
-    assert result[10, 20] == 5  # Top-left of mask
-    assert result[10, 21] == 5  # Top-right of mask
-    assert result[11, 20] == 5  # Bottom-left of mask
-    assert result[11, 21] == 0  # Bottom-right should be 0 (mask is False there)
+    assert np.asarray(result)[10, 20] == 5  # Top-left of mask
+    assert np.asarray(result)[10, 21] == 5  # Top-right of mask
+    assert np.asarray(result)[11, 20] == 5  # Bottom-left of mask
+    assert np.asarray(result)[11, 21] == 0  # Bottom-right should be 0 (mask is False there)
 
     # Other areas should be 0
-    assert result[0, 0] == 0
-    assert result[50, 50] == 0
+    assert np.asarray(result)[0, 0] == 0
+    assert np.asarray(result)[50, 50] == 0
 
 
 def test_graph_array_view_getitem_multiple_nodes() -> None:
@@ -117,13 +128,13 @@ def test_graph_array_view_getitem_multiple_nodes() -> None:
     result = array_view[0]
 
     # Check that both masks were painted with their respective labels
-    assert result[10, 20] == 3
-    assert result[10, 21] == 3
-    assert result[30, 40] == 7
+    assert np.asarray(result)[10, 20] == 3
+    assert np.asarray(result)[10, 21] == 3
+    assert np.asarray(result)[30, 40] == 7
 
     # Other areas should be 0
-    assert result[0, 0] == 0
-    assert result[50, 50] == 0
+    assert np.asarray(result)[0, 0] == 0
+    assert np.asarray(result)[50, 50] == 0
 
 
 def test_graph_array_view_getitem_boolean_dtype() -> None:
@@ -148,8 +159,8 @@ def test_graph_array_view_getitem_boolean_dtype() -> None:
 
     # Boolean values should be converted to uint8 for napari
     assert result.dtype == np.uint8
-    assert result[10, 20] == 1  # True -> 1
-    assert result[0, 0] == 0  # False -> 0
+    assert np.asarray(result)[10, 20] == 1  # True -> 1
+    assert np.asarray(result)[0, 0] == 0  # False -> 0
 
 
 def test_graph_array_view_dtype_inference() -> None:
@@ -179,17 +190,18 @@ def test_graph_array_view_dtype_inference() -> None:
 @fixture(params=[(10, 100, 100), (10, 100, 100, 100)])
 def multi_node_graph_from_image(request) -> GraphArrayView:
     """Fixture to create a graph with multiple nodes for testing."""
-    dims = request.param
-    label = np.zeros(dims, dtype=np.uint8)
-    for i in range(dims[0]):
+    shape = request.param
+    label = np.zeros(shape, dtype=np.uint8)
+    for i in range(shape[0]):
         label[i, 10:20, 10:20] = i + 1
     graph = RustWorkXGraph()
     nodes_operator = RegionPropsNodes(extra_properties=["label"])
     nodes_operator.add_nodes(graph, labels=label)
-    return GraphArrayView(graph=graph, shape=dims, attr_key="label"), label
+    return GraphArrayView(graph=graph, shape=shape, attr_key="label"), label
 
 def test_graph_array_view_equal(multi_node_graph_from_image) -> None:
     array_view, label = multi_node_graph_from_image
+    assert array_view.shape == label.shape
     for t in range(array_view.shape[0]):
         assert np.array_equal(array_view[t], label[t])
     assert array_view.ndim == label.ndim

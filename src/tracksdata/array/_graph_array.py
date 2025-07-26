@@ -1,5 +1,7 @@
 import numpy as np
 from numpy.typing import ArrayLike
+from collections.abc import Sequence
+from copy import copy
 
 from tracksdata.array._base_array import ArrayIndex, BaseReadOnlyArray
 from tracksdata.attrs import NodeAttr
@@ -13,6 +15,32 @@ import numpy as np
 
 DEFAULT_CHUNK_SIZE = 128
 DEFAULT_DTYPE = np.int32
+
+def merge_indices(slicing1: ArrayIndex | None, slicing2: ArrayIndex | None) -> slice:
+    """Merge two array indices into a single slice.
+    Example:
+        merge_indices(slice(3, 20), slice(5, 15)) == slice(8, 18)
+        merge_indices(slice(3, 20), slice(5, None)) == slice(8, 20)
+        merge_indices(slice(3, 20), slice(None, 15)) == slice(3, 18)
+        merge_indices(slice(3, 20), 4) == 7
+        merge_indices(slice(3, 20), (4, 5)) == (7, 8)
+        merge_indices((5,6,7,8,9,10),(3,5)) == (8, 10)
+    """
+    if slicing2 is None:
+        return slicing1
+    if isinstance(slicing1, slice):
+        r = range(max(slicing1.start, slicing1.stop))[slicing1]
+        if isinstance(slicing2, Sequence):
+            return [r[i] for i in slicing2]
+        else:
+            r = r[slicing2]
+            if isinstance(r, range):
+                return slice(r.start, r.stop, r.step)
+            else:
+                return r
+    elif isinstance(slicing1, Sequence):
+        return [slicing1[i] for i in slicing2]
+    raise ValueError(f"Cannot merge indices {slicing1} and {slicing2}. slicing1 must be a slice or python check indexable.")
 
 class GraphArrayView(BaseReadOnlyArray):
     """
@@ -49,13 +77,8 @@ class GraphArrayView(BaseReadOnlyArray):
             raise ValueError(f"Attribute key '{attr_key}' not found in graph. Expected '{graph.node_attr_keys}'")
 
         self.graph = graph
-        self._shape = shape
         self._attr_key = attr_key
         self._offset = offset
-        if chunk_shape is None:
-            chunk_shape = tuple([DEFAULT_CHUNK_SIZE]*(len(shape) - 1))  # Default chunk shape
-        self.max_buffers = max_buffers
-
         # Infer the dtype from the graph's attribute
         # TODO improve performance
         df = graph.node_attrs(attr_keys=[self._attr_key])
@@ -69,6 +92,10 @@ class GraphArrayView(BaseReadOnlyArray):
 
         self._dtype = dtype
 
+        self.original_shape = shape
+        if chunk_shape is None:
+            chunk_shape = tuple([DEFAULT_CHUNK_SIZE]*(len(shape) - 1))  # Default chunk shape
+        self.max_buffers = max_buffers
         self.cache = NDChunkCache(
             compute_func=self._fill_array,
             shape=shape[1:],
@@ -76,28 +103,67 @@ class GraphArrayView(BaseReadOnlyArray):
             max_buffers=max_buffers,
             dtype=np.dtype(self._dtype),
         )
+        self._indices = tuple(slice(0, s) for s in shape)
 
     @property
     def shape(self) -> tuple[int, ...]:
-        return self._shape
+        def _get_size(ind: ArrayIndex, size: int) -> int | None:
+            if isinstance(ind, slice):
+                return len(range(ind.start or 0, ind.stop or size))
+            elif isinstance(ind, Sequence):
+                return len(ind)
+            else:
+                assert np.isscalar(ind), f"Expected scalar or slice, got {type(ind)}"
+                return None
+
+        shape = [_get_size(ind, os) for ind, os in zip(self._indices, self.original_shape)]
+        return tuple(s for s in shape if s is not None)
+
+    @property
+    def ndim(self) -> int:
+        """Returns the number of dimensions of the array."""
+        return len(self.shape)
 
     @property
     def dtype(self) -> np.dtype:
         return self._dtype
 
-    def __getitem__(self, index: ArrayIndex) -> ArrayLike:
-        if isinstance(index, tuple):
-            time, volume_slicing = index[0], index[1:]
-        else:  # if only 1 (time) is provided
-            time = index
-            volume_slicing = tuple()
+    def __getitem__(self, index: ArrayIndex) -> "GraphArrayView":
+        """Get the sliced view of the array.
 
-        if isinstance(time, slice):  # if all time points are requested
+        Args:
+            index (ArrayIndex): _description_
+
+        Returns:
+            ArrayLike: _description_
+        """
+        obj = copy(self)
+        normalized_index = []
+        if not isinstance(index, tuple):
+            index = (index,)
+        jj = 0
+        for oi in self._indices:
+            if np.isscalar(oi):
+                normalized_index.append(None)
+            else:
+                if len(index) <= jj:
+                    normalized_index.append(slice(None))
+                else:
+                    normalized_index.append(index[jj])
+                jj += 1
+
+        obj._indices = tuple(merge_indices(i1, i2) for i1, i2 in zip(self._indices, normalized_index))
+        return obj
+
+    def __array__(self, dtype=None, copy=None) -> np.ndarray:
+        time = self._indices[0]
+        volume_slicing = self._indices[1:]
+        if isinstance(time, Sequence):  # if all time points are requested
             # XXX could be dask? should be benchmarked
             return np.stack(
                 [
-                    self.__getitem__((t,) + volume_slicing).copy()
-                    for t in range(*time.indices(self.shape[0]))
+                    self.__getitem__((t,) + volume_slicing).__array__()
+                    for t in range(*time.indices(self.original_shape[0]))
                 ]
             )
         else:
@@ -105,20 +171,7 @@ class GraphArrayView(BaseReadOnlyArray):
                 time = time.item()  # convert from numpy.int to int
             except AttributeError:
                 time = time
-
-        # Extend the volume_slicing by filling in missing dimensions by slice(None)
-        if len(volume_slicing) < self.ndim - 1:
-            volume_slicing = volume_slicing + (slice(None),) * (self.ndim - 1 - len(volume_slicing))
-
-        volume_slicing = list(volume_slicing)
-        for i, slc in enumerate(volume_slicing):
-            if isinstance(slc, slice):
-                start = slc.start if slc.start is not None else 0
-                stop = slc.stop if slc.stop is not None else self.shape[i + 1]
-                step = slc.step if slc.step is not None else 1
-                volume_slicing[i] = slice(start, stop, step)
     
-        volume_slicing = tuple(volume_slicing)
         return self.cache.get(
             time=time,
             volume_slicing=volume_slicing,
