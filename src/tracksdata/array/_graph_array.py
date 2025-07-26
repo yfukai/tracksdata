@@ -55,7 +55,7 @@ class GraphArrayView(BaseReadOnlyArray):
         self.max_buffers = max_buffers
         self.cache = NDChunkCache(
             compute_func=self._fill_array,
-            shape=shape,
+            shape=shape[1:],
             chunk_shape=chunk_shape,
             max_buffers=max_buffers,
             dtype=np.dtype(self._dtype),
@@ -90,9 +90,22 @@ class GraphArrayView(BaseReadOnlyArray):
             except AttributeError:
                 time = time
 
+        # Extend the volume_slicing by filling in missing dimensions by slice(None)
+        if len(volume_slicing) < self.ndim - 1:
+            volume_slicing = volume_slicing + (slice(None),) * (self.ndim - 1 - len(volume_slicing))
+
+        volume_slicing = list(volume_slicing)
+        for i, slc in enumerate(volume_slicing):
+            if isinstance(slc, slice):
+                start = slc.start if slc.start is not None else 0
+                stop = slc.stop if slc.stop is not None else self.shape[i + 1]
+                step = slc.step if slc.step is not None else 1
+                volume_slicing[i] = slice(start, stop, step)
+    
+        volume_slicing = tuple(volume_slicing)
         return self.cache.get(
             time=time,
-            volume_slices=tuple(volume_slicing),
+            volume_slicing=volume_slicing,
         )
 
     def _fill_array(self, time: int, volume_slicing: ArrayIndex, buffer: np.ndarray) -> np.ndarray:

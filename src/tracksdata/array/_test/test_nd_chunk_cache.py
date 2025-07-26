@@ -14,17 +14,17 @@ def test_nd_chunk_cache_checks_dim():
     cache = NDChunkCache(
         compute_func=simple_compute_func,
         shape=(256, 256, 256),
-        chunk_size=(64, 64, 64),
+        chunk_shape=(64, 64, 64),
         max_buffers=2,
     )
     assert cache.ndim == 3
     assert cache.shape == (256, 256, 256)
-    assert cache.chunk_size == (64, 64, 64)
+    assert cache.chunk_shape == (64, 64, 64)
     with pytest.raises(ValueError):
         NDChunkCache(
             compute_func=simple_compute_func,
             shape=(256, 256),
-            chunk_size=(64, 64, 64),
+            chunk_shape=(64, 64, 64),
             max_buffers=2,
         )
 
@@ -34,7 +34,7 @@ def test_nd_chunk_cache_data_integrity_non_divisible():
     cache = NDChunkCache(
         compute_func=simple_compute_func,
         shape=(5,),
-        chunk_size=(2,),
+        chunk_shape=(2,),
         max_buffers=2
     )
     
@@ -65,7 +65,7 @@ def test_nd_chunk_cache_various_non_divisible(shape, chunk_size):
     cache = NDChunkCache(
         compute_func=simple_compute_func,
         shape=shape,
-        chunk_size=chunk_size,
+        chunk_shape=chunk_size,
         max_buffers=2
     )
     
@@ -87,26 +87,38 @@ def test_nd_chunk_cache_various_non_divisible(shape, chunk_size):
         f"Expected edge shape {expected_edge_shape}, got {edge_result.shape}"
 
 
-def test_nd_chunk_cache_correctly_slice():
-    shape=(300, 300, 300)
+@pytest.fixture
+def array_nd_chunk_cache():
+    max_size=100
+    time_count = 2
+    shape=(max_size, max_size, max_size)
     chunk_size=(64,64,64)
+
+    np_array = np.empty([time_count]+list(shape))
+    for t in range(time_count):
+        simple_compute_func(t, (slice(0, max_size), slice(0, max_size), slice(0, max_size)), np_array[t])
 
     # 3-D data example: full 256×256×256 volume, 64×64×64 chunks
     cache = NDChunkCache(
         compute_func=simple_compute_func,
         shape=shape,
-        chunk_size=chunk_size,
+        chunk_shape=chunk_size,
         max_buffers=3,
     )
+    return cache, np_array
+
+@pytest.mark.parametrize("volume_slicing", 
+    [
+        (slice(10, 50), slice(0, 20), slice(30, 45)),
+        (slice(6, 30), slice(10, 22), slice(0, 80)),
+        (slice(0, 100), 50, slice(0, 30)),
+        (19, 50, 45),
+    ]
+)
+def test_nd_chunk_cache_correctly_slice(array_nd_chunk_cache, volume_slicing):
+    cache, np_array = array_nd_chunk_cache
 
     # First request → triggers chunk computations
-    vol1 = cache.get(0, (slice(10, 150), slice(0, 200), slice(30, 190)))
-    print("vol1 shape:", vol1.shape)
-
-    # Overlapping request → re‑uses cached chunks
-    vol2 = cache.get(0, (slice(60, 120), slice(100, 220), slice(0, 80)))
-    print("vol2 shape:", vol2.shape)
-
-    # Different time point → may trigger eviction if `max_buffers` exceeded
-    vol3 = cache.get(1, (slice(0, 256), slice(0, 256), slice(0, 256)))
-    print("vol3 shape:", vol3.shape)
+    vol1 = cache.get(1, volume_slicing)
+    np.testing.assert_array_equal(vol1, np_array[1][volume_slicing],
+                                  "First request should match original data")
