@@ -2,11 +2,11 @@ import numpy as np
 import pytest
 from pytest import fixture
 
-from tracksdata.nodes import RegionPropsNodes
 from tracksdata.array import GraphArrayView
 from tracksdata.array._graph_array import DEFAULT_DTYPE, merge_indices
 from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.graph import RustWorkXGraph
+from tracksdata.nodes import RegionPropsNodes
 from tracksdata.nodes._mask import Mask
 
 # NOTE: this could be generic test for all array backends
@@ -22,7 +22,7 @@ def test_merge_indices() -> None:
     assert merge_indices(slice(3, 20, 3), 2) == 9
     assert merge_indices(slice(3, 20, 3), slice(2, 6, 2)) == slice(9, 21, 6)
     assert merge_indices(slice(3, 20), [4, 5]) == [7, 8]
-    assert merge_indices((5,6,7,8,9,10),[3, 5]) == [8, 10]
+    assert merge_indices((5, 6, 7, 8, 9, 10), [3, 5]) == [8, 10]
 
 
 def test_graph_array_view_init() -> None:
@@ -199,15 +199,17 @@ def multi_node_graph_from_image(request) -> GraphArrayView:
     nodes_operator.add_nodes(graph, labels=label)
     return GraphArrayView(graph=graph, shape=shape, attr_key="label"), label
 
+
 def test_graph_array_view_equal(multi_node_graph_from_image) -> None:
     array_view, label = multi_node_graph_from_image
     assert array_view.shape == label.shape
     for t in range(array_view.shape[0]):
         assert np.array_equal(array_view[t], label[t])
     assert array_view.ndim == label.ndim
-    assert array_view.dtype == np.int64 # fixed
+    assert array_view.dtype == np.int64  # fixed
     assert array_view.shape == label.shape
-    #assert np.array_equal(array_view[0], label[0])
+    # assert np.array_equal(array_view[0], label[0])
+
 
 def test_graph_array_view_getitem_slices(multi_node_graph_from_image) -> None:
     """Test __getitem__ with slices."""
@@ -230,9 +232,9 @@ def test_graph_array_view_getitem_slices(multi_node_graph_from_image) -> None:
         window = tuple([5] + [slice(None, None)] * count_slice)
         assert np.array_equal(array_view[window], label[window])
 
-#def test_graph_array_view_getitem_indices(multi_node_graph_from_image) -> None:
+
+# def test_graph_array_view_getitem_indices(multi_node_graph_from_image) -> None:
 #    """Test __getitem__ with indices."""
 #    array_view, label = multi_node_graph_from_image
 #    indices = [5, 10, 10]
 #    assert np.array_equal(array_view[0,indices], label[0,indices])
-

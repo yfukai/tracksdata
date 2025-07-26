@@ -71,6 +71,10 @@ def to_napari_format(
         The key of the output track id attribute.
     mask_key : str | None, optional
         The key of the mask attribute.
+    chunk_shape : tuple[int] | None, optional
+        The chunk shape for the labels layer. If None, the default chunk size is used.
+    max_buffers : int, optional
+        The maximum number of buffers to keep in the cache for the labels layer.
 
     Examples
     --------

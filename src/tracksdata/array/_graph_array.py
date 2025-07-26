@@ -1,20 +1,19 @@
-import numpy as np
-from numpy.typing import ArrayLike
 from collections.abc import Sequence
 from copy import copy
 
+import numpy as np
+
 from tracksdata.array._base_array import ArrayIndex, BaseReadOnlyArray
+from tracksdata.array._nd_chunk_cache import NDChunkCache
 from tracksdata.attrs import NodeAttr
 from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.graph._base_graph import BaseGraph
 from tracksdata.nodes._mask import Mask
 from tracksdata.utils._dtypes import polars_dtype_to_numpy_dtype
-from tracksdata.array._nd_chunk_cache import NDChunkCache
 
-import numpy as np
-
-DEFAULT_CHUNK_SIZE = 128
+DEFAULT_CHUNK_SIZE = 2048
 DEFAULT_DTYPE = np.int32
+
 
 def merge_indices(slicing1: ArrayIndex | None, slicing2: ArrayIndex | None) -> slice:
     """Merge two array indices into a single slice.
@@ -40,7 +39,10 @@ def merge_indices(slicing1: ArrayIndex | None, slicing2: ArrayIndex | None) -> s
                 return r
     elif isinstance(slicing1, Sequence):
         return [slicing1[i] for i in slicing2]
-    raise ValueError(f"Cannot merge indices {slicing1} and {slicing2}. slicing1 must be a slice or python check indexable.")
+    raise ValueError(
+        f"Cannot merge indices {slicing1} and {slicing2}. slicing1 must be a slice or python check indexable."
+    )
+
 
 class GraphArrayView(BaseReadOnlyArray):
     """
@@ -94,7 +96,7 @@ class GraphArrayView(BaseReadOnlyArray):
 
         self.original_shape = shape
         if chunk_shape is None:
-            chunk_shape = tuple([DEFAULT_CHUNK_SIZE]*(len(shape) - 1))  # Default chunk shape
+            chunk_shape = tuple([DEFAULT_CHUNK_SIZE] * (len(shape) - 1))  # Default chunk shape
         self.max_buffers = max_buffers
         self.cache = NDChunkCache(
             compute_func=self._fill_array,
@@ -116,7 +118,7 @@ class GraphArrayView(BaseReadOnlyArray):
                 assert np.isscalar(ind), f"Expected scalar or slice, got {type(ind)}"
                 return None
 
-        shape = [_get_size(ind, os) for ind, os in zip(self._indices, self.original_shape)]
+        shape = [_get_size(ind, os) for ind, os in zip(self._indices, self.original_shape, strict=False)]
         return tuple(s for s in shape if s is not None)
 
     @property
@@ -152,7 +154,7 @@ class GraphArrayView(BaseReadOnlyArray):
                     normalized_index.append(index[jj])
                 jj += 1
 
-        obj._indices = tuple(merge_indices(i1, i2) for i1, i2 in zip(self._indices, normalized_index))
+        obj._indices = tuple(merge_indices(i1, i2) for i1, i2 in zip(self._indices, normalized_index, strict=False))
         return obj
 
     def __array__(self, dtype=None, copy=None) -> np.ndarray:
@@ -162,7 +164,7 @@ class GraphArrayView(BaseReadOnlyArray):
             # XXX could be dask? should be benchmarked
             return np.stack(
                 [
-                    self.__getitem__((t,) + volume_slicing).__array__()
+                    self.__getitem__((t, *volume_slicing)).__array__()
                     for t in range(*time.indices(self.original_shape[0]))
                 ]
             )
@@ -171,7 +173,7 @@ class GraphArrayView(BaseReadOnlyArray):
                 time = time.item()  # convert from numpy.int to int
             except AttributeError:
                 time = time
-    
+
         return self.cache.get(
             time=time,
             volume_slicing=volume_slicing,
