@@ -16,9 +16,9 @@ class NDChunkCache:
 
     Parameters
     ----------
-    compute_func : Callable[[int, Tuple[slice, ...]], np.ndarray]
-        User-supplied function returning one *chunk* given (t, chunk_slices).
-    full_shape : Sequence[int]
+    compute_func : Callable[[int, Tuple[slice, ...], np.ndarray], None]
+        User-supplied function painting one *chunk* given (t, chunk_slices) in the buffer.
+    shape : Sequence[int]
         The absolute shape of a single time-point volume.
     chunk_size : Sequence[int]
         Edge length of a chunk in every axis.  Length defines dimensionality.
@@ -33,22 +33,22 @@ class NDChunkCache:
     # ------------------------------------------------------------
     def __init__(
         self,
-        compute_func: Callable[[int, tuple[slice, ...]], np.ndarray],
-        full_shape: Sequence[int],
+        compute_func: Callable[[int, tuple[slice, ...], np.ndarray], None],
+        shape: Sequence[int],
         chunk_size: Sequence[int],
         max_buffers: int = 4,
-        dtype=np.float32,
+        dtype=np.uint64,
     ):
         self.compute_func = compute_func
-        self.full_shape: Tuple[int, ...] = tuple(full_shape)
+        self.shape: Tuple[int, ...] = tuple(shape)
         self.chunk_size: Tuple[int, ...] = tuple(chunk_size)
-        self.ndim: int = len(self.full_shape)
-        if len(self.full_shape) != len(self.chunk_size):
-            raise ValueError("`full_shape` and `chunk_size` must have same length")
+        self.ndim: int = len(self.shape)
+        if len(self.shape) != len(self.chunk_size):
+            raise ValueError("`shape` and `chunk_size` must have same length")
 
         # Grid size in chunks, e.g. (nz, ny, nx, …)
         # Use ceiling division to handle non-divisible shapes
-        self.grid_shape: Tuple[int, ...] = tuple((fs + cs - 1) // cs for fs, cs in zip(self.full_shape, self.chunk_size))
+        self.grid_shape: Tuple[int, ...] = tuple((fs + cs - 1) // cs for fs, cs in zip(self.shape, self.chunk_size))
 
         self.max_buffers = max_buffers
         self.dtype = dtype
@@ -74,7 +74,7 @@ class NDChunkCache:
             self._store.popitem(last=False)
 
         # Allocate new buffer and boolean mask
-        buf = np.empty(self.full_shape, dtype=self.dtype)
+        buf = np.empty(self.shape, dtype=self.dtype)
         ready = np.zeros(self.grid_shape, dtype=bool)
         self._store[t] = {"buffer": buf, "ready": ready}
         return self._store[t]
@@ -88,7 +88,7 @@ class NDChunkCache:
     # ------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------
-    def get(self, t: int, volume_slices: Tuple[slice, ...]) -> np.ndarray:
+    def get(self, time: int, volume_slices: Tuple[slice, ...]) -> np.ndarray:
         """
         Retrieve data for time `t` and arbitrary dimensional slices.
 
@@ -97,7 +97,7 @@ class NDChunkCache:
         if len(volume_slices) != self.ndim:
             raise ValueError("Number of slices must equal dimensionality")
 
-        store_entry = self._ensure_buffer(t)
+        store_entry = self._ensure_buffer(time)
         buf = store_entry["buffer"]
         ready = store_entry["ready"]
 
@@ -113,10 +113,10 @@ class NDChunkCache:
             # Absolute slice covering this chunk
             chunk_slc = tuple(
                 slice(ci * cs, min((ci + 1) * cs, fs)) 
-                for ci, cs, fs in zip(chunk_idx, self.chunk_size, self.full_shape)
+                for ci, cs, fs in zip(chunk_idx, self.chunk_size, self.shape)
             )
             # Handle the case where chunk_slc exceeds volume_slices
-            buf[chunk_slc] = self.compute_func(t, chunk_slc).astype(self.dtype, copy=False)
+            self.compute_func(time, chunk_slc, buf)
             ready[chunk_idx] = True
 
         # Return view on the big buffer

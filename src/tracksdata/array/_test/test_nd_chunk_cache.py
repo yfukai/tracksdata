@@ -2,29 +2,28 @@ import numpy as np
 import pytest
 from tracksdata.array._nd_chunk_cache import NDChunkCache
 
-def simple_compute_func(t: int, chunk_slices: tuple[slice, ...]) -> np.ndarray:
+def simple_compute_func(t: int, chunk_slices: tuple[slice, ...], buffer: np.ndarray) -> None:
     """Dummy I/O-heavy function."""
     mesh = np.meshgrid(
         *[np.arange(s.start, s.stop) for s in chunk_slices], 
         indexing='ij'
     )
-    val = t*1e6+sum([100**(i)*mesh[i] for i in range(len(mesh))])
-    return val
+    buffer[chunk_slices] = t*1e6+sum([100**(i)*mesh[i] for i in range(len(mesh))])
     
 def test_nd_chunk_cache_checks_dim():
     cache = NDChunkCache(
         compute_func=simple_compute_func,
-        full_shape=(256, 256, 256),
+        shape=(256, 256, 256),
         chunk_size=(64, 64, 64),
         max_buffers=2,
     )
     assert cache.ndim == 3
-    assert cache.full_shape == (256, 256, 256)
+    assert cache.shape == (256, 256, 256)
     assert cache.chunk_size == (64, 64, 64)
     with pytest.raises(ValueError):
         NDChunkCache(
             compute_func=simple_compute_func,
-            full_shape=(256, 256),
+            shape=(256, 256),
             chunk_size=(64, 64, 64),
             max_buffers=2,
         )
@@ -34,7 +33,7 @@ def test_nd_chunk_cache_data_integrity_non_divisible():
     """Test that data is computed correctly for non-divisible edge chunks."""
     cache = NDChunkCache(
         compute_func=simple_compute_func,
-        full_shape=(5,),
+        shape=(5,),
         chunk_size=(2,),
         max_buffers=2
     )
@@ -52,7 +51,7 @@ def test_nd_chunk_cache_data_integrity_non_divisible():
     np.testing.assert_array_equal(partial1, partial2, "Data should be consistent")
 
 
-@pytest.mark.parametrize("full_shape,chunk_size", [
+@pytest.mark.parametrize("shape,chunk_size", [
     ((10,), (3,)),
     ((7, 5), (3, 2)),
     ((8, 6, 4), (3, 2, 3)),
@@ -61,41 +60,41 @@ def test_nd_chunk_cache_data_integrity_non_divisible():
     ((1,), (2,)),
     ((3, 1), (2, 3)),
 ])
-def test_nd_chunk_cache_various_non_divisible(full_shape, chunk_size):
+def test_nd_chunk_cache_various_non_divisible(shape, chunk_size):
     """Parametrized test for various non-divisible shape combinations."""
     cache = NDChunkCache(
         compute_func=simple_compute_func,
-        full_shape=full_shape,
+        shape=shape,
         chunk_size=chunk_size,
         max_buffers=2
     )
     
     # Grid shape should use ceiling division
-    expected_grid_shape = tuple((fs + cs - 1) // cs for fs, cs in zip(full_shape, chunk_size))
+    expected_grid_shape = tuple((fs + cs - 1) // cs for fs, cs in zip(shape, chunk_size))
     assert cache.grid_shape == expected_grid_shape, \
         f"Expected grid_shape {expected_grid_shape}, got {cache.grid_shape}"
     
     # Should be able to access full array
-    full_slices = tuple(slice(0, fs) for fs in full_shape)
+    full_slices = tuple(slice(0, fs) for fs in shape)
     result = cache.get(0, full_slices)
-    assert result.shape == full_shape, f"Expected shape {full_shape}, got {result.shape}"
+    assert result.shape == shape, f"Expected shape {shape}, got {result.shape}"
     
     # Should be able to access edge elements
-    edge_slices = tuple(slice(fs - 1, fs) for fs in full_shape)
+    edge_slices = tuple(slice(fs - 1, fs) for fs in shape)
     edge_result = cache.get(0, edge_slices)
-    expected_edge_shape = tuple(1 for _ in full_shape)
+    expected_edge_shape = tuple(1 for _ in shape)
     assert edge_result.shape == expected_edge_shape, \
         f"Expected edge shape {expected_edge_shape}, got {edge_result.shape}"
 
 
 def test_nd_chunk_cache_correctly_slice():
-    full_shape=(300, 300, 300)
+    shape=(300, 300, 300)
     chunk_size=(64,64,64)
 
     # 3-D data example: full 256×256×256 volume, 64×64×64 chunks
     cache = NDChunkCache(
         compute_func=simple_compute_func,
-        full_shape=full_shape,
+        shape=shape,
         chunk_size=chunk_size,
         max_buffers=3,
     )

@@ -7,48 +7,9 @@ from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.graph._base_graph import BaseGraph
 from tracksdata.nodes._mask import Mask
 from tracksdata.utils._dtypes import polars_dtype_to_numpy_dtype
-from functools import lru_cache
-from cachetools import LRUCache
+from tracksdata.array._nd_chunk_cache import NDChunkCache
 
 import numpy as np
-from typing import Tuple, Dict
-
-
-
-
-
-
-# # -------------------------------------------------------------------------
-# # Example usage (works for any dimensionality)
-# # -------------------------------------------------------------------------
-# if __name__ == "__main__":
-# 
-#     def expensive_compute(t: int, chunk_slc: Tuple[slice, ...]) -> np.ndarray:
-#         """Dummy expensive function – replace with real work/IO."""
-#         print(f"compute(t={t}, slices={chunk_slc})")
-#         shape = tuple(s.stop - s.start for s in chunk_slc)
-#         rng = np.random.default_rng(hash((t, chunk_slc)) & 0xFFFF_FFFF)
-#         return rng.random(shape, dtype=np.float32)
-# 
-#     # 4‑D spatial data (e.g. Z, Y, X, C)
-#     cache = NDChunkCache(
-#         compute_func=expensive_compute,
-#         chunk_size=(32, 32, 32, 4),
-#         max_cache_size=16,
-#     )
-# 
-#     # Request a slice spanning multiple chunks in every axis
-#     data = cache.get(
-#         t=0,
-#         volume_slices=(
-#             slice(10, 90),   # Z
-#             slice(20, 100),  # Y
-#             slice(5, 130),   # X
-#             slice(0, 4),     # C
-#         ),
-#     )
-#     print("result shape:", data.shape)
-
 
 class GraphArrayView(BaseReadOnlyArray):
     """
@@ -78,8 +39,8 @@ class GraphArrayView(BaseReadOnlyArray):
         shape: tuple[int, ...],
         attr_key: str,
         offset: int | np.ndarray = 0,
-        lru_cache_size: int = 128,
-        buffer_size: int = 128,
+        chunk_shape: tuple[int] | None = None,
+        max_buffers: int = 32,
     ):
         if attr_key not in graph.node_attr_keys:
             raise ValueError(f"Attribute key '{attr_key}' not found in graph. Expected '{graph.node_attr_keys}'")
@@ -89,10 +50,16 @@ class GraphArrayView(BaseReadOnlyArray):
         self._attr_key = attr_key
         self._offset = offset
         self._dtype = np.int32
-        self._cached_fill_array = lru_cache(maxsize=lru_cache_size)(
-            self._cached_fill_array
+        if chunk_shape is None:
+            chunk_shape = tuple(128 for _ in range(len(shape) - 1))  # Default chunk shape
+        self.max_buffers = max_buffers
+        self.cache = NDChunkCache(
+            compute_func=self._fill_array,
+            shape=shape,
+            chunk_shape=chunk_shape,
+            max_buffers=max_buffers,
+            dtype=np.dtype(self._dtype),
         )
-        self._buffer = LRUCache(maxsize=buffer_size)
 
     @property
     def shape(self) -> tuple[int, ...]:
@@ -123,38 +90,27 @@ class GraphArrayView(BaseReadOnlyArray):
             except AttributeError:
                 time = time
 
-        buffer = self._cached_fill_array(
+        return self.cache.get(
             time=time,
-            volume_slicing=tuple(volume_slicing),
+            volume_slices=tuple(volume_slicing),
         )
 
-        return buffer[volume_slicing]
-
-    def _cached_fill_array(self, time: int, volume_slicing: ArrayIndex) -> np.ndarray:
-        # Executing here already means that the time and slices are 
-        # not cached, so we compute the buffer
-
-        # Reuse the buffer if it exists for that time, otherwise create a new one
-        if time not in self._buffer:
-            self._buffer[time] = np.zeros(self.shape[1:], dtype=self.dtype)
-        buffer = self._buffer[time]
-
+    def _fill_array(self, time: int, volume_slicing: ArrayIndex, buffer: np.ndarray) -> np.ndarray:
         # TODO handling the slices for volume_slicing
         graph_filter = self.graph.filter(NodeAttr(DEFAULT_ATTR_KEYS.T) == time)
         df = graph_filter.node_attrs(
             attr_keys=[self._attr_key, DEFAULT_ATTR_KEYS.MASK],
         )
 
+        # TODO fix dtype at the constructor since it already generates the buffer there
         dtype = polars_dtype_to_numpy_dtype(df[self._attr_key].dtype)
-
         # napari support for bool is limited
         if np.issubdtype(dtype, bool):
             dtype = np.uint8
 
         self._dtype = dtype
+        #self.cache.dtype = np.dtype(dtype)
 
         for mask, value in zip(df[DEFAULT_ATTR_KEYS.MASK], df[self._attr_key], strict=False):
             mask: Mask
             mask.paint_buffer(buffer, value, offset=self._offset)
-
-        return buffer[volume_slicing]
