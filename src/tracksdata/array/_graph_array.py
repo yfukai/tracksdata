@@ -103,6 +103,7 @@ class GraphArrayView(BaseReadOnlyArray):
             chunk_shape = tuple([DEFAULT_CHUNK_SIZE] * (len(shape) - 1))  # Default chunk shape
         self.chunk_shape = chunk_shape
         self.max_buffers = max_buffers
+        self._indices = tuple(slice(0, s) for s in shape)
         self._cache = NDChunkCache(
             compute_func=self._fill_array,
             shape=self.shape[1:],
@@ -110,7 +111,6 @@ class GraphArrayView(BaseReadOnlyArray):
             max_buffers=self.max_buffers,
             dtype=self.dtype,
         )
-        self._indices = tuple(slice(0, s) for s in shape)
 
     @property
     def shape(self) -> tuple[int, ...]:
@@ -169,7 +169,6 @@ class GraphArrayView(BaseReadOnlyArray):
                 jj += 1
 
         obj._indices = tuple(merge_indices(i1, i2) for i1, i2 in zip(self._indices, normalized_index, strict=False))
-        obj._cache = None  # Reset the cache to force recomputation
         return obj
 
     def __array__(self, dtype=None, copy=None) -> np.ndarray:
@@ -199,7 +198,7 @@ class GraphArrayView(BaseReadOnlyArray):
             except AttributeError:
                 time = time
 
-        return self.cache.get(
+        return self._cache.get(
             time=time,
             volume_slicing=volume_slicing,
         ).astype(dtype or self.dtype)
