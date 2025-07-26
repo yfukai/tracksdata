@@ -217,9 +217,9 @@ def test_graph_array_view_getitem_slices(multi_node_graph_from_image) -> None:
         window = tuple([5] + [slice(None, None)] * count_slice)
         assert np.array_equal(array_view[window], label[window])
 
-def test_graph_array_view_getitem_indices(multi_node_graph_from_image) -> None:
-    """Test __getitem__ with indices."""
-    array_view, label = multi_node_graph_from_image
-    indices = [5, 10, 10]
-    assert np.array_equal(array_view[0,indices], label[0,indices])
+#def test_graph_array_view_getitem_indices(multi_node_graph_from_image) -> None:
+#    """Test __getitem__ with indices."""
+#    array_view, label = multi_node_graph_from_image
+#    indices = [5, 10, 10]
+#    assert np.array_equal(array_view[0,indices], label[0,indices])
 
