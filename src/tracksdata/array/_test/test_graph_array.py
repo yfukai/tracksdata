@@ -4,6 +4,7 @@ from pytest import fixture
 
 from tracksdata.nodes import RegionPropsNodes
 from tracksdata.array import GraphArrayView
+from tracksdata.array._graph_array import DEFAULT_DTYPE
 from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.graph import RustWorkXGraph
 from tracksdata.nodes._mask import Mask
@@ -26,7 +27,7 @@ def test_graph_array_view_init() -> None:
     assert array_view.shape == (10, 100, 100)
     assert array_view._attr_key == "label"
     assert array_view._offset == 0
-    assert array_view.dtype == np.int32
+    assert array_view.dtype == DEFAULT_DTYPE
     assert array_view.ndim == 3
     assert len(array_view) == 10
 
@@ -52,7 +53,7 @@ def test_graph_array_view_getitem_empty_time() -> None:
     # Should return zeros with correct shape
     assert result.shape == (100, 100)
     assert np.all(result == 0)
-    assert result.dtype == np.int32
+    assert result.dtype == DEFAULT_DTYPE
 
 
 def test_graph_array_view_getitem_with_nodes() -> None:

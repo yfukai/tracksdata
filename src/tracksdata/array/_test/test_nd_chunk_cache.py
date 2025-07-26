@@ -112,6 +112,7 @@ def array_nd_chunk_cache():
         (slice(10, 50), slice(0, 20), slice(30, 45)),
         (slice(6, 30), slice(10, 22), slice(0, 80)),
         (slice(0, 100), 50, slice(0, 30)),
+        (99, 50, slice(0, 30)),
         (19, 50, 45),
     ]
 )

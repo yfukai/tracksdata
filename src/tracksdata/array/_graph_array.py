@@ -11,6 +11,9 @@ from tracksdata.array._nd_chunk_cache import NDChunkCache
 
 import numpy as np
 
+DEFAULT_CHUNK_SIZE = 128
+DEFAULT_DTYPE = np.int32
+
 class GraphArrayView(BaseReadOnlyArray):
     """
     Class used to view the content of a graph as an array.
@@ -49,10 +52,23 @@ class GraphArrayView(BaseReadOnlyArray):
         self._shape = shape
         self._attr_key = attr_key
         self._offset = offset
-        self._dtype = np.int32
         if chunk_shape is None:
-            chunk_shape = tuple(128 for _ in range(len(shape) - 1))  # Default chunk shape
+            chunk_shape = tuple([DEFAULT_CHUNK_SIZE]*(len(shape) - 1))  # Default chunk shape
         self.max_buffers = max_buffers
+
+        # Infer the dtype from the graph's attribute
+        # TODO improve performance
+        df = graph.node_attrs(attr_keys=[self._attr_key])
+        if df.is_empty():
+            dtype = DEFAULT_DTYPE
+        else:
+            dtype = polars_dtype_to_numpy_dtype(df[self._attr_key].dtype)
+            # napari support for bool is limited
+            if np.issubdtype(dtype, bool):
+                dtype = np.uint8
+
+        self._dtype = dtype
+
         self.cache = NDChunkCache(
             compute_func=self._fill_array,
             shape=shape[1:],
@@ -114,15 +130,6 @@ class GraphArrayView(BaseReadOnlyArray):
         df = graph_filter.node_attrs(
             attr_keys=[self._attr_key, DEFAULT_ATTR_KEYS.MASK],
         )
-
-        # TODO fix dtype at the constructor since it already generates the buffer there
-        dtype = polars_dtype_to_numpy_dtype(df[self._attr_key].dtype)
-        # napari support for bool is limited
-        if np.issubdtype(dtype, bool):
-            dtype = np.uint8
-
-        self._dtype = dtype
-        #self.cache.dtype = np.dtype(dtype)
 
         for mask, value in zip(df[DEFAULT_ATTR_KEYS.MASK], df[self._attr_key], strict=False):
             mask: Mask

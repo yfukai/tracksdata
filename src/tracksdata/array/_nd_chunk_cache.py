@@ -74,7 +74,7 @@ class NDChunkCache:
             self._store.popitem(last=False)
 
         # Allocate new buffer and boolean mask
-        buf = np.empty(self.shape, dtype=self.dtype)
+        buf = np.zeros(self.shape, dtype=self.dtype)
         ready = np.zeros(self.grid_shape, dtype=bool)
         self._store[t] = {"buffer": buf, "ready": ready}
         return self._store[t]
