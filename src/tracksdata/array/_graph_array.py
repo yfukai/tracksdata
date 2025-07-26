@@ -104,17 +104,18 @@ class GraphArrayView(BaseReadOnlyArray):
         self.chunk_shape = chunk_shape
         self.max_buffers = max_buffers
         self._cache = NDChunkCache(
-                compute_func=self._fill_array,
-                shape=self.shape[1:],
-                chunk_shape=self.chunk_shape,
-                max_buffers=self.max_buffers,
-                dtype=self.dtype,
+            compute_func=self._fill_array,
+            shape=self.shape[1:],
+            chunk_shape=self.chunk_shape,
+            max_buffers=self.max_buffers,
+            dtype=self.dtype,
         )
         self._indices = tuple(slice(0, s) for s in shape)
 
     @property
     def shape(self) -> tuple[int, ...]:
         """Returns the shape of the array."""
+
         def _get_size(ind: ArrayIndex, size: int) -> int | None:
             if isinstance(ind, slice):
                 return len(range(ind.start or 0, ind.stop or size))
