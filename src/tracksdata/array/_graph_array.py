@@ -15,15 +15,35 @@ DEFAULT_CHUNK_SIZE = 2048
 DEFAULT_DTYPE = np.int32
 
 
-def merge_indices(slicing1: ArrayIndex | None, slicing2: ArrayIndex | None) -> slice:
-    """Merge two array indices into a single slice.
-    Example:
-        merge_indices(slice(3, 20), slice(5, 15)) == slice(8, 18)
-        merge_indices(slice(3, 20), slice(5, None)) == slice(8, 20)
-        merge_indices(slice(3, 20), slice(None, 15)) == slice(3, 18)
-        merge_indices(slice(3, 20), 4) == 7
-        merge_indices(slice(3, 20), (4, 5)) == (7, 8)
-        merge_indices((5,6,7,8,9,10),(3,5)) == (8, 10)
+def merge_indices(slicing1: ArrayIndex | None, slicing2: ArrayIndex | None) -> ArrayIndex:
+    """Merge two array indices into a single index.
+
+    Parameters
+    ----------
+    slicing1 : ArrayIndex | None
+        The first array index to merge.
+    slicing2 : ArrayIndex | None
+        The second array index to merge.
+
+    Returns
+    -------
+    ArrayIndex
+        The merged array index.
+
+    Examples
+    --------
+    >>> merge_indices(slice(3, 20), slice(5, 15))
+    slice(8, 18, None)
+    >>> merge_indices(slice(3, 20), slice(5, None))
+    slice(8, 20, None)
+    >>> merge_indices(slice(3, 20), slice(None, 15))
+    slice(3, 18, None)
+    >>> merge_indices(slice(3, 20), 4)
+    7
+    >>> merge_indices(slice(3, 20), (4, 5))
+    [7, 8]
+    >>> merge_indices((5, 6, 7, 8, 9, 10), (3, 5))
+    [8, 10]
     """
     if slicing2 is None:
         return slicing1
@@ -215,6 +235,22 @@ class GraphArrayView(BaseReadOnlyArray):
             ).astype(dtype or self.dtype)
 
     def _fill_array(self, time: int, volume_slicing: ArrayIndex, buffer: np.ndarray) -> np.ndarray:
+        """Fill the buffer with data from the graph at a specific time.
+
+        Parameters
+        ----------
+        time : int
+            The time point to retrieve data for.
+        volume_slicing : ArrayIndex
+            The volume slicing information (currently not fully utilized).
+        buffer : np.ndarray
+            The buffer to fill with data.
+
+        Returns
+        -------
+        np.ndarray
+            The filled buffer.
+        """
         # TODO handling the slices for volume_slicing
         graph_filter = self.graph.filter(NodeAttr(DEFAULT_ATTR_KEYS.T) == time)
         df = graph_filter.node_attrs(

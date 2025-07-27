@@ -11,7 +11,7 @@ class NDChunkCache:
 
     Parameters
     ----------
-    compute_func : Callable[[int, Tuple[slice, ...], np.ndarray], None]
+    compute_func : Callable[[int, tuple[slice, ...], np.ndarray], None]
         User-supplied function painting one *chunk* given (t, chunk_slices) in the buffer.
     shape : Sequence[int]
         The absolute shape of a single time-point volume.
@@ -20,7 +20,7 @@ class NDChunkCache:
     max_buffers : int
         Maximum number of time-points kept simultaneously.
     dtype : np.dtype, optional
-        Stored dtype of buffers (default float32).
+        Stored dtype of buffers (default np.uint64).
     """
 
     # ------------------------------------------------------------
@@ -85,9 +85,19 @@ class NDChunkCache:
     # ------------------------------------------------------------
     def get(self, time: int, volume_slicing: tuple[slice | int | Sequence[int], ...]) -> np.ndarray:
         """
-        Retrieve data for time `t` and arbitrary dimensional slices.
+        Retrieve data for time `time` and arbitrary dimensional slices.
 
-        Returns a *view* into the cached full buffer (zero-copy).
+        Parameters
+        ----------
+        time : int
+            The time point to retrieve data for.
+        volume_slicing : tuple[slice | int | Sequence[int], ...]
+            Slicing specification for the volume dimensions.
+
+        Returns
+        -------
+        np.ndarray
+            A view into the cached full buffer (zero-copy).
         """
         if len(volume_slicing) != self.ndim:
             raise ValueError("Number of slices must equal dimensionality")
