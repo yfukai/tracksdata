@@ -38,7 +38,10 @@ def merge_indices(slicing1: ArrayIndex | None, slicing2: ArrayIndex | None) -> s
             else:
                 return r
     elif isinstance(slicing1, Sequence):
-        return [slicing1[i] for i in slicing2]
+        if isinstance(slicing2, Sequence):
+            return [slicing1[i] for i in slicing2]
+        else:
+            return slicing1[slicing2]
     raise ValueError(
         f"Cannot merge indices {slicing1} and {slicing2}. slicing1 must be a slice or python check indexable."
     )
@@ -184,24 +187,30 @@ class GraphArrayView(BaseReadOnlyArray):
 
         time = self._indices[0]
         volume_slicing = self._indices[1:]
-        if isinstance(time, Sequence):  # if all time points are requested
-            # XXX could be dask? should be benchmarked
-            return np.stack(
-                [
-                    self.__getitem__((t, *volume_slicing)).__array__()
-                    for t in range(*time.indices(self.original_shape[0]))
-                ]
-            ).astype(dtype or self.dtype)
-        else:
+
+        if np.isscalar(time):
             try:
                 time = time.item()  # convert from numpy.int to int
             except AttributeError:
                 time = time
+            return self._cache.get(
+                time=time,
+                volume_slicing=volume_slicing,
+            ).astype(dtype or self.dtype)
+        else:
+            if isinstance(time, slice):
+                time = range(self.original_shape[0])[time]
 
-        return self._cache.get(
-            time=time,
-            volume_slicing=volume_slicing,
-        ).astype(dtype or self.dtype)
+            # XXX could be dask? should be benchmarked
+            return np.stack(
+                [
+                    self._cache.get(
+                        time=t,
+                        volume_slicing=volume_slicing,
+                    ).astype(dtype or self.dtype)
+                    for t in time
+                ]
+            ).astype(dtype or self.dtype)
 
     def _fill_array(self, time: int, volume_slicing: ArrayIndex, buffer: np.ndarray) -> np.ndarray:
         # TODO handling the slices for volume_slicing
