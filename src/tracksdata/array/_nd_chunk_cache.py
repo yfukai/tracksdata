@@ -83,7 +83,7 @@ class NDChunkCache:
     # ------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------
-    def get(self, time: int, volume_slicing: tuple[slice | int, ...]) -> np.ndarray:
+    def get(self, time: int, volume_slicing: tuple[slice | int | Sequence[int], ...]) -> np.ndarray:
         """
         Retrieve data for time `t` and arbitrary dimensional slices.
 
@@ -91,7 +91,19 @@ class NDChunkCache:
         """
         if len(volume_slicing) != self.ndim:
             raise ValueError("Number of slices must equal dimensionality")
-        volume_slicing_slices = tuple(slc if isinstance(slc, slice) else slice(slc, slc + 1) for slc in volume_slicing)
+
+        def to_slice(slc):
+            """Convert int or slice to slice."""
+            if isinstance(slc, int):
+                return slice(slc, slc + 1)
+            elif isinstance(slc, slice):
+                return slc
+            elif isinstance(slc, Sequence):
+                return slice(min(slc), max(slc) + 1)
+            else:
+                raise TypeError(f"Unsupported type for slicing: {type(slc)}")
+
+        volume_slicing_slices = tuple(to_slice(slc) for slc in volume_slicing)
 
         store_entry = self._ensure_buffer(time)
         buf = store_entry["buffer"]

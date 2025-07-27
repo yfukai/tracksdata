@@ -1,3 +1,5 @@
+from collections.abc import Sequence
+
 import numpy as np
 import pytest
 from pytest import fixture
@@ -214,7 +216,7 @@ def test_graph_array_view_equal(multi_node_graph_from_image) -> None:
     # assert np.array_equal(array_view[0], label[0])
 
 
-def test_graph_array_view_getitem_slices(multi_node_graph_from_image) -> None:
+def test_graph_array_view_getitem_multi_slices(multi_node_graph_from_image) -> None:
     """Test __getitem__ with slices."""
     array_view, label = multi_node_graph_from_image
 
@@ -236,8 +238,30 @@ def test_graph_array_view_getitem_slices(multi_node_graph_from_image) -> None:
         assert np.array_equal(array_view[window], label[window])
 
 
-# def test_graph_array_view_getitem_indices(multi_node_graph_from_image) -> None:
-#    """Test __getitem__ with indices."""
-#    array_view, label = multi_node_graph_from_image
-#    indices = [5, 10, 10]
-#    assert np.array_equal(array_view[0,indices], label[0,indices])
+possible_combinations = [
+    (slice(3, 20), slice(5, None)),
+    (slice(3, 20), slice(None, 15)),
+    (slice(3, 20), 4),
+    (slice(3, 20), [4, 5]),
+    ([5, 6, 7, 8, 9], slice(1, 3)),
+    (4, 0),
+]
+
+
+@pytest.mark.parametrize("index1, index2", possible_combinations)
+def test_graph_array_view_getitem_time_index_nested(multi_node_graph_from_image, index1, index2) -> None:
+    """Test __getitem__ with nested indices."""
+    array_view, label = multi_node_graph_from_image
+    assert np.array_equal(array_view[index1][index2], label[index1][index2]), (
+        f"Failed for index1={index1}, index2={index2}"
+    )
+
+    if isinstance(index1, Sequence) or isinstance(index2, Sequence):
+        with pytest.raises(NotImplementedError):
+            # This should raise an error to avoid inconsistency with numpy-like indexing
+            array_view[(index1, index1)].__array__()
+            array_view[(index2, index2)].__array__()
+    elif not isinstance(index1, int):
+        assert np.array_equal(
+            array_view[(index1, index1)][(index2, index2)], label[(index1, index1)][(index2, index2)]
+        ), f"Failed for index1={index1}, index2={index2}"

@@ -185,6 +185,8 @@ class GraphArrayView(BaseReadOnlyArray):
             This parameter is ignored, as the GraphArrayView is read-only.
         """
 
+        if sum(isinstance(i, Sequence) for i in self._indices) > 1:
+            raise NotImplementedError("Multiple sequences in indices are not supported for __array__.")
         time = self._indices[0]
         volume_slicing = self._indices[1:]
 
