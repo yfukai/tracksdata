@@ -210,6 +210,7 @@ def test_graph_array_view_equal(multi_node_graph_from_image) -> None:
     assert np.array_equal(array_view, label)
     assert np.array_equal(array_view[:5], label[:5])
     assert np.array_equal(array_view[[1, 6, 7]], label[[1, 6, 7]])
+    assert np.array_equal(array_view[:, 3, 10:20][3, 2:5], label[:, 3, 10:20][3, 2:5])
     assert array_view.ndim == label.ndim
     assert array_view.dtype == np.int64  # fixed
     assert array_view.shape == label.shape
