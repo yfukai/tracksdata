@@ -100,7 +100,6 @@ class GraphArrayView(BaseReadOnlyArray):
         offset: int | np.ndarray = 0,
         chunk_shape: tuple[int] | None = None,
         max_buffers: int = 32,
-        filtering_by_bbox: bool = False,
     ):
         if attr_key not in graph.node_attr_keys:
             raise ValueError(f"Attribute key '{attr_key}' not found in graph. Expected '{graph.node_attr_keys}'")
@@ -141,11 +140,14 @@ class GraphArrayView(BaseReadOnlyArray):
             spatial_columns = ["y", "x"]
         else:
             raise ValueError(f"Unsupported shape: {self.original_shape} expected 3 or 4 dimensions")
-        self._filtering_by_bbox = filtering_by_bbox
-        if filtering_by_bbox:
-            spatial_columns = [f"{k}_min" for k in spatial_columns] + [f"{k}_max" for k in spatial_columns]
 
-        self._spatial_filter = self.graph.spatial_filter(attrs_keys=[DEFAULT_ATTR_KEYS.T, *spatial_columns])
+        min_spatial_columns = [f"{k}_min" for k in spatial_columns]
+        max_spatial_columns = [f"{k}_max" for k in spatial_columns]
+
+        self._spatial_filter = self.graph.bb_spatial_filter(
+            min_attrs_keys=[DEFAULT_ATTR_KEYS.T, *min_spatial_columns],
+            max_attrs_keys=[DEFAULT_ATTR_KEYS.T, *max_spatial_columns],
+        )
 
     @property
     def shape(self) -> tuple[int, ...]:
@@ -263,11 +265,8 @@ class GraphArrayView(BaseReadOnlyArray):
         np.ndarray
             The filled buffer.
         """
-        if self._filtering_by_bbox:
-            # Retrieve the data if either of the min or max position is in the slice
-            subgraph = self._spatial_filter[(slice(time, time), *volume_slicing, *volume_slicing)]
-        else:
-            subgraph = self._spatial_filter[(slice(time, time), *volume_slicing)]
+
+        subgraph = self._spatial_filter[(slice(time, time), *volume_slicing)]
         df = subgraph.node_attrs(
             attr_keys=[
                 self._attr_key,
