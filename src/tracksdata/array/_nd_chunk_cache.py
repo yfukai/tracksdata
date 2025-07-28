@@ -53,9 +53,6 @@ class NDChunkCache:
         # (LRU) mapping   t  ->  {"buffer": ndarray, "ready": boolean ndarray}
         self._store: OrderedDict[int, dict[str, np.ndarray]] = OrderedDict()
 
-    # ------------------------------------------------------------
-    # Internal helpers
-    # ------------------------------------------------------------
     def _ensure_buffer(self, t: int) -> dict[str, np.ndarray]:
         """
         Return the dictionary holding buffer & ready-mask for time `t`,
