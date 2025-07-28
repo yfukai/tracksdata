@@ -230,13 +230,14 @@ def test_graph_array_view_dtype_inference() -> None:
 def multi_node_graph_from_image(request) -> GraphArrayView:
     """Fixture to create a graph with multiple nodes for testing."""
     shape = request.param
+    chunk_shape = [6] * (len(shape) - 1)
     label = np.zeros(shape, dtype=np.uint8)
     for i in range(shape[0]):
         label[i, 10:20, 10:20] = i + 1
     graph = RustWorkXGraph()
     nodes_operator = RegionPropsNodes(extra_properties=["label"])
     nodes_operator.add_nodes(graph, labels=label)
-    return GraphArrayView(graph=graph, shape=shape, attr_key="label"), label
+    return GraphArrayView(graph=graph, shape=shape, attr_key="label", chunk_shape=chunk_shape), label
 
 
 def test_graph_array_view_equal(multi_node_graph_from_image) -> None:
@@ -246,13 +247,18 @@ def test_graph_array_view_equal(multi_node_graph_from_image) -> None:
         print(np.unique(array_view[t]), np.unique(label[t]))
         assert np.array_equal(array_view[t], label[t])
     assert np.array_equal(array_view, label)
-    assert np.array_equal(array_view[:5], label[:5])
-    assert np.array_equal(array_view[[1, 6, 7]], label[[1, 6, 7]])
-    assert np.array_equal(array_view[:, 3, 10:20][3, 2:5], label[:, 3, 10:20][3, 2:5])
+    assert np.array_equal(array_view[5:], label[5:])
+    assert np.array_equal(array_view[3, [1, 15, 15]], label[3, [1, 15, 15]])
+    assert np.array_equal(array_view[:, 15, 10:20][3, 2:5], label[:, 15, 10:20][3, 2:5])
     assert array_view.ndim == label.ndim
     assert array_view.dtype == np.int64  # fixed
     assert array_view.shape == label.shape
     # assert np.array_equal(array_view[0], label[0])
+
+
+def test_graph_array_view_equal_edge_case_for_bbox(multi_node_graph_from_image) -> None:
+    array_view, label = multi_node_graph_from_image
+    assert np.array_equal(array_view[0, :12, :12], label[0, :12, :12])
 
 
 def test_graph_array_view_getitem_multi_slices(multi_node_graph_from_image) -> None:
