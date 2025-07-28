@@ -244,7 +244,7 @@ possible_combinations = [
     (slice(3, 20), slice(None, 15)),
     (slice(3, 20), 4),
     (slice(3, 20), [4, 5]),
-    ([5, 6, 7, 8, 9], slice(1, 3)),
+    ([5, 6, 9, 8, 7], slice(1, 3)),
     (4, 0),
 ]
 
