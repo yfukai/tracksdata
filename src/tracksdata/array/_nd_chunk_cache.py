@@ -85,7 +85,7 @@ class NDChunkCache:
     # ------------------------------------------------------------
     def get(self, time: int, volume_slicing: tuple[slice | int | Sequence[int], ...]) -> np.ndarray:
         """
-        Retrieve data for time `time` and arbitrary dimensional slices.
+        Retrieve data for `time` and arbitrary dimensional slices.
 
         Parameters
         ----------

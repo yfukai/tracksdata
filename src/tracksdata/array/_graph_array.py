@@ -214,7 +214,7 @@ class GraphArrayView(BaseReadOnlyArray):
             try:
                 time = time.item()  # convert from numpy.int to int
             except AttributeError:
-                time = time
+                pass
             return self._cache.get(
                 time=time,
                 volume_slicing=volume_slicing,
