@@ -16,7 +16,10 @@ from tracksdata.utils._multiprocessing import multiprocessing_apply
 
 if TYPE_CHECKING:
     from tracksdata.graph.filters._base_filter import BaseFilter
-    from tracksdata.graph.filters._spatial_filter import SpatialFilter
+    from tracksdata.graph.filters._spatial_filter import (
+        BoundingBoxSpatialFilter,
+        SpatialFilter,
+    )
 
 
 T = TypeVar("T", bound="BaseGraph")
@@ -948,3 +951,60 @@ class BaseGraph(abc.ABC):
         from tracksdata.graph.filters._spatial_filter import SpatialFilter
 
         return SpatialFilter(self, attrs_keys=attrs_keys)
+
+    def bb_spatial_filter(
+        self, min_attrs_keys: list[str] | None = None, max_attrs_keys: list[str] | None = None
+    ) -> "BoundingBoxSpatialFilter":
+        """
+        Create a spatial filter for efficient spatial queries of graph nodes using bounding boxes.
+
+        This method creates a spatial index of graph nodes based on their bounding box coordinates,
+        enabling efficient querying of nodes intersecting with spatial regions of interest (ROI).
+
+        Parameters
+        ----------
+        min_attrs_keys : list[str] | None, optional
+            List of attribute keys to use as spatial coordinates. If None, defaults to
+            ["t", "min_z", "min_y", "min_x"] filtered to only include keys present in the graph.
+            Common combinations include:
+            - 2D: ["min_y", "min_x"]
+            - 3D: ["min_z", "min_y", "min_x"] or ["t", "min_y", "min_x"]
+            - 4D: ["t", "min_z", "min_y", "min_x"]
+        max_attrs_keys : list[str] | None, optional
+            List of attribute keys to use as spatial coordinates. If None, defaults to
+            ["t", "max_z", "max_y", "max_x"] filtered to only include keys present in the graph.
+            See `min_attrs_keys` for common combinations.
+
+        Returns
+        -------
+        SpatialFilter
+            A spatial filter object that can be used to query nodes within spatial regions
+            using slice notation.
+
+        Examples
+        --------
+        Create a 2D spatial filter for bounding boxes:
+
+        ```python
+        spatial_filter = graph.spatial_filter(min_attrs_keys=["min_y", "min_x"], max_attrs_keys=["max_y", "max_x"])
+        # Query nodes intersecting with region y=[10, 50), x=[20, 60)
+        subgraph = spatial_filter[10:50, 20:60].subgraph()
+        ```
+
+        Create a 4D spatiotemporal filter:
+
+        ```python
+        spatial_filter = graph.spatial_filter()
+        # Uses default ["t", "min_z", "min_y", "min_x"] and ["t", "max_z", "max_y", "max_x"]
+        # Query nodes intersecting with time=[0, 10), z=[0, 5), y=[10, 50), x=[20, 60)
+        nodes_in_roi = spatial_filter[0:10, 0:5, 10:50, 20:60].node_attrs()
+        ```
+
+        See Also
+        --------
+        BoundingBoxSpatialFilter : The spatial filter class for detailed usage.
+        filter : General attribute-based filtering.
+        """
+        from tracksdata.graph.filters._spatial_filter import BoundingBoxSpatialFilter
+
+        return BoundingBoxSpatialFilter(self, min_attrs_keys=min_attrs_keys, max_attrs_keys=max_attrs_keys)
