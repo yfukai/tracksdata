@@ -23,9 +23,6 @@ class NDChunkCache:
         Stored dtype of buffers (default np.uint64).
     """
 
-    # ------------------------------------------------------------
-    # Construction
-    # ------------------------------------------------------------
     def __init__(
         self,
         compute_func: Callable[[int, tuple[slice, ...], np.ndarray], None],
