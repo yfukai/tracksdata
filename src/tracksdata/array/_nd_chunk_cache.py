@@ -80,9 +80,6 @@ class NDChunkCache:
         """Return inclusive chunk-index bounds for every axis."""
         return tuple((s.start // cs, (s.stop - 1) // cs) for s, cs in zip(slices, self.chunk_shape, strict=False))
 
-    # ------------------------------------------------------------
-    # Public API
-    # ------------------------------------------------------------
     def get(self, time: int, volume_slicing: tuple[slice | int | Sequence[int], ...]) -> np.ndarray:
         """
         Retrieve data for `time` and arbitrary dimensional slices.
