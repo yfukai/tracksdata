@@ -76,13 +76,23 @@ def test_graph_array_view_getitem_with_nodes() -> None:
     # Add attribute keys
     graph.add_node_attr_key("label", 0)
     graph.add_node_attr_key(DEFAULT_ATTR_KEYS.MASK, None)
+    graph.add_node_attr_key("y", 0)
+    graph.add_node_attr_key("x", 0)
 
     # Create a mask
     mask_data = np.array([[True, True], [True, False]], dtype=bool)
     mask = Mask(mask_data, bbox=np.array([10, 20, 12, 22]))  # y_min, x_min, y_max, x_max
 
     # Add a node with mask and label
-    graph.add_node({DEFAULT_ATTR_KEYS.T: 0, "label": 5, DEFAULT_ATTR_KEYS.MASK: mask})
+    graph.add_node(
+        {
+            DEFAULT_ATTR_KEYS.T: 0,
+            "label": 5,
+            DEFAULT_ATTR_KEYS.MASK: mask,
+            "y": 11,
+            "x": 21,
+        }
+    )
 
     array_view = GraphArrayView(graph=graph, shape=(10, 100, 100), attr_key="label")
 
@@ -111,6 +121,8 @@ def test_graph_array_view_getitem_multiple_nodes() -> None:
     # Add attribute keys
     graph.add_node_attr_key("label", 0)
     graph.add_node_attr_key(DEFAULT_ATTR_KEYS.MASK, None)
+    graph.add_node_attr_key("y", 0)
+    graph.add_node_attr_key("x", 0)
 
     # Create two masks at different locations
     mask1_data = np.array([[True, True]], dtype=bool)
@@ -120,9 +132,25 @@ def test_graph_array_view_getitem_multiple_nodes() -> None:
     mask2 = Mask(mask2_data, bbox=np.array([30, 40, 31, 41]))
 
     # Add nodes with different labels
-    graph.add_node({DEFAULT_ATTR_KEYS.T: 0, "label": 3, DEFAULT_ATTR_KEYS.MASK: mask1})
+    graph.add_node(
+        {
+            DEFAULT_ATTR_KEYS.T: 0,
+            "label": 3,
+            DEFAULT_ATTR_KEYS.MASK: mask1,
+            "y": 11,
+            "x": 21,
+        }
+    )
 
-    graph.add_node({DEFAULT_ATTR_KEYS.T: 0, "label": 7, DEFAULT_ATTR_KEYS.MASK: mask2})
+    graph.add_node(
+        {
+            DEFAULT_ATTR_KEYS.T: 0,
+            "label": 7,
+            DEFAULT_ATTR_KEYS.MASK: mask2,
+            "y": 31,
+            "x": 41,
+        }
+    )
 
     array_view = GraphArrayView(graph=graph, shape=(10, 100, 100), attr_key="label")
 
@@ -146,13 +174,15 @@ def test_graph_array_view_getitem_boolean_dtype() -> None:
     # Add attribute keys
     graph.add_node_attr_key("is_active", False)
     graph.add_node_attr_key(DEFAULT_ATTR_KEYS.MASK, None)
+    graph.add_node_attr_key("y", 0)
+    graph.add_node_attr_key("x", 0)
 
     # Create a mask
     mask_data = np.array([[True]], dtype=bool)
     mask = Mask(mask_data, bbox=np.array([10, 20, 11, 21]))
 
     # Add a node with boolean attribute
-    graph.add_node({DEFAULT_ATTR_KEYS.T: 0, "is_active": True, DEFAULT_ATTR_KEYS.MASK: mask})
+    graph.add_node({DEFAULT_ATTR_KEYS.T: 0, "is_active": True, DEFAULT_ATTR_KEYS.MASK: mask, "y": 11, "x": 21})
 
     array_view = GraphArrayView(graph=graph, shape=(10, 100, 100), attr_key="is_active")
 
@@ -172,13 +202,15 @@ def test_graph_array_view_dtype_inference() -> None:
     # Add attribute keys
     graph.add_node_attr_key("float_label", 0.0)
     graph.add_node_attr_key(DEFAULT_ATTR_KEYS.MASK, None)
+    graph.add_node_attr_key("y", 0)
+    graph.add_node_attr_key("x", 0)
 
     # Create a mask
     mask_data = np.array([[True]], dtype=bool)
     mask = Mask(mask_data, bbox=np.array([10, 20, 11, 21]))
 
     # Add a node with float attribute
-    graph.add_node({DEFAULT_ATTR_KEYS.T: 0, "float_label": 3.14, DEFAULT_ATTR_KEYS.MASK: mask})
+    graph.add_node({DEFAULT_ATTR_KEYS.T: 0, "float_label": 3.14, DEFAULT_ATTR_KEYS.MASK: mask, "y": 11, "x": 21})
 
     array_view = GraphArrayView(graph=graph, shape=(10, 100, 100), attr_key="float_label")
 
@@ -189,7 +221,12 @@ def test_graph_array_view_dtype_inference() -> None:
     assert array_view.dtype == np.float64
 
 
-@fixture(params=[(10, 100, 100), (10, 100, 100, 100)])
+@fixture(
+    params=[
+        (10, 100, 100),
+        (10, 100, 100, 100),
+    ]
+)
 def multi_node_graph_from_image(request) -> GraphArrayView:
     """Fixture to create a graph with multiple nodes for testing."""
     shape = request.param
@@ -206,6 +243,7 @@ def test_graph_array_view_equal(multi_node_graph_from_image) -> None:
     array_view, label = multi_node_graph_from_image
     assert array_view.shape == label.shape
     for t in range(array_view.shape[0]):
+        print(np.unique(array_view[t]), np.unique(label[t]))
         assert np.array_equal(array_view[t], label[t])
     assert np.array_equal(array_view, label)
     assert np.array_equal(array_view[:5], label[:5])
@@ -253,9 +291,8 @@ possible_combinations = [
 def test_graph_array_view_getitem_time_index_nested(multi_node_graph_from_image, index1, index2) -> None:
     """Test __getitem__ with nested indices."""
     array_view, label = multi_node_graph_from_image
-    assert np.array_equal(array_view[index1][index2], label[index1][index2]), (
-        f"Failed for index1={index1}, index2={index2}"
-    )
+    msg = f"Failed for index1={index1}, index2={index2}"
+    assert np.array_equal(array_view[index1][index2], label[index1][index2]), msg
 
     if isinstance(index1, Sequence) or isinstance(index2, Sequence):
         with pytest.raises(NotImplementedError):
@@ -263,6 +300,7 @@ def test_graph_array_view_getitem_time_index_nested(multi_node_graph_from_image,
             array_view[(index1, index1)].__array__()
             array_view[(index2, index2)].__array__()
     elif not isinstance(index1, int):
-        assert np.array_equal(
-            array_view[(index1, index1)][(index2, index2)], label[(index1, index1)][(index2, index2)]
-        ), f"Failed for index1={index1}, index2={index2}"
+        msg = f"Failed for index1={index1}, index2={index2}"
+        expected_array = label[(index1, index1)][(index2, index2)]
+        actual_array = array_view[(index1, index1)][(index2, index2)]
+        assert np.array_equal(actual_array, expected_array), msg

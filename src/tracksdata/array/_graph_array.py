@@ -5,7 +5,6 @@ import numpy as np
 
 from tracksdata.array._base_array import ArrayIndex, BaseReadOnlyArray
 from tracksdata.array._nd_chunk_cache import NDChunkCache
-from tracksdata.attrs import NodeAttr
 from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.graph._base_graph import BaseGraph
 from tracksdata.nodes._mask import Mask
@@ -135,6 +134,15 @@ class GraphArrayView(BaseReadOnlyArray):
             dtype=self.dtype,
         )
 
+        if len(self.original_shape) == 4:
+            spatial_columns = ["z", "y", "x"]
+        elif len(self.original_shape) == 3:
+            spatial_columns = ["y", "x"]
+        else:
+            raise ValueError(f"Unsupported shape: {self.original_shape} expected 3 or 4 dimensions")
+
+        self._spatial_filter = self.graph.spatial_filter(attrs_keys=[DEFAULT_ATTR_KEYS.T, *spatial_columns])
+
     @property
     def shape(self) -> tuple[int, ...]:
         """Returns the shape of the array."""
@@ -234,14 +242,14 @@ class GraphArrayView(BaseReadOnlyArray):
                 ]
             ).astype(dtype or self.dtype)
 
-    def _fill_array(self, time: int, volume_slicing: ArrayIndex, buffer: np.ndarray) -> np.ndarray:
+    def _fill_array(self, time: int, volume_slicing: Sequence[slice], buffer: np.ndarray) -> np.ndarray:
         """Fill the buffer with data from the graph at a specific time.
 
         Parameters
         ----------
         time : int
             The time point to retrieve data for.
-        volume_slicing : ArrayIndex
+        volume_slicing : Sequence[slice]
             The volume slicing information (currently not fully utilized).
         buffer : np.ndarray
             The buffer to fill with data.
@@ -251,10 +259,9 @@ class GraphArrayView(BaseReadOnlyArray):
         np.ndarray
             The filled buffer.
         """
-        # TODO handling the slices for volume_slicing
-        graph_filter = self.graph.filter(NodeAttr(DEFAULT_ATTR_KEYS.T) == time)
-        df = graph_filter.node_attrs(
-            attr_keys=[self._attr_key, DEFAULT_ATTR_KEYS.MASK],
+        subgraph = self._spatial_filter[(slice(time, time), *volume_slicing)]
+        df = subgraph.node_attrs(
+            attr_keys=[self._attr_key, DEFAULT_ATTR_KEYS.MASK, "t", "y", "x"],
         )
 
         for mask, value in zip(df[DEFAULT_ATTR_KEYS.MASK], df[self._attr_key], strict=False):
