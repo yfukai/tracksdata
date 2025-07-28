@@ -199,3 +199,90 @@ class SpatialFilter:
         """
         node_ids = self._df_filter[keys]
         return self._graph.filter(node_ids=node_ids)
+
+
+class BoundingBoxSpatialFilter:
+    """
+    Spatial filter for bounding box queries on graph nodes.
+
+    This filter allows querying nodes within a bounding box defined by minimum and
+    maximum coordinates for each spatial dimension.
+
+    Parameters
+    ----------
+    graph : BaseGraph
+        The graph containing nodes with spatial coordinates.
+    attrs_keys : list[str] | None, optional
+        List of attribute keys to use as spatial coordinates. If None, defaults to
+        ["t_min", "z_min", "y_min", "x_min", "t_max", "z_max", "y_max", "x_max"]
+        filtered to only include keys present in the graph.
+    """
+
+    def __init__(self, graph: "BaseGraph", attrs_keys: list[str] | None = None) -> None:
+        from spatial_graph import PointRTree
+
+        if attrs_keys is None:
+            attrs_keys = ["t_min", "z_min", "y_min", "x_min", "t_max", "z_max", "y_max", "x_max"]
+            valid_keys = set(graph.node_attr_keys)
+            attrs_keys = list(filter(lambda x: x in valid_keys, attrs_keys))
+        assert len(attrs_keys) % 2 == 0, "attrs_keys must contain pairs of min and max coordinates"
+        self._graph = graph
+        self._node_rtree = PointRTree()
+        nodes_df = graph.node_attrs(attr_keys=[DEFAULT_ATTR_KEYS.NODE_ID, *attrs_keys])
+        node_ids = nodes_df[DEFAULT_ATTR_KEYS.NODE_ID].values
+
+        attrs_keys_min = attrs_keys[: len(attrs_keys) // 2]
+        attrs_keys_max = attrs_keys[len(attrs_keys) // 2 :]
+        positions_min = nodes_df[attrs_keys_min].values.astype(np.float32)
+        positions_max = nodes_df[attrs_keys_max].values.astype(np.float32)
+        self._node_rtree.insert_bb_items(node_ids, positions_min, positions_max)
+
+    def __getitem__(self, keys: tuple[slice, ...]) -> "BaseFilter":
+        """
+        Query nodes that overlaps with a spatial region of interest.
+
+        Uses spatial indexing to efficiently find nodes whose bounding boxes fall within
+        the specified bounds for each spatial dimension.
+
+        Parameters
+        ----------
+        keys : tuple[slice, ...]
+            Tuple of slices defining the spatial bounds for each coordinate dimension.
+            Must match the number of coordinate dimensions specified in attrs_keys.
+            Each slice defines [start, stop) bounds for that dimension.
+
+        Returns
+        -------
+        BaseFilter
+            A filter containing only nodes and their edges that fall within the spatial ROI.
+
+        Raises
+        ------
+        ValueError
+            If the number of slices doesn't match the number of coordinate dimensions.
+
+        Examples
+        --------
+        ```python
+        # For 2D spatial filter with ["y_min", "x_min", "y_max", "x_max"] coordinates
+        filter = spatial_filter[10:50, 20:60]
+
+        # For 4D spatial filter with ["t_min", "z_min", "y_min", "x_min",
+        # "t_max", "z_max", "y_max", "x_max"] coordinates
+        subgraph = spatial_filter[0:10, 0:5, 10:50, 20:60].subgraph()
+        ```
+        """
+
+        node_ids = self._node_rtree.search(
+            *(
+                np.stack(
+                    [[s.start, s.stop] for s in keys],
+                    axis=1,
+                    dtype=np.float32,
+                ).T
+            )
+        )
+        if not node_ids:
+            LOG.warning("No nodes found in the specified bounding box.")
+            return self._graph.filter(node_ids=[])
+        return self._graph.filter(node_ids=node_ids)
