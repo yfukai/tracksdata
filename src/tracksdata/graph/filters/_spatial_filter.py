@@ -51,11 +51,13 @@ class DataFrameSpatialFilter:
             position_attr="position",
             directed=True,
         )
-        node_pos = np.ascontiguousarray(df.to_numpy(), dtype=np.float32)
-        self._sg_graph.add_nodes(
-            nodes=indices.copy(),
-            position=node_pos,
-        )
+
+        if not df.is_empty():
+            node_pos = np.ascontiguousarray(df.to_numpy(), dtype=np.float32)
+            self._sg_graph.add_nodes(
+                nodes=indices.copy(),
+                position=node_pos,
+            )
 
         end_time = time.time()
         LOG.info(f"Time to create spatial graph: {end_time - start_time} seconds")
@@ -95,7 +97,7 @@ class DataFrameSpatialFilter:
         start_time = time.time()
 
         roi = np.stack(
-            [[s.start, s.stop] for s in keys],
+            [[s.start, s.stop] for s in keys],  # subtractring 1e-8 because the spatial graph is inclusive
             axis=1,
             dtype=np.float32,
         )
