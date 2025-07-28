@@ -229,7 +229,7 @@ class GraphArrayView(BaseReadOnlyArray):
                     self._cache.get(
                         time=t,
                         volume_slicing=volume_slicing,
-                    ).astype(dtype or self.dtype)
+                    )
                     for t in time
                 ]
             ).astype(dtype or self.dtype)
