@@ -29,6 +29,31 @@ def sample_graph() -> RustWorkXGraph:
     return graph
 
 
+@pytest.fixture
+def sample_bb_graph() -> RustWorkXGraph:
+    """Create a sample graph with nodes for bounding box testing."""
+    graph = RustWorkXGraph()
+    graph.add_node_attr_key("z_min", 0)
+    graph.add_node_attr_key("y_min", 0)
+    graph.add_node_attr_key("x_min", 0)
+    graph.add_node_attr_key("z_max", 0)
+    graph.add_node_attr_key("y_max", 0)
+    graph.add_node_attr_key("x_max", 0)
+
+    # Add some nodes with bounding box coordinates
+    nodes = [
+        {"t": 0, "z_min": 0, "y_min": 10, "x_min": 20, "z_max": 1, "y_max": 15, "x_max": 25},
+        {"t": 0, "z_min": 0, "y_min": 30, "x_min": 40, "z_max": 1, "y_max": 35, "x_max": 45},
+        {"t": 1, "z_min": 1, "y_min": 50, "x_min": 60, "z_max": 2, "y_max": 55, "x_max": 65},
+        {"t": 2, "z_min": 2, "y_min": 90, "x_min": 100, "z_max": 3, "y_max": 95, "x_max": 105},
+    ]
+
+    for node_attrs in nodes:
+        graph.add_node(node_attrs)
+
+    return graph
+
+
 def test_spatial_filter_initialization(sample_graph: RustWorkXGraph) -> None:
     """Test SpatialFilter initialization with default and custom attributes."""
     # Test default attributes
@@ -174,3 +199,83 @@ def test_bb_spatial_filter_with_edges() -> None:
     # Should preserve both nodes and the edge
     assert len(result.node_attrs()) == 2
     assert len(result.edge_attrs()) == 1
+
+
+def test_bb_spatial_filter_initialization(sample_bb_graph: RustWorkXGraph) -> None:
+    """Test BoundingBoxSpatialFilter initialization with default and custom attributes."""
+    # Test default attributes - should filter to existing keys
+    spatial_filter = BoundingBoxSpatialFilter(sample_bb_graph)
+    # The filter should use the available min/max keys from the graph
+    assert spatial_filter._node_rtree is not None
+
+    # Test custom attributes
+    custom_min_attrs = ["t", "y_min", "x_min"]
+    custom_max_attrs = ["t", "y_max", "x_max"]
+    spatial_filter = BoundingBoxSpatialFilter(
+        sample_bb_graph, min_attrs_keys=custom_min_attrs, max_attrs_keys=custom_max_attrs
+    )
+    assert spatial_filter._node_rtree is not None
+
+
+def test_bb_spatial_filter_querying(sample_bb_graph: RustWorkXGraph) -> None:
+    """Test bounding box spatial querying with different bounds and dimensions."""
+    spatial_filter = BoundingBoxSpatialFilter(
+        sample_bb_graph,
+        min_attrs_keys=["t", "z_min", "y_min", "x_min"],
+        max_attrs_keys=["t", "z_max", "y_max", "x_max"],
+    )
+
+    # Test valid bounds that include nodes
+    result = spatial_filter[0:3, 0:3, 0:100, 0:110]
+    node_attrs = result.node_attrs()
+    assert not node_attrs.is_empty()
+
+    # Test narrow bounds that should include specific nodes
+    result = spatial_filter[0:1, 0:2, 10:20, 20:30]
+    node_attrs = result.node_attrs()
+    assert len(node_attrs) >= 1
+
+    # Test bounds that exclude all nodes
+    result = spatial_filter[10:20, 10:20, 200:300, 200:300]
+    node_attrs = result.node_attrs()
+    assert node_attrs.is_empty()
+
+
+def test_bb_spatial_filter_dimensions() -> None:
+    """Test BoundingBoxSpatialFilter with different coordinate dimensions."""
+    graph = RustWorkXGraph()
+    graph.add_node_attr_key("z_min", 0)
+    graph.add_node_attr_key("y_min", 0)
+    graph.add_node_attr_key("x_min", 0)
+    graph.add_node_attr_key("z_max", 0)
+    graph.add_node_attr_key("y_max", 0)
+    graph.add_node_attr_key("x_max", 0)
+    graph.add_node({"t": 0, "z_min": 0, "y_min": 10, "x_min": 20, "z_max": 1, "y_max": 15, "x_max": 25})
+
+    # Test 2D coordinates
+    spatial_filter_2d = BoundingBoxSpatialFilter(
+        graph, min_attrs_keys=["y_min", "x_min"], max_attrs_keys=["y_max", "x_max"]
+    )
+    result = spatial_filter_2d[0:50, 0:50]
+    assert not result.node_attrs().is_empty()
+
+    # Test 3D coordinates
+    spatial_filter_3d = BoundingBoxSpatialFilter(
+        graph, min_attrs_keys=["z_min", "y_min", "x_min"], max_attrs_keys=["z_max", "y_max", "x_max"]
+    )
+    result = spatial_filter_3d[0:2, 0:100, 0:100]
+    assert not result.node_attrs().is_empty()
+
+
+def test_bb_spatial_filter_error_handling() -> None:
+    """Test error handling for mismatched min/max attribute lengths."""
+    graph = RustWorkXGraph()
+    graph.add_node_attr_key("y_min", 0)
+    graph.add_node_attr_key("x_min", 0)
+    graph.add_node_attr_key("y_max", 0)
+    graph.add_node_attr_key("x_max", 0)
+    graph.add_node({"t": 0, "y_min": 10, "x_min": 20, "y_max": 15, "x_max": 25})
+
+    # Test mismatched min/max attributes length
+    with pytest.raises(AssertionError, match="min_attrs_keys and max_attrs_keys must have the same length"):
+        BoundingBoxSpatialFilter(graph, min_attrs_keys=["y_min", "x_min"], max_attrs_keys=["y_max"])  # Missing x_max
