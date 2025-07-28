@@ -1,7 +1,10 @@
 import pytest
 
 from tracksdata.graph import RustWorkXGraph
-from tracksdata.graph.filters._spatial_filter import SpatialFilter
+from tracksdata.graph.filters._spatial_filter import (
+    BoundingBoxSpatialFilter,
+    SpatialFilter,
+)
 
 
 @pytest.fixture
@@ -103,6 +106,70 @@ def test_spatial_filter_with_edges() -> None:
 
     spatial_filter = SpatialFilter(graph, attrs_keys=["y", "x"])
     result = spatial_filter[0:50, 0:50]
+
+    # Should preserve both nodes and the edge
+    assert len(result.node_attrs()) == 2
+    assert len(result.edge_attrs()) == 1
+
+
+def test_bb_spatial_filter_overlaps() -> None:
+    """Test BoundingBoxSpatialFilter overlaps with existing nodes."""
+    graph = RustWorkXGraph()
+    graph.add_node_attr_key("min_y", 0)
+    graph.add_node_attr_key("min_x", 0)
+    graph.add_node_attr_key("max_y", 0)
+    graph.add_node_attr_key("max_x", 0)
+
+    # Add nodes with bounding boxes
+    bboxes = [
+        [[0, 10], [20, 30]],  # Node 1
+        [[5, 15], [25, 35]],  # Node 2
+        [[10, 20], [30, 40]],  # Node 3
+        [[15, 25], [35, 45]],  # Node 4
+    ]
+    node_ids = []
+    for bbox in bboxes:
+        node_id = graph.add_node(
+            {
+                "t": 0,
+                "min_y": bbox[0][0],
+                "min_x": bbox[1][0],
+                "max_y": bbox[0][1],
+                "max_x": bbox[1][1],
+            }
+        )
+        node_ids.append(node_id)
+
+    spatial_filter = BoundingBoxSpatialFilter(
+        graph, min_attrs_keys=["t", "min_y", "min_x"], max_attrs_keys=["t", "max_y", "max_x"]
+    )
+    result = spatial_filter[0:0, 15:20, 0:40]
+    assert set(result.node_ids()) == {node_ids[i] for i in [1, 2, 3]}
+    result = spatial_filter[0:0, 15:20, 36:40]
+    assert set(result.node_ids()) == {node_ids[i] for i in [2, 3]}
+
+    # Should return both nodes
+    assert len(result.node_attrs()) == 2
+
+
+def test_bb_spatial_filter_with_edges() -> None:
+    """Test SpatialFilter preserves edges in subgraphs."""
+    graph = RustWorkXGraph()
+    graph.add_node_attr_key("min_y", 0)
+    graph.add_node_attr_key("min_x", 0)
+    graph.add_node_attr_key("max_y", 0)
+    graph.add_node_attr_key("max_x", 0)
+    graph.add_edge_attr_key("weight", 0.0)
+
+    # Add nodes and edge
+    node1_id = graph.add_node({"t": 0, "min_y": 10, "min_x": 20, "max_y": 15, "max_x": 25})
+    node2_id = graph.add_node({"t": 1, "min_y": 30, "min_x": 40, "max_y": 35, "max_x": 45})
+    graph.add_edge(node1_id, node2_id, {"weight": 1.0})
+
+    spatial_filter = BoundingBoxSpatialFilter(
+        graph, min_attrs_keys=["t", "min_y", "min_x"], max_attrs_keys=["t", "max_y", "max_x"]
+    )
+    result = spatial_filter[0:1, 0:50, 0:50]
 
     # Should preserve both nodes and the edge
     assert len(result.node_attrs()) == 2
