@@ -54,7 +54,6 @@ def test_spatial_filter_initialization(sample_graph: RustWorkXGraph) -> None:
     # Test default attributes
     spatial_filter = SpatialFilter(sample_graph)
     assert spatial_filter._df_filter._attrs_keys == ["t", "z", "y", "x"]
-    assert spatial_filter._df_filter._sg_graph is not None
 
     # Test custom attributes
     custom_attrs = ["t", "y", "x"]

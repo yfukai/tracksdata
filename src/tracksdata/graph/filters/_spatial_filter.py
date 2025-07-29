@@ -34,28 +34,19 @@ class DataFrameSpatialFilter:
         indices: pl.Series,
         df: pl.DataFrame,
     ) -> None:
-        import spatial_graph as sg
+        from spatial_graph import PointRTree
 
         start_time = time.time()
-
-        indices = np.ascontiguousarray(indices.to_numpy(), dtype=np.int64)
         self._attrs_keys = df.columns
-
-        self._sg_graph = sg.SpatialGraph(
-            ndims=len(self._attrs_keys),
-            node_dtype="int64",
-            node_attr_dtypes={
-                "position": f"float32[{len(self._attrs_keys)}]",
-            },
-            edge_attr_dtypes={},
-            position_attr="position",
-            directed=True,
+        indices = np.ascontiguousarray(indices.to_numpy(), dtype=np.int64).copy()
+        node_pos = np.ascontiguousarray(df.to_numpy(), dtype=np.float32).copy()
+        self.ndims = node_pos.shape[1]
+        self._node_rtree = PointRTree(
+            item_dtype="int64",
+            coord_dtype="float32",
+            dims=self.ndims,
         )
-        node_pos = np.ascontiguousarray(df.to_numpy(), dtype=np.float32)
-        self._sg_graph.add_nodes(
-            nodes=indices.copy(),
-            position=node_pos,
-        )
+        self._node_rtree.insert_point_items(indices, node_pos)
 
         end_time = time.time()
         LOG.info(f"Time to create spatial graph: {end_time - start_time} seconds")
@@ -89,8 +80,8 @@ class DataFrameSpatialFilter:
             if key.start is None or key.stop is None:
                 raise ValueError(f"Slice {key} must have start and stop")
 
-        if len(keys) != len(self._attrs_keys):
-            raise ValueError(f"Expected {len(self._attrs_keys)} keys, got {len(keys)}")
+        if len(keys) != self.ndims:
+            raise ValueError(f"Expected {self.ndims} keys, got {len(keys)}")
 
         start_time = time.time()
 
@@ -99,18 +90,11 @@ class DataFrameSpatialFilter:
             axis=1,
             dtype=np.float32,
         )
-        node_ids = self._sg_graph.query_nodes_in_roi(roi)
+        node_ids = self._node_rtree.search(*roi)
 
         end_time = time.time()
 
         LOG.info(f"Time to query nodes in ROI: {end_time - start_time} seconds")
-
-        roi = np.stack(
-            [[s.start, s.stop] for s in keys],
-            axis=1,
-            dtype=np.float32,
-        )
-        node_ids = self._sg_graph.query_nodes_in_roi(roi)
 
         return node_ids.tolist()
 
@@ -245,7 +229,7 @@ class BoundingBoxSpatialFilter:
         self._node_rtree = PointRTree(
             item_dtype="int64",
             coord_dtype="float32",
-            dims=num_dims + 1,  # +1 for the frame dimension
+            dims=self.ndims,
         )
         self._node_rtree.insert_bb_items(node_ids, positions_min, positions_max)
 
@@ -284,6 +268,10 @@ class BoundingBoxSpatialFilter:
         subgraph = spatial_filter[0:10, 0:5, 10:50, 20:60].subgraph()
         ```
         """
+
+        for key in keys:
+            if key.start is None or key.stop is None:
+                raise ValueError(f"Slice {key} must have start and stop")
 
         if len(keys) != self.ndims:
             raise ValueError(f"Expected {self.ndims} keys, got {len(keys)}")
