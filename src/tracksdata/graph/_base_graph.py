@@ -956,7 +956,7 @@ class BaseGraph(abc.ABC):
     def bb_spatial_filter(
         self,
         frame_attr_key: str = DEFAULT_ATTR_KEYS.T,
-        box_attr_key: str = DEFAULT_ATTR_KEYS.BBOX,
+        bbox_attr_key: str = DEFAULT_ATTR_KEYS.BBOX,
     ) -> "BoundingBoxSpatialFilter":
         """
         Create a spatial filter for efficient spatial queries of graph nodes using bounding boxes.
@@ -969,7 +969,7 @@ class BaseGraph(abc.ABC):
         frame_attr_key : str
             The attribute key for the frame (time) coordinate.
             Default is `DEFAULT_ATTR_KEYS.T`.
-        box_attr_key : str
+        bbox_attr_key : str
             The attribute key for the bounding box coordinates.
             Default is `DEFAULT_ATTR_KEYS.BBOX`.
 
@@ -1005,7 +1005,7 @@ class BaseGraph(abc.ABC):
         """
         from tracksdata.graph.filters._spatial_filter import BoundingBoxSpatialFilter
 
-        return BoundingBoxSpatialFilter(self, frame_attr_key=frame_attr_key, box_attr_key=box_attr_key)
+        return BoundingBoxSpatialFilter(self, frame_attr_key=frame_attr_key, bbox_attr_key=bbox_attr_key)
 
     def tracklet_graph(
         self,

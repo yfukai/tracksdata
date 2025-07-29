@@ -198,7 +198,7 @@ class BoundingBoxSpatialFilter:
         The graph containing nodes with spatial coordinates.
     frame_attr_key : str, optional
         The attribute key representing the frame or time dimension. Defaults to "t".
-    box_attr_key : str, optional
+    bbox_attr_key : str, optional
         The attribute key representing the bounding box coordinates. Defaults to "bbox".
     """
 
