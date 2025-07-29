@@ -90,9 +90,7 @@ class GraphView(RustWorkXGraph, MappedGraphMixin):
         # Setting up the time_to_nodes mapping (this was removed accidentally)
         for idx in rx_graph.node_indices():
             t = self.rx_graph[idx][DEFAULT_ATTR_KEYS.T]
-            if t not in self._time_to_nodes:
-                self._time_to_nodes[t] = []
-            self._time_to_nodes[t].append(idx)
+            self._time_to_nodes.setdefault(t, []).append(idx)
 
         # Set up edge mapping (nodes handled by mixin)
         self._edge_map_to_root: bidict.bidict[int, int] = bidict.bidict(
