@@ -946,8 +946,9 @@ class BaseGraph(abc.ABC):
 
         See Also
         --------
-        SpatialFilter : The spatial filter class for detailed usage.
-        filter : General attribute-based filtering.
+        [SpatialFilter][tracksdata.graph.filters.SpatialFilter]:
+            The point spatial filter query class.
+
         """
         from tracksdata.graph.filters._spatial_filter import SpatialFilter
 
@@ -1000,7 +1001,7 @@ class BaseGraph(abc.ABC):
 
         See Also
         --------
-        [BBoxSpatialFilter][src.tracksdata/graph/filters/_spatial_filter.BBoxSpatialFilter]:
+        [BBoxSpatialFilter][tracksdata.graph.filters.BBoxSpatialFilter]:
             The bounding box spatial filter query class.
         """
         from tracksdata.graph.filters._spatial_filter import BBoxSpatialFilter
