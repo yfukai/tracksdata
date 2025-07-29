@@ -212,38 +212,41 @@ class BoundingBoxSpatialFilter:
     ----------
     graph : BaseGraph
         The graph containing nodes with spatial coordinates.
-    attrs_keys : list[str] | None, optional
-        List of attribute keys to use as spatial coordinates. If None, defaults to
-        ["t", "z_min", "y_min", "x_min", "t", "z_max", "y_max", "x_max"]
-        filtered to only include keys present in the graph.
+    frame_attr_key : str, optional
+        The attribute key representing the frame or time dimension. Defaults to "t".
+    box_attr_key : str, optional
+        The attribute key representing the bounding box coordinates. Defaults to "bbox".
     """
 
     def __init__(
-        self, graph: "BaseGraph", min_attrs_keys: list[str] | None = None, max_attrs_keys: list[str] | None = None
+        self,
+        graph: "BaseGraph",
+        frame_attr_key: str = DEFAULT_ATTR_KEYS.T,
+        bbox_attr_key: str = DEFAULT_ATTR_KEYS.BBOX,
     ) -> None:
         from spatial_graph import PointRTree
 
-        if min_attrs_keys is None:
-            min_attrs_keys = ["t", "z_min", "y_min", "x_min"]
-            valid_keys = set(graph.node_attr_keys)
-            min_attrs_keys = list(filter(lambda x: x in valid_keys, min_attrs_keys))
-        if max_attrs_keys is None:
-            max_attrs_keys = ["t", "z_max", "y_max", "x_max"]
-            valid_keys = set(graph.node_attr_keys)
-            max_attrs_keys = list(filter(lambda x: x in valid_keys, max_attrs_keys))
-
-        assert len(min_attrs_keys) == len(max_attrs_keys), "min_attrs_keys and max_attrs_keys must have the same length"
         self._graph = graph
+        nodes_df = graph.node_attrs(attr_keys=[DEFAULT_ATTR_KEYS.NODE_ID, frame_attr_key, bbox_attr_key])
+        node_ids = np.ascontiguousarray(nodes_df[DEFAULT_ATTR_KEYS.NODE_ID].to_numpy(), dtype=np.int64).copy()
+
+        frames = nodes_df[frame_attr_key].to_numpy()
+        bboxes = nodes_df[bbox_attr_key].to_numpy()
+        msg = f"Bounding box coordinates must have even number of dimensions, got {bboxes.shape[1]}"
+        assert bboxes.shape[1] % 2 == 0, msg
+        num_dims = bboxes.shape[1] // 2
+        self.ndims = num_dims + 1  # +1 for the frame dimension
+        positions_min = np.ascontiguousarray(
+            np.hstack((frames[:, np.newaxis], bboxes[:, :num_dims])), dtype=np.float32
+        ).copy()
+        positions_max = np.ascontiguousarray(
+            np.hstack((frames[:, np.newaxis], bboxes[:, num_dims:])), dtype=np.float32
+        ).copy()
         self._node_rtree = PointRTree(
             item_dtype="int64",
             coord_dtype="float32",
-            dims=len(min_attrs_keys),
+            dims=num_dims + 1,  # +1 for the frame dimension
         )
-        nodes_df = graph.node_attrs(attr_keys=list({DEFAULT_ATTR_KEYS.NODE_ID, *min_attrs_keys, *max_attrs_keys}))
-        node_ids = np.ascontiguousarray(nodes_df[DEFAULT_ATTR_KEYS.NODE_ID].to_numpy(), dtype=np.int64).copy()
-
-        positions_min = np.ascontiguousarray(nodes_df[min_attrs_keys].to_numpy(), dtype=np.float32).copy()
-        positions_max = np.ascontiguousarray(nodes_df[max_attrs_keys].to_numpy(), dtype=np.float32).copy()
         self._node_rtree.insert_bb_items(node_ids, positions_min, positions_max)
 
     def __getitem__(self, keys: tuple[slice, ...]) -> "BaseFilter":
@@ -281,6 +284,9 @@ class BoundingBoxSpatialFilter:
         subgraph = spatial_filter[0:10, 0:5, 10:50, 20:60].subgraph()
         ```
         """
+
+        if len(keys) != self.ndims:
+            raise ValueError(f"Expected {self.ndims} keys, got {len(keys)}")
 
         node_ids = self._node_rtree.search(
             *(

@@ -954,7 +954,9 @@ class BaseGraph(abc.ABC):
         return SpatialFilter(self, attrs_keys=attrs_keys)
 
     def bb_spatial_filter(
-        self, min_attrs_keys: list[str] | None = None, max_attrs_keys: list[str] | None = None
+        self,
+        frame_attr_key: str = DEFAULT_ATTR_KEYS.T,
+        box_attr_key: str = DEFAULT_ATTR_KEYS.BBOX,
     ) -> "BoundingBoxSpatialFilter":
         """
         Create a spatial filter for efficient spatial queries of graph nodes using bounding boxes.
@@ -964,17 +966,12 @@ class BaseGraph(abc.ABC):
 
         Parameters
         ----------
-        min_attrs_keys : list[str] | None, optional
-            List of attribute keys to use as spatial coordinates. If None, defaults to
-            ["t", "min_z", "min_y", "min_x"] filtered to only include keys present in the graph.
-            Common combinations include:
-            - 2D: ["min_y", "min_x"]
-            - 3D: ["min_z", "min_y", "min_x"] or ["t", "min_y", "min_x"]
-            - 4D: ["t", "min_z", "min_y", "min_x"]
-        max_attrs_keys : list[str] | None, optional
-            List of attribute keys to use as spatial coordinates. If None, defaults to
-            ["t", "max_z", "max_y", "max_x"] filtered to only include keys present in the graph.
-            See `min_attrs_keys` for common combinations.
+        frame_attr_key : str
+            The attribute key for the frame (time) coordinate.
+            Default is `DEFAULT_ATTR_KEYS.T`.
+        box_attr_key : str
+            The attribute key for the bounding box coordinates.
+            Default is `DEFAULT_ATTR_KEYS.BBOX`.
 
         Returns
         -------
@@ -987,7 +984,7 @@ class BaseGraph(abc.ABC):
         Create a 2D spatial filter for bounding boxes:
 
         ```python
-        spatial_filter = graph.spatial_filter(min_attrs_keys=["min_y", "min_x"], max_attrs_keys=["max_y", "max_x"])
+        spatial_filter = graph.spatial_filter(frame_attr_key="t", box_attr_key="bbox")
         # Query nodes intersecting with region y=[10, 50), x=[20, 60)
         subgraph = spatial_filter[10:50, 20:60].subgraph()
         ```
@@ -996,7 +993,7 @@ class BaseGraph(abc.ABC):
 
         ```python
         spatial_filter = graph.spatial_filter()
-        # Uses default ["t", "min_z", "min_y", "min_x"] and ["t", "max_z", "max_y", "max_x"]
+        # Uses default ["t", "bbox"]
         # Query nodes intersecting with time=[0, 10), z=[0, 5), y=[10, 50), x=[20, 60)
         nodes_in_roi = spatial_filter[0:10, 0:5, 10:50, 20:60].node_attrs()
         ```
@@ -1008,7 +1005,7 @@ class BaseGraph(abc.ABC):
         """
         from tracksdata.graph.filters._spatial_filter import BoundingBoxSpatialFilter
 
-        return BoundingBoxSpatialFilter(self, min_attrs_keys=min_attrs_keys, max_attrs_keys=max_attrs_keys)
+        return BoundingBoxSpatialFilter(self, frame_attr_key=frame_attr_key, box_attr_key=box_attr_key)
 
     def tracklet_graph(
         self,
