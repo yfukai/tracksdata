@@ -82,7 +82,8 @@ class GraphView(RustWorkXGraph, MappedGraphMixin):
         sync: bool = True,
     ) -> None:
         # Initialize RustWorkXGraph
-        RustWorkXGraph.__init__(self, rx_graph=rx_graph)
+        RustWorkXGraph.__init__(self, rx_graph=None)  # rx_graph is not used to avoid initialization
+        self._graph = rx_graph
 
         # Initialize MappedGraphMixin
         MappedGraphMixin.__init__(self, node_map_to_root)
