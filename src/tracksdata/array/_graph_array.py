@@ -100,6 +100,7 @@ class GraphArrayView(BaseReadOnlyArray):
         offset: int | np.ndarray = 0,
         chunk_shape: tuple[int] | None = None,
         max_buffers: int = 32,
+        dtype: np.dtype | None = None,
     ):
         if attr_key not in graph.node_attr_keys:
             raise ValueError(f"Attribute key '{attr_key}' not found in graph. Expected '{graph.node_attr_keys}'")
@@ -109,14 +110,16 @@ class GraphArrayView(BaseReadOnlyArray):
         self._offset = offset
         # Infer the dtype from the graph's attribute
         # TODO improve performance
-        df = graph.node_attrs(attr_keys=[self._attr_key])
-        if df.is_empty():
-            dtype = DEFAULT_DTYPE
-        else:
-            dtype = polars_dtype_to_numpy_dtype(df[self._attr_key].dtype)
-            # napari support for bool is limited
-            if np.issubdtype(dtype, bool):
-                dtype = np.uint8
+
+        if dtype is None:
+            df = graph.node_attrs(attr_keys=[self._attr_key])
+            if df.is_empty():
+                dtype = DEFAULT_DTYPE
+            else:
+                dtype = polars_dtype_to_numpy_dtype(df[self._attr_key].dtype)
+                # napari support for bool is limited
+                if np.issubdtype(dtype, bool):
+                    dtype = np.uint8
 
         self._dtype = dtype
 
