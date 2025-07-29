@@ -40,11 +40,11 @@ class DataFrameSpatialFilter:
         self._attrs_keys = df.columns
         indices = np.ascontiguousarray(indices.to_numpy(), dtype=np.int64).copy()
         node_pos = np.ascontiguousarray(df.to_numpy(), dtype=np.float32).copy()
-        self.ndims = node_pos.shape[1]
+        self._ndims = node_pos.shape[1]
         self._node_rtree = PointRTree(
             item_dtype="int64",
             coord_dtype="float32",
-            dims=self.ndims,
+            dims=self._ndims,
         )
         self._node_rtree.insert_point_items(indices, node_pos)
 
@@ -80,8 +80,8 @@ class DataFrameSpatialFilter:
             if key.start is None or key.stop is None:
                 raise ValueError(f"Slice {key} must have start and stop")
 
-        if len(keys) != self.ndims:
-            raise ValueError(f"Expected {self.ndims} keys, got {len(keys)}")
+        if len(keys) != self._ndims:
+            raise ValueError(f"Expected {self._ndims} keys, got {len(keys)}")
 
         start_time = time.time()
 
@@ -185,7 +185,7 @@ class SpatialFilter:
         return self._graph.filter(node_ids=node_ids)
 
 
-class BoundingBoxSpatialFilter:
+class BBoxSpatialFilter:
     """
     Spatial filter for bounding box queries on graph nodes.
 
