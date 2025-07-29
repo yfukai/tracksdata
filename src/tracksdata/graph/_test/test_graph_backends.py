@@ -1300,7 +1300,7 @@ def test_spatial_filter_basic(graph_backend: BaseGraph) -> None:
     graph_backend.add_edge(node3, node2, attrs={})
 
     g_filter = graph_backend.spatial_filter(["t", "x", "y", "z"])
-    bb_filter = graph_backend.bb_spatial_filter("t", "bbox")
+    bb_filter = graph_backend.bbox_spatial_filter("t", "bbox")
 
     assert set(g_filter[0:0, 0:2, 0:2, 0:2].node_ids()) == {node1}
     assert set(bb_filter[0:0, 0:2, 0:2, 0:2].node_ids()) == {node3}
