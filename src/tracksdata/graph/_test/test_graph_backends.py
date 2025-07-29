@@ -1284,3 +1284,95 @@ def test_summary(graph_backend: BaseGraph) -> None:
     assert "Graph summary" in summary
     assert "Number of nodes" in summary
     assert "Number of edges" in summary
+
+
+def test_spatial_filter_basic(graph_backend: BaseGraph) -> None:
+    graph_backend.add_node_attr_key("x", 0.0)
+    graph_backend.add_node_attr_key("y", 0.0)
+    graph_backend.add_node_attr_key("z", 0.0)
+    graph_backend.add_node_attr_key("bbox", None)
+
+    node1 = graph_backend.add_node({"t": 0, "x": 1.0, "y": 1.0, "z": 1.0, "bbox": np.array([6, 6, 6, 8, 8, 8])})
+    node2 = graph_backend.add_node({"t": 1, "x": 2.0, "y": 2.0, "z": 2.0, "bbox": np.array([0, 0, 0, 3, 3, 3])})
+    node3 = graph_backend.add_node({"t": 0, "x": 3.0, "y": 3.0, "z": 3.0, "bbox": np.array([2, 2, 2, 4, 4, 4])})
+
+    graph_backend.add_edge(node1, node2, attrs={})
+    graph_backend.add_edge(node3, node2, attrs={})
+
+    g_filter = graph_backend.spatial_filter(["t", "x", "y", "z"])
+    bb_filter = graph_backend.bb_spatial_filter("t", "bbox")
+
+    assert set(g_filter[0:0, 0:2, 0:2, 0:2].node_ids()) == {node1}
+    assert set(bb_filter[0:0, 0:2, 0:2, 0:2].node_ids()) == {node3}
+
+
+def test_tracklet_graph_basic(graph_backend: BaseGraph) -> None:
+    """Test basic tracklet_graph functionality."""
+    # Add track_id attribute and nodes with track IDs
+    graph_backend.add_node_attr_key(DEFAULT_ATTR_KEYS.TRACK_ID, -1)
+
+    # Create nodes with different track IDs
+    node1 = graph_backend.add_node({"t": 0, DEFAULT_ATTR_KEYS.TRACK_ID: 1})
+    node2 = graph_backend.add_node({"t": 1, DEFAULT_ATTR_KEYS.TRACK_ID: 2})
+    node3 = graph_backend.add_node({"t": 1, DEFAULT_ATTR_KEYS.TRACK_ID: 3})
+    node4 = graph_backend.add_node({"t": 2, DEFAULT_ATTR_KEYS.TRACK_ID: 2})
+    node5 = graph_backend.add_node({"t": 2, DEFAULT_ATTR_KEYS.TRACK_ID: 3})
+    node6 = graph_backend.add_node({"t": 0, DEFAULT_ATTR_KEYS.TRACK_ID: 4})
+    node7 = graph_backend.add_node({"t": 1, DEFAULT_ATTR_KEYS.TRACK_ID: 4})
+    node8 = graph_backend.add_node({"t": 2, DEFAULT_ATTR_KEYS.TRACK_ID: 4})
+
+    graph_backend.add_edge_attr_key("weight", 0.0)
+
+    # Add edges within tracks (will be filtered out)
+    graph_backend.add_edge(node1, node2, {"weight": 0.8})
+    graph_backend.add_edge(node1, node3, {"weight": 0.9})
+    graph_backend.add_edge(node2, node4, {"weight": 0.5})
+    graph_backend.add_edge(node3, node5, {"weight": 0.7})
+
+    graph_backend.add_edge(node6, node7, {"weight": 0.9})
+    graph_backend.add_edge(node7, node8, {"weight": 0.5})
+
+    # Create tracklet graph
+    tracklet_graph = graph_backend.tracklet_graph()
+
+    # The method adds all track IDs from nodes_df, including duplicates
+    # So we should have 4 nodes (one for each node in original graph)
+    assert tracklet_graph.num_nodes() == 4
+    assert tracklet_graph.num_edges() == 2
+
+    # node content is the same as node ids
+    nodes = tracklet_graph.nodes()
+    assert set(nodes) == {1, 2, 3, 4}
+
+    edges = tracklet_graph.edges()
+    assert set(edges) == {(1, 2), (1, 3)}
+
+
+def test_tracklet_graph_with_ignore_track_id(graph_backend: BaseGraph) -> None:
+    """Test tracklet_graph with ignore_track_id parameter."""
+    # Add track_id attribute and nodes with track IDs
+    graph_backend.add_node_attr_key(DEFAULT_ATTR_KEYS.TRACK_ID, -1)
+    graph_backend.add_edge_attr_key("weight", 0.0)
+
+    # Simple test case: just check that the method accepts the parameter
+    # and filters out nodes properly when there are no edges
+    node1 = graph_backend.add_node({"t": 0, DEFAULT_ATTR_KEYS.TRACK_ID: 1})
+    node2 = graph_backend.add_node({"t": 1, DEFAULT_ATTR_KEYS.TRACK_ID: 2})
+    node3 = graph_backend.add_node({"t": 1, DEFAULT_ATTR_KEYS.TRACK_ID: -1})
+
+    graph_backend.add_edge(node1, node2, {"weight": 0.8})
+    graph_backend.add_edge(node1, node3, {"weight": 0.9})
+
+    # Test that tracklet_graph method accepts ignore_track_id parameter
+    tracklet_graph = graph_backend.tracklet_graph(ignore_track_id=-1)
+    assert tracklet_graph.num_nodes() == 2
+    assert tracklet_graph.num_edges() == 1
+
+    assert set(tracklet_graph.nodes()) == {1, 2}
+    assert set(tracklet_graph.edges()) == {(1, 2)}
+
+
+def test_tracklet_graph_missing_track_id_key(graph_backend: BaseGraph) -> None:
+    """Test tracklet_graph raises error when track_id_key doesn't exist."""
+    with pytest.raises(ValueError, match="Track id key 'track_id' not found in graph"):
+        graph_backend.tracklet_graph()
