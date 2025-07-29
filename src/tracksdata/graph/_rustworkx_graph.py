@@ -1166,16 +1166,14 @@ class RustWorkXGraph(BaseGraph):
 
 class IndexedRXGraph(RustWorkXGraph, MappedGraphMixin):
     """
-    A graph that is indexed by node ids.
-
-    This graph is useful when you have a graph with arbitrary node ids.
+    A graph with arbitrary node indices.
 
     Parameters
     ----------
     rx_graph : rx.PyDiGraph | None
         The rustworkx graph to index.
     node_id_map : dict[int, int] | None
-        A map of world ids to graph ids, must be provided if `rx_graph` is provided.
+        A map of external ids (arbitrary) to rx graph ids (0 to N-1), must be provided if `rx_graph` is provided.
 
     Examples
     --------
