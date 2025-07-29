@@ -1000,7 +1000,8 @@ class BaseGraph(abc.ABC):
 
         See Also
         --------
-        BoundingBoxSpatialFilter : The spatial filter class for detailed usage.
+        [BBoxSpatialFilter][src.tracksdata/graph/filters/_spatial_filter.BBoxSpatialFilter]:
+            The bounding box spatial filter query class.
         """
         from tracksdata.graph.filters._spatial_filter import BBoxSpatialFilter
 

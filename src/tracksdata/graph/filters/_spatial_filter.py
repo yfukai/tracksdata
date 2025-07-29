@@ -39,7 +39,7 @@ class DataFrameSpatialFilter:
         start_time = time.time()
         self._attrs_keys = df.columns
         indices = np.ascontiguousarray(indices.to_numpy(), dtype=np.int64).copy()
-        node_pos = np.ascontiguousarray(df.to_numpy(), dtype=np.float32).copy()
+        node_pos = np.ascontiguousarray(df.to_numpy(), dtype=np.float32)
         self._ndims = node_pos.shape[1]
         self._node_rtree = PointRTree(
             item_dtype="int64",
@@ -196,40 +196,56 @@ class BBoxSpatialFilter:
     ----------
     graph : BaseGraph
         The graph containing nodes with spatial coordinates.
-    frame_attr_key : str, optional
-        The attribute key representing the frame or time dimension. Defaults to "t".
+    frame_attr_key : str | None, optional
+        The attribute key representing the frame or time dimension.
+        Defaults to None, which means no frame filtering.
     bbox_attr_key : str, optional
         The attribute key representing the bounding box coordinates. Defaults to "bbox".
+        The bounding box coordinates should be in the format:
+        [min_x, min_y, min_z, ..., max_x, max_y, max_z, ...]
+        where each dimension has a min and max value.
     """
 
     def __init__(
         self,
         graph: "BaseGraph",
-        frame_attr_key: str = DEFAULT_ATTR_KEYS.T,
+        frame_attr_key: str | None = None,
         bbox_attr_key: str = DEFAULT_ATTR_KEYS.BBOX,
     ) -> None:
         from spatial_graph import PointRTree
 
         self._graph = graph
-        nodes_df = graph.node_attrs(attr_keys=[DEFAULT_ATTR_KEYS.NODE_ID, frame_attr_key, bbox_attr_key])
+
+        if frame_attr_key is None:
+            attr_keys = [DEFAULT_ATTR_KEYS.NODE_ID, bbox_attr_key]
+        else:
+            attr_keys = [DEFAULT_ATTR_KEYS.NODE_ID, frame_attr_key, bbox_attr_key]
+        nodes_df = graph.node_attrs(attr_keys=attr_keys)
         node_ids = np.ascontiguousarray(nodes_df[DEFAULT_ATTR_KEYS.NODE_ID].to_numpy(), dtype=np.int64).copy()
 
-        frames = nodes_df[frame_attr_key].to_numpy()
         bboxes = nodes_df[bbox_attr_key].to_numpy()
         msg = f"Bounding box coordinates must have even number of dimensions, got {bboxes.shape[1]}"
-        assert bboxes.shape[1] % 2 == 0, msg
+        if bboxes.shape[1] % 2 != 0:
+            raise ValueError(msg)
         num_dims = bboxes.shape[1] // 2
-        self.ndims = num_dims + 1  # +1 for the frame dimension
-        positions_min = np.ascontiguousarray(
-            np.hstack((frames[:, np.newaxis], bboxes[:, :num_dims])), dtype=np.float32
-        ).copy()
-        positions_max = np.ascontiguousarray(
-            np.hstack((frames[:, np.newaxis], bboxes[:, num_dims:])), dtype=np.float32
-        ).copy()
+
+        if frame_attr_key is None:
+            self._ndims = num_dims
+            positions_min = np.ascontiguousarray(bboxes[:, :num_dims], dtype=np.float32)
+            positions_max = np.ascontiguousarray(bboxes[:, num_dims:], dtype=np.float32)
+        else:
+            frames = nodes_df[frame_attr_key].to_numpy()
+            self._ndims = num_dims + 1  # +1 for the frame dimension
+            positions_min = np.ascontiguousarray(
+                np.hstack((frames[:, np.newaxis], bboxes[:, :num_dims])), dtype=np.float32
+            )
+            positions_max = np.ascontiguousarray(
+                np.hstack((frames[:, np.newaxis], bboxes[:, num_dims:])), dtype=np.float32
+            )
         self._node_rtree = PointRTree(
             item_dtype="int64",
             coord_dtype="float32",
-            dims=self.ndims,
+            dims=self._ndims,
         )
         self._node_rtree.insert_bb_items(node_ids, positions_min, positions_max)
 
@@ -245,7 +261,7 @@ class BBoxSpatialFilter:
         keys : tuple[slice, ...]
             Tuple of slices defining the spatial bounds for each coordinate dimension.
             Must match the number of coordinate dimensions specified in attrs_keys.
-            Each slice defines [start, stop) bounds for that dimension.
+            Each slice defines [start, stop] bounds for that dimension.
 
         Returns
         -------
@@ -260,11 +276,14 @@ class BBoxSpatialFilter:
         Examples
         --------
         ```python
-        # For 2D spatial filter with ["y_min", "x_min", "y_max", "x_max"] coordinates
+        # For 2D spatial filter with the bounding boxes
+        # overlapping with the region [10, 20] x [50, 60]
+        spatial_filter = BBoxSpatialFilter(graph, bbox_attr_key="bbox")
         filter = spatial_filter[10:50, 20:60]
 
-        # For 4D spatial filter with ["t_min", "z_min", "y_min", "x_min",
-        # "t_max", "z_max", "y_max", "x_max"] coordinates
+        # For 4D spatial filter with the t in [0, 10] and
+        # bounding boxes overlapping with the region [0, 5] x [10, 50] x [20, 60]
+        spatial_filter = BBoxSpatialFilter(graph, frame_attr_key="t", bbox_attr_key="bbox")
         subgraph = spatial_filter[0:10, 0:5, 10:50, 20:60].subgraph()
         ```
         """
@@ -273,8 +292,8 @@ class BBoxSpatialFilter:
             if key.start is None or key.stop is None:
                 raise ValueError(f"Slice {key} must have start and stop")
 
-        if len(keys) != self.ndims:
-            raise ValueError(f"Expected {self.ndims} keys, got {len(keys)}")
+        if len(keys) != self._ndims:
+            raise ValueError(f"Expected {self._ndims} keys, got {len(keys)}")
 
         node_ids = self._node_rtree.search(
             *(

@@ -1,10 +1,7 @@
 import pytest
 
 from tracksdata.graph import RustWorkXGraph
-from tracksdata.graph.filters._spatial_filter import (
-    BBoxSpatialFilter,
-    SpatialFilter,
-)
+from tracksdata.graph.filters._spatial_filter import BBoxSpatialFilter, SpatialFilter
 
 
 @pytest.fixture
@@ -131,7 +128,7 @@ def test_spatial_filter_with_edges() -> None:
     assert len(result.edge_attrs()) == 1
 
 
-def test_bb_spatial_filter_overlaps() -> None:
+def test_bbox_spatial_filter_overlaps() -> None:
     """Test BoundingBoxSpatialFilter overlaps with existing nodes."""
     graph = RustWorkXGraph()
     graph.add_node_attr_key("bbox", [0, 0, 0, 0])
@@ -167,7 +164,7 @@ def test_bb_spatial_filter_overlaps() -> None:
     assert len(result.node_attrs()) == 2
 
 
-def test_bb_spatial_filter_with_edges() -> None:
+def test_bbox_spatial_filter_with_edges() -> None:
     """Test SpatialFilter preserves edges in subgraphs."""
     graph = RustWorkXGraph()
     graph.add_node_attr_key("bbox", [0, 0, 0, 0])
@@ -186,17 +183,18 @@ def test_bb_spatial_filter_with_edges() -> None:
     assert len(result.edge_attrs()) == 1
 
 
-def test_bb_spatial_filter_initialization(sample_bb_graph: RustWorkXGraph) -> None:
+def test_bbox_spatial_filter_initialization(sample_bbox_graph: RustWorkXGraph) -> None:
     """Test BoundingBoxSpatialFilter initialization with default and custom attributes."""
-    # Test default attributes - should filter to existing keys
-    spatial_filter = BBoxSpatialFilter(sample_bb_graph)
-    # The filter should use the available min/max keys from the graph
+    spatial_filter = BBoxSpatialFilter(sample_bbox_graph)
+    assert spatial_filter._node_rtree is not None
+
+    spatial_filter = BBoxSpatialFilter(sample_bbox_graph, frame_attr_key="t", bbox_attr_key="bbox")
     assert spatial_filter._node_rtree is not None
 
 
-def test_bb_spatial_filter_querying(sample_bb_graph: RustWorkXGraph) -> None:
+def test_bbox_spatial_filter_querying(sample_bbox_graph: RustWorkXGraph) -> None:
     """Test bounding box spatial querying with different bounds and dimensions."""
-    spatial_filter = BBoxSpatialFilter(sample_bb_graph, frame_attr_key="t", bbox_attr_key="bbox")
+    spatial_filter = BBoxSpatialFilter(sample_bbox_graph, frame_attr_key="t", bbox_attr_key="bbox")
 
     # Test valid bounds that include nodes
     result = spatial_filter[0:3, 0:3, 0:100, 0:110]
@@ -214,13 +212,13 @@ def test_bb_spatial_filter_querying(sample_bb_graph: RustWorkXGraph) -> None:
     assert node_attrs.is_empty()
 
 
-def test_bb_spatial_filter_dimensions() -> None:
+def test_bbox_spatial_filter_dimensions() -> None:
     """Test BoundingBoxSpatialFilter with different coordinate dimensions."""
     graph = RustWorkXGraph()
     graph.add_node_attr_key("bbox", [0, 0, 0, 0, 0, 0])
     graph.add_node({"t": 0, "bbox": [0, 10, 20, 1, 15, 25]})
 
-    # Test 2D coordinates
+    # Test 3D coordinates
     spatial_filter = BBoxSpatialFilter(graph, frame_attr_key="t", bbox_attr_key="bbox")
     result = spatial_filter[0:2, 0:50, 0:50, 0:50]
     assert not result.node_attrs().is_empty()
@@ -229,12 +227,17 @@ def test_bb_spatial_filter_dimensions() -> None:
         # Test wrong number of slices
         spatial_filter[0:2, 0:50, 0:50]
 
+    # Only spatial coordinates
+    spatial_filter = BBoxSpatialFilter(graph, bbox_attr_key="bbox")
+    result = spatial_filter[0:50, 0:50, 0:50]
+    assert not result.node_attrs().is_empty()
 
-def test_bb_spatial_filter_error_handling() -> None:
+
+def test_bbox_spatial_filter_error_handling() -> None:
     """Test error handling for mismatched min/max attribute lengths."""
     graph = RustWorkXGraph()
     graph.add_node_attr_key("bbox", [0, 0, 0, 0])
     graph.add_node({"t": 0, "bbox": [10, 20, 15, 25, 14]})
     # Test mismatched min/max attributes length
-    with pytest.raises(AssertionError):
+    with pytest.raises(ValueError, match="Bounding box coordinates must have even number of dimensions"):
         BBoxSpatialFilter(graph, frame_attr_key="t", bbox_attr_key="bbox")
