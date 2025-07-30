@@ -1,8 +1,38 @@
 import itertools
 from collections import OrderedDict
 from collections.abc import Callable, Sequence
+from dataclasses import dataclass
 
 import numpy as np
+
+
+def _to_slice(slc: slice | int | Sequence[int]) -> slice:
+    """Convert int or slice to slice."""
+    if isinstance(slc, int):
+        return slice(slc, slc + 1)
+    elif isinstance(slc, slice):
+        return slc
+    elif isinstance(slc, Sequence):
+        return slice(min(slc), max(slc) + 1)
+    else:
+        raise TypeError(f"Unsupported type for slicing: {type(slc)}")
+
+
+@dataclass
+class CacheEntry:
+    buffer: np.ndarray
+    ready: np.ndarray
+
+    """
+    A cache entry for a single time-point.
+
+    Parameters
+    ----------
+    buffer : np.ndarray
+        The buffer to storing the entire volume.
+    ready : np.ndarray
+        A boolean mask indicating which chunks have been computed.
+    """
 
 
 class NDChunkCache:
@@ -41,19 +71,29 @@ class NDChunkCache:
         # Grid size in chunks, e.g. (nz, ny, nx, …)
         # Use ceiling division to handle non-divisible shapes
         self.grid_shape: tuple[int, ...] = tuple(
-            (fs + cs - 1) // cs for fs, cs in zip(self.shape, self.chunk_shape, strict=False)
+            (fs + cs - 1) // cs for fs, cs in zip(self.shape, self.chunk_shape, strict=True)
         )
 
         self.max_buffers = max_buffers
         self.dtype = dtype
 
         # (LRU) mapping   t  ->  {"buffer": ndarray, "ready": boolean ndarray}
-        self._store: OrderedDict[int, dict[str, np.ndarray]] = OrderedDict()
+        self._store: OrderedDict[int, CacheEntry] = OrderedDict()
 
-    def _ensure_buffer(self, t: int) -> dict[str, np.ndarray]:
+    def _ensure_buffer(self, t: int) -> CacheEntry:
         """
         Return the dictionary holding buffer & ready-mask for time `t`,
         allocating (and evicting) if necessary.
+
+        Parameters
+        ----------
+        t : int
+            The time point to retrieve data for.
+
+        Returns
+        -------
+        CacheEntry
+            The cache entry for the time point.
         """
         if t in self._store:
             # Move to MRU position
@@ -67,12 +107,12 @@ class NDChunkCache:
         # Allocate new buffer and boolean mask
         buf = np.zeros(self.shape, dtype=self.dtype)
         ready = np.zeros(self.grid_shape, dtype=bool)
-        self._store[t] = {"buffer": buf, "ready": ready}
+        self._store[t] = CacheEntry(buffer=buf, ready=ready)
         return self._store[t]
 
     def _chunk_bounds(self, slices: tuple[slice, ...]) -> tuple[tuple[int, int], ...]:
         """Return inclusive chunk-index bounds for every axis."""
-        return tuple((s.start // cs, (s.stop - 1) // cs) for s, cs in zip(slices, self.chunk_shape, strict=False))
+        return tuple((s.start // cs, (s.stop - 1) // cs) for s, cs in zip(slices, self.chunk_shape, strict=True))
 
     def get(self, time: int, volume_slicing: tuple[slice | int | Sequence[int], ...]) -> np.ndarray:
         """
@@ -93,40 +133,26 @@ class NDChunkCache:
         if len(volume_slicing) != self.ndim:
             raise ValueError("Number of slices must equal dimensionality")
 
-        def to_slice(slc):
-            """Convert int or slice to slice."""
-            if isinstance(slc, int):
-                return slice(slc, slc + 1)
-            elif isinstance(slc, slice):
-                return slc
-            elif isinstance(slc, Sequence):
-                return slice(min(slc), max(slc) + 1)
-            else:
-                raise TypeError(f"Unsupported type for slicing: {type(slc)}")
-
-        volume_slicing_slices = tuple(to_slice(slc) for slc in volume_slicing)
+        volume_slicing_slices = tuple(_to_slice(slc) for slc in volume_slicing)
 
         store_entry = self._ensure_buffer(time)
-        buf = store_entry["buffer"]
-        ready = store_entry["ready"]
-
         # Which chunks are touched by this request?
         bounds = self._chunk_bounds(volume_slicing_slices)
         chunk_ranges = [range(lo, hi + 1) for lo, hi in bounds]
 
         # For every intersected chunk, compute if not ready
         for chunk_idx in itertools.product(*chunk_ranges):
-            if ready[chunk_idx]:
+            if store_entry.ready[chunk_idx]:
                 continue  # already filled
 
             # Absolute slice covering this chunk
             chunk_slc = tuple(
                 slice(ci * cs, min((ci + 1) * cs, fs))
-                for ci, cs, fs in zip(chunk_idx, self.chunk_shape, self.shape, strict=False)
+                for ci, cs, fs in zip(chunk_idx, self.chunk_shape, self.shape, strict=True)
             )
             # Handle the case where chunk_slc exceeds volume_slices
-            self.compute_func(time, chunk_slc, buf)
-            ready[chunk_idx] = True
+            self.compute_func(time, chunk_slc, store_entry.buffer)
+            store_entry.ready[chunk_idx] = True
 
         # Return view on the big buffer
-        return buf[volume_slicing]
+        return store_entry.buffer[volume_slicing]
