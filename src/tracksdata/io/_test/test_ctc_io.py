@@ -13,6 +13,7 @@ def test_export_from_ctc_roundtrip(tmp_path: Path):
     in_graph = RustWorkXGraph()
 
     in_graph.add_node_attr_key(DEFAULT_ATTR_KEYS.MASK, None)
+    in_graph.add_node_attr_key(DEFAULT_ATTR_KEYS.BBOX, None)
     in_graph.add_node_attr_key(DEFAULT_ATTR_KEYS.TRACK_ID, -1)
     in_graph.add_node_attr_key("x", -999_999)
     in_graph.add_node_attr_key("y", -999_999)
@@ -27,6 +28,7 @@ def test_export_from_ctc_roundtrip(tmp_path: Path):
                 mask=np.ones((2, 2), dtype=bool),
                 bbox=np.asarray([0, 0, 2, 2]),
             ),
+            DEFAULT_ATTR_KEYS.BBOX: np.array([0, 0, 2, 2]),
         },
     )
 
@@ -40,6 +42,7 @@ def test_export_from_ctc_roundtrip(tmp_path: Path):
                 mask=np.ones((2, 2), dtype=bool),
                 bbox=np.asarray([0, 0, 2, 2]),
             ),
+            DEFAULT_ATTR_KEYS.BBOX: np.array([0, 0, 2, 2]),
         },
     )
 
@@ -53,6 +56,7 @@ def test_export_from_ctc_roundtrip(tmp_path: Path):
                 mask=np.ones((2, 2), dtype=bool),
                 bbox=np.asarray([1, 1, 3, 3]),
             ),
+            DEFAULT_ATTR_KEYS.BBOX: np.array([1, 1, 3, 3]),
         },
     )
 
