@@ -207,9 +207,11 @@ class BBoxSpatialFilter:
         The graph containing nodes with spatial coordinates.
     frame_attr_key : str | None, optional
         The attribute key representing the frame or time dimension.
-        Defaults to None, which means no frame filtering.
+        Default is None.
+        If None it will only use the bounding box coordinates.
     bbox_attr_key : str, optional
-        The attribute key representing the bounding box coordinates. Defaults to "bbox".
+        The attribute key representing the bounding box coordinates.
+        Defaults to `DEFAULT_ATTR_KEYS.BBOX`.
         The bounding box coordinates should be in the format:
         [min_x, min_y, min_z, ..., max_x, max_y, max_z, ...]
         where each dimension has a min and max value.
@@ -218,7 +220,7 @@ class BBoxSpatialFilter:
     def __init__(
         self,
         graph: "BaseGraph",
-        frame_attr_key: str | None = None,
+        frame_attr_key: str | None = DEFAULT_ATTR_KEYS.T,
         bbox_attr_key: str = DEFAULT_ATTR_KEYS.BBOX,
     ) -> None:
         from spatial_graph import PointRTree
@@ -230,16 +232,14 @@ class BBoxSpatialFilter:
         else:
             attr_keys = [DEFAULT_ATTR_KEYS.NODE_ID, frame_attr_key, bbox_attr_key]
         nodes_df = graph.node_attrs(attr_keys=attr_keys)
+        node_ids = np.ascontiguousarray(nodes_df[DEFAULT_ATTR_KEYS.NODE_ID].to_numpy(), dtype=np.int64).copy()
 
         if nodes_df.is_empty():
             self._node_rtree = None
         else:
-            node_ids = np.ascontiguousarray(nodes_df[DEFAULT_ATTR_KEYS.NODE_ID].to_numpy(), dtype=np.int64).copy()
-
             bboxes = nodes_df[bbox_attr_key].to_numpy()
             if bboxes.shape[1] % 2 != 0:
-                msg = f"Bounding box coordinates must have even number of dimensions, got {bboxes.shape[1]}"
-                raise ValueError(msg)
+                raise ValueError(f"Bounding box coordinates must have even number of dimensions, got {bboxes.shape[1]}")
             num_dims = bboxes.shape[1] // 2
 
             if frame_attr_key is None:

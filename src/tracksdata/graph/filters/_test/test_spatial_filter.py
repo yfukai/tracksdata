@@ -30,7 +30,7 @@ def sample_graph() -> RustWorkXGraph:
 def sample_bbox_graph() -> RustWorkXGraph:
     """Create a sample graph with nodes for bounding box testing."""
     graph = RustWorkXGraph()
-    graph.add_node_attr_key("bbox", [0, 0, 0, 0])
+    graph.add_node_attr_key("bbox", [0, 0, 0, 0, 0, 0])
 
     # Add some nodes with bounding box coordinates
     nodes = [
@@ -134,31 +134,18 @@ def test_bbox_spatial_filter_overlaps() -> None:
     graph.add_node_attr_key("bbox", [0, 0, 0, 0])
     # Add nodes with bounding boxes
     bboxes = [
-        [[0, 10], [20, 30]],  # Node 1
-        [[5, 15], [25, 35]],  # Node 2
-        [[10, 20], [30, 40]],  # Node 3
-        [[15, 25], [35, 45]],  # Node 4
+        [0, 20, 10, 30],  # Node 1
+        [5, 25, 15, 35],  # Node 2
+        [10, 30, 20, 40],  # Node 3
+        [15, 35, 25, 45],  # Node 4
     ]
-    node_ids = []
-    for bbox in bboxes:
-        node_id = graph.add_node(
-            {
-                "t": 0,
-                "bbox": [
-                    bbox[0][0],
-                    bbox[1][0],  # min_y, min_x
-                    bbox[0][1],
-                    bbox[1][1],  # max_y, max_x
-                ],
-            }
-        )
-        node_ids.append(node_id)
+    node_ids = graph.bulk_add_nodes([{"t": 0, "bbox": bbox} for bbox in bboxes])
 
     spatial_filter = BBoxSpatialFilter(graph, frame_attr_key="t", bbox_attr_key="bbox")
     result = spatial_filter[0:0, 15:20, 0:40]
-    assert set(result.node_ids()) == {node_ids[i] for i in [1, 2, 3]}
+    assert set(result.node_ids()) == set(node_ids[1:])
     result = spatial_filter[0:0, 15:20, 36:40]
-    assert set(result.node_ids()) == {node_ids[i] for i in [2, 3]}
+    assert set(result.node_ids()) == set(node_ids[2:])
 
     # Should return both nodes
     assert len(result.node_attrs()) == 2
@@ -205,6 +192,7 @@ def test_bbox_spatial_filter_querying(sample_bbox_graph: RustWorkXGraph) -> None
     result = spatial_filter[0:1, 0:2, 10:20, 20:30]
     node_attrs = result.node_attrs()
     assert len(node_attrs) >= 1
+    assert len(node_attrs) < sample_bbox_graph.num_nodes
 
     # Test bounds that exclude all nodes
     result = spatial_filter[10:20, 10:20, 200:300, 200:300]
@@ -228,7 +216,7 @@ def test_bbox_spatial_filter_dimensions() -> None:
         spatial_filter[0:2, 0:50, 0:50]
 
     # Only spatial coordinates
-    spatial_filter = BBoxSpatialFilter(graph, bbox_attr_key="bbox")
+    spatial_filter = BBoxSpatialFilter(graph, frame_attr_key=None, bbox_attr_key="bbox")
     result = spatial_filter[0:50, 0:50, 0:50]
     assert not result.node_attrs().is_empty()
 
