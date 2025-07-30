@@ -230,7 +230,6 @@ class GraphArrayView(BaseReadOnlyArray):
             if isinstance(time, slice):
                 time = range(self.original_shape[0])[time]
 
-            # XXX could be dask? should be benchmarked
             return np.stack(
                 [
                     self._cache.get(
