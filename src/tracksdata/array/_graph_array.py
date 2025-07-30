@@ -86,7 +86,7 @@ def _get_size(ind: ArrayIndex, size: int) -> int | None:
         The final size of the array after applying the indexing operation.
     """
     if isinstance(ind, slice):
-        return len(range(ind.start or 0, ind.stop or size))
+        return len(range(ind.start or 0, ind.stop or size, ind.step or 1))
     elif isinstance(ind, Sequence):
         return len(ind)
     elif np.isscalar(ind):
