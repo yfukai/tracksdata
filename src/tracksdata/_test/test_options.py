@@ -11,7 +11,7 @@ def test_default_options() -> None:
     options = Options()
     assert options.show_progress is True
     assert options.n_workers == 1
-    assert options.gav_chunk_size == (1, 2048, 2048)
+    assert options.gav_chunk_size == (2048, 2048)
     assert options.gav_default_dtype == np.uint64
 
 
