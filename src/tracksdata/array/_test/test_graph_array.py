@@ -306,6 +306,8 @@ def test_graph_array_view_getitem_multi_slices(multi_node_graph_from_image) -> N
 possible_combinations = [
     (slice(3, 20), slice(5, None)),
     (slice(3, 20), slice(None, 15)),
+    (slice(3, 20), slice(None, 15)),
+    (slice(3, 20, 4), slice(None, 15)),
     (slice(3, 20), 4),
     (slice(3, 20), [4, 5]),
     ([5, 6, 9, 8, 7], slice(1, 3)),
@@ -319,6 +321,8 @@ def test_graph_array_view_getitem_time_index_nested(multi_node_graph_from_image,
     array_view, label = multi_node_graph_from_image
     msg = f"Failed for index1={index1}, index2={index2}"
     assert np.array_equal(array_view[index1][index2], label[index1][index2]), msg
+    assert array_view[index1][index2].shape == label[index1][index2].shape, msg
+    assert array_view[index1][index2].ndim == label[index1][index2].ndim, msg
 
     if isinstance(index1, Sequence) or isinstance(index2, Sequence):
         with pytest.raises(NotImplementedError):
