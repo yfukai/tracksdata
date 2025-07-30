@@ -15,7 +15,7 @@ def test_nd_chunk_cache_checks_dim():
         compute_func=simple_compute_func,
         shape=(256, 256, 256),
         chunk_shape=(64, 64, 64),
-        max_buffers=2,
+        buffer_cache_size=2,
     )
     assert cache.ndim == 3
     assert cache.shape == (256, 256, 256)
@@ -25,13 +25,13 @@ def test_nd_chunk_cache_checks_dim():
             compute_func=simple_compute_func,
             shape=(256, 256),
             chunk_shape=(64, 64, 64),
-            max_buffers=2,
+            buffer_cache_size=2,
         )
 
 
 def test_nd_chunk_cache_data_integrity_non_divisible():
     """Test that data is computed correctly for non-divisible edge chunks."""
-    cache = NDChunkCache(compute_func=simple_compute_func, shape=(5,), chunk_shape=(2,), max_buffers=2)
+    cache = NDChunkCache(compute_func=simple_compute_func, shape=(5,), chunk_shape=(2,), buffer_cache_size=2)
 
     # Get full array
     result = cache.get(0, (slice(0, 5),))
@@ -60,11 +60,12 @@ def test_nd_chunk_cache_data_integrity_non_divisible():
 )
 def test_nd_chunk_cache_various_non_divisible(shape, chunk_size):
     """Parametrized test for various non-divisible shape combinations."""
-    cache = NDChunkCache(compute_func=simple_compute_func, shape=shape, chunk_shape=chunk_size, max_buffers=2)
+    cache = NDChunkCache(compute_func=simple_compute_func, shape=shape, chunk_shape=chunk_size, buffer_cache_size=2)
 
     # Grid shape should use ceiling division
     expected_grid_shape = tuple((fs + cs - 1) // cs for fs, cs in zip(shape, chunk_size, strict=False))
-    assert cache.grid_shape == expected_grid_shape, f"Expected grid_shape {expected_grid_shape}, got {cache.grid_shape}"
+    msg = f"Expected grid_shape {expected_grid_shape}, got {cache.grid_shape}"
+    assert cache.grid_shape == expected_grid_shape, msg
 
     # Should be able to access full array
     full_slices = tuple(slice(0, fs) for fs in shape)
@@ -75,9 +76,8 @@ def test_nd_chunk_cache_various_non_divisible(shape, chunk_size):
     edge_slices = tuple(slice(fs - 1, fs) for fs in shape)
     edge_result = cache.get(0, edge_slices)
     expected_edge_shape = tuple(1 for _ in shape)
-    assert edge_result.shape == expected_edge_shape, (
-        f"Expected edge shape {expected_edge_shape}, got {edge_result.shape}"
-    )
+    msg = f"Expected edge shape {expected_edge_shape}, got {edge_result.shape}"
+    assert edge_result.shape == expected_edge_shape, msg
 
 
 @pytest.fixture
@@ -95,7 +95,7 @@ def array_nd_chunk_cache():
         compute_func=simple_compute_func,
         shape=shape,
         chunk_shape=chunk_size,
-        max_buffers=3,
+        buffer_cache_size=3,
     )
     return cache, np_array
 

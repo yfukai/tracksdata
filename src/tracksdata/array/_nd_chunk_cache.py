@@ -58,7 +58,7 @@ class NDChunkCache:
         compute_func: Callable[[int, tuple[slice, ...], np.ndarray], None],
         shape: Sequence[int],
         chunk_shape: Sequence[int],
-        max_buffers: int = 4,
+        buffer_cache_size: int = 4,
         dtype=np.uint64,
     ):
         self.compute_func = compute_func
@@ -74,7 +74,7 @@ class NDChunkCache:
             (fs + cs - 1) // cs for fs, cs in zip(self.shape, self.chunk_shape, strict=True)
         )
 
-        self.max_buffers = max_buffers
+        self.max_buffers = buffer_cache_size
         self.dtype = dtype
 
         # (LRU) mapping   t  ->  {"buffer": ndarray, "ready": boolean ndarray}

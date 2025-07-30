@@ -333,7 +333,7 @@ def test_graph_array_view_getitem_time_index_nested(multi_node_graph_from_image,
 
 
 def test_graph_array_set_options() -> None:
-    with Options(gav_chunk_size=(512, 512), gav_default_dtype=np.int16):
+    with Options(gav_chunk_shape=(512, 512), gav_default_dtype=np.int16):
         empty_graph = RustWorkXGraph()
         empty_graph.add_node_attr_key("label", 0)
         array_view = GraphArrayView(graph=empty_graph, shape=(10, 100, 100), attr_key="label")

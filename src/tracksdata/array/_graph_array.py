@@ -117,8 +117,9 @@ class GraphArrayView(BaseReadOnlyArray):
         The offset to apply to the array.
     chunk_shape : tuple[int] | None, optional
         The chunk shape for the array. If None, the default chunk size is used.
-    max_buffers : int, optional
+    buffer_cache_size : int, optional
         The maximum number of buffers to keep in the cache for the array.
+        If None, the default buffer cache size is used.
     """
 
     def __init__(
@@ -127,8 +128,8 @@ class GraphArrayView(BaseReadOnlyArray):
         shape: tuple[int, ...],
         attr_key: str = DEFAULT_ATTR_KEYS.BBOX,
         offset: int | np.ndarray = 0,
-        chunk_shape: tuple[int] | None = None,
-        max_buffers: int = 32,
+        chunk_shape: tuple[int, ...] | int | None = None,
+        buffer_cache_size: int | None = None,
         dtype: np.dtype | None = None,
     ):
         if attr_key not in graph.node_attr_keys:
@@ -151,22 +152,23 @@ class GraphArrayView(BaseReadOnlyArray):
                     dtype = np.uint8
 
         self._dtype = dtype
-
         self.original_shape = shape
-        if chunk_shape is None:
-            chunk_shape = get_options().gav_chunk_size
-            if isinstance(chunk_shape, int):
-                chunk_shape = (chunk_shape,) * (len(shape) - 1)
-            elif len(chunk_shape) < len(shape) - 1:
-                chunk_shape = (1,) * (len(shape) - 1 - len(chunk_shape)) + tuple(chunk_shape)
+
+        chunk_shape = chunk_shape or get_options().gav_chunk_shape
+        if isinstance(chunk_shape, int):
+            chunk_shape = (chunk_shape,) * (len(shape) - 1)
+        elif len(chunk_shape) < len(shape) - 1:
+            chunk_shape = (1,) * (len(shape) - 1 - len(chunk_shape)) + tuple(chunk_shape)
+
         self.chunk_shape = chunk_shape
-        self.max_buffers = max_buffers
+        self.buffer_cache_size = buffer_cache_size or get_options().gav_buffer_cache_size
+
         self._indices = tuple(slice(0, s) for s in shape)
         self._cache = NDChunkCache(
             compute_func=self._fill_array,
             shape=self.shape[1:],
             chunk_shape=self.chunk_shape,
-            max_buffers=self.max_buffers,
+            buffer_cache_size=self.buffer_cache_size,
             dtype=self.dtype,
         )
 

@@ -38,7 +38,7 @@ def to_napari_format(
     output_track_id_key: str = DEFAULT_ATTR_KEYS.TRACK_ID,
     mask_key: str | None = None,
     chunk_shape: tuple[int] | None = None,
-    max_buffers: int = 32,
+    buffer_cache_size: int | None = None,
 ) -> (
     tuple[
         pl.DataFrame,
@@ -74,8 +74,9 @@ def to_napari_format(
         The key of the mask attribute.
     chunk_shape : tuple[int] | None, optional
         The chunk shape for the labels layer. If None, the default chunk size is used.
-    max_buffers : int, optional
+    buffer_cache_size : int, optional
         The maximum number of buffers to keep in the cache for the labels layer.
+        If None, the default buffer cache size is used.
 
     Examples
     --------
@@ -122,7 +123,7 @@ def to_napari_format(
             shape,
             attr_key=output_track_id_key,
             chunk_shape=chunk_shape,
-            max_buffers=max_buffers,
+            buffer_cache_size=buffer_cache_size,
         )
 
         return tracks_data, dict_graph, array_view
