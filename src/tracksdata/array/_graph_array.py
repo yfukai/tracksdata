@@ -154,12 +154,11 @@ class GraphArrayView(BaseReadOnlyArray):
         self._dtype = dtype
         self.original_shape = shape
 
-        if chunk_shape is None:
-            chunk_shape = get_options().gav_chunk_shape
-            if isinstance(chunk_shape, int):
-                chunk_shape = (chunk_shape,) * (len(shape) - 1)
-            elif len(chunk_shape) < len(shape) - 1:
-                chunk_shape = (1,) * (len(shape) - 1 - len(chunk_shape)) + tuple(chunk_shape)
+        chunk_shape = chunk_shape or get_options().gav_chunk_shape
+        if isinstance(chunk_shape, int):
+            chunk_shape = (chunk_shape,) * (len(shape) - 1)
+        elif len(chunk_shape) < len(shape) - 1:
+            chunk_shape = (1,) * (len(shape) - 1 - len(chunk_shape)) + tuple(chunk_shape)
 
         self.chunk_shape = chunk_shape
         self.buffer_cache_size = buffer_cache_size or get_options().gav_buffer_cache_size
