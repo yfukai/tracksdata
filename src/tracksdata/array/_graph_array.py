@@ -14,56 +14,87 @@ DEFAULT_CHUNK_SIZE = 2048
 DEFAULT_DTYPE = np.int32
 
 
-def merge_indices(slicing1: ArrayIndex | None, slicing2: ArrayIndex | None) -> ArrayIndex:
-    """Merge two array indices into a single index.
+def chain_indices(slicing1: ArrayIndex | None, slicing2: ArrayIndex | None) -> ArrayIndex:
+    """Chain two array indexing operations into a single one.
 
     Parameters
     ----------
     slicing1 : ArrayIndex | None
-        The first array index to merge.
+        The first array indexing operation.
     slicing2 : ArrayIndex | None
-        The second array index to merge.
+        The second array indexing operation.
 
     Returns
     -------
     ArrayIndex
-        The merged array index.
+        The chained array index.
 
     Examples
     --------
-    >>> merge_indices(slice(3, 20), slice(5, 15))
+    ```python
+    chain_indices(slice(3, 20), slice(5, 15))
     slice(8, 18, None)
-    >>> merge_indices(slice(3, 20), slice(5, None))
+    chain_indices(slice(3, 20), slice(5, None))
     slice(8, 20, None)
-    >>> merge_indices(slice(3, 20), slice(None, 15))
+    chain_indices(slice(3, 20), slice(None, 15))
     slice(3, 18, None)
-    >>> merge_indices(slice(3, 20), 4)
+    chain_indices(slice(3, 20), 4)
     7
-    >>> merge_indices(slice(3, 20), (4, 5))
+    chain_indices(slice(3, 20), (4, 5))
     [7, 8]
-    >>> merge_indices((5, 6, 7, 8, 9, 10), (3, 5))
+    chain_indices((5, 6, 7, 8, 9, 10), (3, 5))
     [8, 10]
+    ```
     """
     if slicing2 is None:
         return slicing1
+
     if isinstance(slicing1, slice):
-        r = range(max(slicing1.start, slicing1.stop))[slicing1]
+        new_slicing = range(max(slicing1.start, slicing1.stop))[slicing1]
         if isinstance(slicing2, Sequence):
-            return [r[i] for i in slicing2]
+            return [new_slicing[i] for i in slicing2]
         else:
-            r = r[slicing2]
-            if isinstance(r, range):
-                return slice(r.start, r.stop, r.step)
+            new_slicing = new_slicing[slicing2]
+            if isinstance(new_slicing, range):
+                return slice(new_slicing.start, new_slicing.stop, new_slicing.step)
             else:
-                return r
+                return new_slicing
+
     elif isinstance(slicing1, Sequence):
         if isinstance(slicing2, Sequence):
             return [slicing1[i] for i in slicing2]
         else:
             return slicing1[slicing2]
+
     raise ValueError(
         f"Cannot merge indices {slicing1} and {slicing2}. slicing1 must be a slice or python check indexable."
     )
+
+
+def _get_size(ind: ArrayIndex, size: int) -> int | None:
+    """
+    Get final size of an array after applying the indexing operation.
+
+    Parameters
+    ----------
+    ind : ArrayIndex
+        The indexing operation.
+    size : int
+        The size of the array before applying the indexing operation.
+
+    Returns
+    -------
+    int | None
+        The final size of the array after applying the indexing operation.
+    """
+    if isinstance(ind, slice):
+        return len(range(ind.start or 0, ind.stop or size))
+    elif isinstance(ind, Sequence):
+        return len(ind)
+    elif np.isscalar(ind):
+        return None
+    else:
+        raise ValueError(f"Expected scalar, sequence or slice, got type '{type(ind)}' with value {ind}")
 
 
 class GraphArrayView(BaseReadOnlyArray):
@@ -146,16 +177,7 @@ class GraphArrayView(BaseReadOnlyArray):
     def shape(self) -> tuple[int, ...]:
         """Returns the shape of the array."""
 
-        def _get_size(ind: ArrayIndex, size: int) -> int | None:
-            if isinstance(ind, slice):
-                return len(range(ind.start or 0, ind.stop or size))
-            elif isinstance(ind, Sequence):
-                return len(ind)
-            else:
-                assert np.isscalar(ind), f"Expected scalar or slice, got {type(ind)}"
-                return None
-
-        shape = [_get_size(ind, os) for ind, os in zip(self._indices, self.original_shape, strict=False)]
+        shape = [_get_size(ind, os) for ind, os in zip(self._indices, self.original_shape, strict=True)]
         return tuple(s for s in shape if s is not None)
 
     @property
@@ -181,7 +203,6 @@ class GraphArrayView(BaseReadOnlyArray):
         GraphArrayView
             A new GraphArrayView object with updated indices.
         """
-        obj = copy(self)
         normalized_index = []
         if not isinstance(index, tuple):
             index = (index,)
@@ -198,10 +219,35 @@ class GraphArrayView(BaseReadOnlyArray):
                     normalized_index.append(index[jj])
                 jj += 1
 
-        obj._indices = tuple(merge_indices(i1, i2) for i1, i2 in zip(self._indices, normalized_index, strict=False))
+        return self.reindex(normalized_index)
+
+    def reindex(
+        self,
+        slicing: Sequence[ArrayIndex],
+    ) -> "GraphArrayView":
+        """
+        Reindex the GraphArrayView.
+        Returns a shallow copy of the GraphArrayView with the new indices.
+
+        Parameters
+        ----------
+        slicing : tuple[ArrayIndex, ...]
+            The new indices to apply to the GraphArrayView.
+
+        Returns
+        -------
+        GraphArrayView
+            A new GraphArrayView object with updated indices.
+        """
+        obj = copy(self)
+        obj._indices = tuple(chain_indices(i1, i2) for i1, i2 in zip(self._indices, slicing, strict=False))
         return obj
 
-    def __array__(self, dtype=None, copy=None) -> np.ndarray:
+    def __array__(
+        self,
+        dtype: np.dtype | None = None,
+        copy: bool | None = None,
+    ) -> np.ndarray:
         """Convert the GraphArrayView to a numpy array.
 
         Parameters
@@ -210,10 +256,16 @@ class GraphArrayView(BaseReadOnlyArray):
             The desired dtype of the output array. If None, the dtype of the GraphArrayView is used.
         copy : bool, optional
             This parameter is ignored, as the GraphArrayView is read-only.
+
+        Returns
+        -------
+        np.ndarray
+            In memory numpy array of the GraphArrayView of the current indices.
         """
 
         if sum(isinstance(i, Sequence) for i in self._indices) > 1:
             raise NotImplementedError("Multiple sequences in indices are not supported for __array__.")
+
         time = self._indices[0]
         volume_slicing = self._indices[1:]
 
@@ -262,6 +314,6 @@ class GraphArrayView(BaseReadOnlyArray):
             attr_keys=[self._attr_key, DEFAULT_ATTR_KEYS.MASK],
         )
 
-        for mask, value in zip(df[DEFAULT_ATTR_KEYS.MASK], df[self._attr_key], strict=False):
+        for mask, value in zip(df[DEFAULT_ATTR_KEYS.MASK], df[self._attr_key], strict=True):
             mask: Mask
             mask.paint_buffer(buffer, value, offset=self._offset)
