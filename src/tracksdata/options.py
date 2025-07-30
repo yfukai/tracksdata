@@ -5,6 +5,8 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any
 
+import numpy as np
+
 __all__ = ["Options", "get_options", "options_context", "set_options"]
 
 # Module-private mutable state
@@ -28,10 +30,19 @@ class Options:
         - 0 or 1: use default behavior (sequential)
         - > 1: use exactly this many worker processes
         NOTE: Overhead of multiprocessing is significant, experiment with 1 before increasing.
+    gav_chunk_size : tuple[int, ...] | int
+        Spatial chunk size for displaying data as GraphArrayView. If the length
+        is less than the number of dimensions, the remaining dimensions will be
+        filled with 1 from the left.
+        If an int is provided, it will be used for all dimensions.
+    gav_default_dtype : np.dtype
+        Default dtype for GraphArrayView.
     """
 
     show_progress: bool = True
     n_workers: int = 1
+    gav_chunk_size: tuple[int, ...] | int = (1, 2048, 2048)
+    gav_default_dtype: np.dtype | str = np.uint64
 
     def __enter__(self) -> "Options":
         """Enter the context manager."""

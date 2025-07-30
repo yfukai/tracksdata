@@ -8,10 +8,8 @@ from tracksdata.array._nd_chunk_cache import NDChunkCache
 from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.graph._base_graph import BaseGraph
 from tracksdata.nodes._mask import Mask
+from tracksdata.options import get_options
 from tracksdata.utils._dtypes import polars_dtype_to_numpy_dtype
-
-DEFAULT_CHUNK_SIZE = 2048
-DEFAULT_DTYPE = np.int32
 
 
 def merge_indices(slicing1: ArrayIndex | None, slicing2: ArrayIndex | None) -> ArrayIndex:
@@ -114,7 +112,7 @@ class GraphArrayView(BaseReadOnlyArray):
             # TODO improve performance
             df = graph.node_attrs(attr_keys=[self._attr_key])
             if df.is_empty():
-                dtype = DEFAULT_DTYPE
+                dtype = get_options().gav_default_dtype
             else:
                 dtype = polars_dtype_to_numpy_dtype(df[self._attr_key].dtype)
                 # napari support for bool is limited
@@ -125,7 +123,11 @@ class GraphArrayView(BaseReadOnlyArray):
 
         self.original_shape = shape
         if chunk_shape is None:
-            chunk_shape = tuple([DEFAULT_CHUNK_SIZE] * (len(shape) - 1))  # Default chunk shape
+            chunk_shape = get_options().gav_chunk_size
+            if isinstance(chunk_shape, int):
+                chunk_shape = (chunk_shape,) * (len(shape) - 1)
+            elif len(chunk_shape) < len(shape) - 1:
+                chunk_shape = (1,) * (len(shape) - 1 - len(chunk_shape)) + tuple(chunk_shape)
         self.chunk_shape = chunk_shape
         self.max_buffers = max_buffers
         self._indices = tuple(slice(0, s) for s in shape)

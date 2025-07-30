@@ -5,11 +5,12 @@ import pytest
 from pytest import fixture
 
 from tracksdata.array import GraphArrayView
-from tracksdata.array._graph_array import DEFAULT_DTYPE, merge_indices
+from tracksdata.array._graph_array import merge_indices
 from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.graph import RustWorkXGraph
 from tracksdata.nodes import RegionPropsNodes
 from tracksdata.nodes._mask import Mask
+from tracksdata.options import Options, get_options
 
 # NOTE: this could be generic test for all array backends
 # when more slicing operations are implemented we could test as in:
@@ -40,7 +41,7 @@ def test_graph_array_view_init() -> None:
     assert array_view.shape == (10, 100, 100)
     assert array_view._attr_key == "label"
     assert array_view._offset == 0
-    assert array_view.dtype == DEFAULT_DTYPE
+    assert array_view.dtype == get_options().gav_default_dtype
     assert array_view.ndim == 3
     assert len(array_view) == 10
 
@@ -66,7 +67,7 @@ def test_graph_array_view_getitem_empty_time() -> None:
     # Should return zeros with correct shape
     assert result.shape == (100, 100)
     assert np.all(np.asarray(result) == 0)
-    assert result.dtype == DEFAULT_DTYPE
+    assert array_view.dtype == get_options().gav_default_dtype
 
 
 def test_graph_array_view_getitem_with_nodes() -> None:
@@ -329,3 +330,12 @@ def test_graph_array_view_getitem_time_index_nested(multi_node_graph_from_image,
         expected_array = label[(index1, index1)][(index2, index2)]
         actual_array = array_view[(index1, index1)][(index2, index2)]
         assert np.array_equal(actual_array, expected_array), msg
+
+
+def test_graph_array_set_options() -> None:
+    with Options(gav_chunk_size=(512, 512), gav_default_dtype=np.int16):
+        empty_graph = RustWorkXGraph()
+        empty_graph.add_node_attr_key("label", 0)
+        array_view = GraphArrayView(graph=empty_graph, shape=(10, 100, 100), attr_key="label")
+        assert array_view.chunk_shape == (512, 512)
+        assert array_view.dtype == np.int16
