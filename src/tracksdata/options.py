@@ -37,12 +37,15 @@ class Options:
         If an int is provided, it will be used for all dimensions.
     gav_default_dtype : np.dtype
         Default dtype for GraphArrayView.
+    gav_buffer_size : int
+        Number of chunks to buffer for GraphArrayView.
     """
 
     show_progress: bool = True
     n_workers: int = 1
-    gav_chunk_size: tuple[int, ...] | int = (2048, 2048)
+    gav_chunk_shape: tuple[int, ...] | int = 512
     gav_default_dtype: np.dtype | str = np.uint64
+    gav_buffer_cache_size: int = 4
 
     def __enter__(self) -> "Options":
         """Enter the context manager."""
