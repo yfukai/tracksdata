@@ -41,7 +41,7 @@ class Options:
 
     show_progress: bool = True
     n_workers: int = 1
-    gav_chunk_size: tuple[int, ...] | int = (1, 2048, 2048)
+    gav_chunk_size: tuple[int, ...] | int = (2048, 2048)
     gav_default_dtype: np.dtype | str = np.uint64
 
     def __enter__(self) -> "Options":

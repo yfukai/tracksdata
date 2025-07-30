@@ -51,7 +51,7 @@ def test_set_options_with_kwargs() -> None:
     set_options(original_options)
     assert get_options().show_progress is True
     assert get_options().n_workers == 1
-    assert get_options().gav_chunk_size == (1, 2048, 2048)
+    assert get_options().gav_chunk_size == (2048, 2048)
     assert get_options().gav_default_dtype == np.uint64
 
 
