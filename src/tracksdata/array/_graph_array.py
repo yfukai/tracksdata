@@ -162,7 +162,7 @@ class GraphArrayView(BaseReadOnlyArray):
                 chunk_shape = (1,) * (len(shape) - 1 - len(chunk_shape)) + tuple(chunk_shape)
 
         self.chunk_shape = chunk_shape
-        self.buffer_cache_size = buffer_cache_size or get_options().gav_cache_buffer_size
+        self.buffer_cache_size = buffer_cache_size or get_options().gav_buffer_cache_size
 
         self._indices = tuple(slice(0, s) for s in shape)
         self._cache = NDChunkCache(
