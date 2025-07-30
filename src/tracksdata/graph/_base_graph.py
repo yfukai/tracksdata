@@ -956,7 +956,7 @@ class BaseGraph(abc.ABC):
 
     def bbox_spatial_filter(
         self,
-        frame_attr_key: str = DEFAULT_ATTR_KEYS.T,
+        frame_attr_key: str | None = DEFAULT_ATTR_KEYS.T,
         bbox_attr_key: str = DEFAULT_ATTR_KEYS.BBOX,
     ) -> "BBoxSpatialFilter":
         """
@@ -970,9 +970,13 @@ class BaseGraph(abc.ABC):
         frame_attr_key : str
             The attribute key for the frame (time) coordinate.
             Default is `DEFAULT_ATTR_KEYS.T`.
+            If None it will only use the bounding box coordinates.
         bbox_attr_key : str
             The attribute key for the bounding box coordinates.
-            Default is `DEFAULT_ATTR_KEYS.BBOX`.
+            Defaults to `DEFAULT_ATTR_KEYS.BBOX`.
+            The bounding box coordinates should be in the format:
+            [min_x, min_y, min_z, ..., max_x, max_y, max_z, ...]
+            where each dimension has a min and max value.
 
         Returns
         -------
@@ -985,7 +989,7 @@ class BaseGraph(abc.ABC):
         Create a 2D spatial filter for bounding boxes:
 
         ```python
-        spatial_filter = graph.bbox_spatial_filter(frame_attr_key="t", box_attr_key="bbox")
+        spatial_filter = graph.bbox_spatial_filter(frame_attr_key=None, box_attr_key="bbox")
         # Query nodes intersecting with region y=[10, 50), x=[20, 60)
         subgraph = spatial_filter[10:50, 20:60].subgraph()
         ```
