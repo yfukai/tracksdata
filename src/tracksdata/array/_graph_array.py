@@ -96,7 +96,7 @@ class GraphArrayView(BaseReadOnlyArray):
         self,
         graph: BaseGraph,
         shape: tuple[int, ...],
-        attr_key: str,
+        attr_key: str = DEFAULT_ATTR_KEYS.BBOX,
         offset: int | np.ndarray = 0,
         chunk_shape: tuple[int] | None = None,
         max_buffers: int = 32,
@@ -108,10 +108,10 @@ class GraphArrayView(BaseReadOnlyArray):
         self.graph = graph
         self._attr_key = attr_key
         self._offset = offset
-        # Infer the dtype from the graph's attribute
-        # TODO improve performance
 
         if dtype is None:
+            # Infer the dtype from the graph's attribute
+            # TODO improve performance
             df = graph.node_attrs(attr_keys=[self._attr_key])
             if df.is_empty():
                 dtype = DEFAULT_DTYPE
@@ -137,14 +137,10 @@ class GraphArrayView(BaseReadOnlyArray):
             dtype=self.dtype,
         )
 
-        if len(self.original_shape) == 4:
-            spatial_columns = ["z", "y", "x"]
-        elif len(self.original_shape) == 3:
-            spatial_columns = ["y", "x"]
-        else:
-            raise ValueError(f"Unsupported shape: {self.original_shape} expected 3 or 4 dimensions")
-
-        self._spatial_filter = self.graph.spatial_filter(attrs_keys=[DEFAULT_ATTR_KEYS.T, *spatial_columns])
+        self._spatial_filter = self.graph.bbox_spatial_filter(
+            frame_attr_key=DEFAULT_ATTR_KEYS.T,
+            bbox_attr_key=DEFAULT_ATTR_KEYS.BBOX,
+        )
 
     @property
     def shape(self) -> tuple[int, ...]:
@@ -264,7 +260,7 @@ class GraphArrayView(BaseReadOnlyArray):
         """
         subgraph = self._spatial_filter[(slice(time, time), *volume_slicing)]
         df = subgraph.node_attrs(
-            attr_keys=[self._attr_key, DEFAULT_ATTR_KEYS.MASK, "t", "y", "x"],
+            attr_keys=[self._attr_key, DEFAULT_ATTR_KEYS.MASK],
         )
 
         for mask, value in zip(df[DEFAULT_ATTR_KEYS.MASK], df[self._attr_key], strict=False):

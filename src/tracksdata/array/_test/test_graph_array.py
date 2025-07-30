@@ -76,6 +76,7 @@ def test_graph_array_view_getitem_with_nodes() -> None:
     # Add attribute keys
     graph.add_node_attr_key("label", 0)
     graph.add_node_attr_key(DEFAULT_ATTR_KEYS.MASK, None)
+    graph.add_node_attr_key(DEFAULT_ATTR_KEYS.BBOX, None)
     graph.add_node_attr_key("y", 0)
     graph.add_node_attr_key("x", 0)
 
@@ -89,6 +90,7 @@ def test_graph_array_view_getitem_with_nodes() -> None:
             DEFAULT_ATTR_KEYS.T: 0,
             "label": 5,
             DEFAULT_ATTR_KEYS.MASK: mask,
+            DEFAULT_ATTR_KEYS.BBOX: mask.bbox,
             "y": 11,
             "x": 21,
         }
@@ -121,6 +123,7 @@ def test_graph_array_view_getitem_multiple_nodes() -> None:
     # Add attribute keys
     graph.add_node_attr_key("label", 0)
     graph.add_node_attr_key(DEFAULT_ATTR_KEYS.MASK, None)
+    graph.add_node_attr_key(DEFAULT_ATTR_KEYS.BBOX, None)
     graph.add_node_attr_key("y", 0)
     graph.add_node_attr_key("x", 0)
 
@@ -137,6 +140,7 @@ def test_graph_array_view_getitem_multiple_nodes() -> None:
             DEFAULT_ATTR_KEYS.T: 0,
             "label": 3,
             DEFAULT_ATTR_KEYS.MASK: mask1,
+            DEFAULT_ATTR_KEYS.BBOX: mask1.bbox,
             "y": 11,
             "x": 21,
         }
@@ -147,6 +151,7 @@ def test_graph_array_view_getitem_multiple_nodes() -> None:
             DEFAULT_ATTR_KEYS.T: 0,
             "label": 7,
             DEFAULT_ATTR_KEYS.MASK: mask2,
+            DEFAULT_ATTR_KEYS.BBOX: mask2.bbox,
             "y": 31,
             "x": 41,
         }
@@ -174,6 +179,7 @@ def test_graph_array_view_getitem_boolean_dtype() -> None:
     # Add attribute keys
     graph.add_node_attr_key("is_active", False)
     graph.add_node_attr_key(DEFAULT_ATTR_KEYS.MASK, None)
+    graph.add_node_attr_key(DEFAULT_ATTR_KEYS.BBOX, None)
     graph.add_node_attr_key("y", 0)
     graph.add_node_attr_key("x", 0)
 
@@ -182,7 +188,16 @@ def test_graph_array_view_getitem_boolean_dtype() -> None:
     mask = Mask(mask_data, bbox=np.array([10, 20, 11, 21]))
 
     # Add a node with boolean attribute
-    graph.add_node({DEFAULT_ATTR_KEYS.T: 0, "is_active": True, DEFAULT_ATTR_KEYS.MASK: mask, "y": 11, "x": 21})
+    graph.add_node(
+        {
+            DEFAULT_ATTR_KEYS.T: 0,
+            "is_active": True,
+            DEFAULT_ATTR_KEYS.MASK: mask,
+            DEFAULT_ATTR_KEYS.BBOX: mask.bbox,
+            "y": 11,
+            "x": 21,
+        }
+    )
 
     array_view = GraphArrayView(graph=graph, shape=(10, 100, 100), attr_key="is_active")
 
@@ -202,6 +217,7 @@ def test_graph_array_view_dtype_inference() -> None:
     # Add attribute keys
     graph.add_node_attr_key("float_label", 0.0)
     graph.add_node_attr_key(DEFAULT_ATTR_KEYS.MASK, None)
+    graph.add_node_attr_key(DEFAULT_ATTR_KEYS.BBOX, None)
     graph.add_node_attr_key("y", 0)
     graph.add_node_attr_key("x", 0)
 
@@ -210,7 +226,16 @@ def test_graph_array_view_dtype_inference() -> None:
     mask = Mask(mask_data, bbox=np.array([10, 20, 11, 21]))
 
     # Add a node with float attribute
-    graph.add_node({DEFAULT_ATTR_KEYS.T: 0, "float_label": 3.14, DEFAULT_ATTR_KEYS.MASK: mask, "y": 11, "x": 21})
+    graph.add_node(
+        {
+            DEFAULT_ATTR_KEYS.T: 0,
+            "float_label": 3.14,
+            DEFAULT_ATTR_KEYS.MASK: mask,
+            "y": 11,
+            "x": 21,
+            DEFAULT_ATTR_KEYS.BBOX: mask.bbox,
+        }
+    )
 
     array_view = GraphArrayView(graph=graph, shape=(10, 100, 100), attr_key="float_label")
 
