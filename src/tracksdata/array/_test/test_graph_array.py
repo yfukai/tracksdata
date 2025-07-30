@@ -5,7 +5,7 @@ import pytest
 from pytest import fixture
 
 from tracksdata.array import GraphArrayView
-from tracksdata.array._graph_array import merge_indices
+from tracksdata.array._graph_array import chain_indices
 from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.graph import RustWorkXGraph
 from tracksdata.nodes import RegionPropsNodes
@@ -18,14 +18,14 @@ from tracksdata.options import Options, get_options
 
 
 def test_merge_indices() -> None:
-    assert merge_indices(slice(3, 20), slice(5, 15)) == slice(8, 18, 1)
-    assert merge_indices(slice(3, 20), slice(5, None)) == slice(8, 20, 1)
-    assert merge_indices(slice(3, 20), slice(None, 15)) == slice(3, 18, 1)
-    assert merge_indices(slice(3, 20), 4) == 7
-    assert merge_indices(slice(3, 20, 3), 2) == 9
-    assert merge_indices(slice(3, 20, 3), slice(2, 6, 2)) == slice(9, 21, 6)
-    assert merge_indices(slice(3, 20), [4, 5]) == [7, 8]
-    assert merge_indices((5, 6, 7, 8, 9, 10), [3, 5]) == [8, 10]
+    assert chain_indices(slice(3, 20), slice(5, 15)) == slice(8, 18, 1)
+    assert chain_indices(slice(3, 20), slice(5, None)) == slice(8, 20, 1)
+    assert chain_indices(slice(3, 20), slice(None, 15)) == slice(3, 18, 1)
+    assert chain_indices(slice(3, 20), 4) == 7
+    assert chain_indices(slice(3, 20, 3), 2) == 9
+    assert chain_indices(slice(3, 20, 3), slice(2, 6, 2)) == slice(9, 21, 6)
+    assert chain_indices(slice(3, 20), [4, 5]) == [7, 8]
+    assert chain_indices((5, 6, 7, 8, 9, 10), [3, 5]) == [8, 10]
 
 
 def test_graph_array_view_init() -> None:
