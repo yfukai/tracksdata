@@ -967,7 +967,7 @@ class BaseGraph(abc.ABC):
 
         Parameters
         ----------
-        frame_attr_key : str
+        frame_attr_key : str | None
             The attribute key for the frame (time) coordinate.
             Default is `DEFAULT_ATTR_KEYS.T`.
             If None it will only use the bounding box coordinates.

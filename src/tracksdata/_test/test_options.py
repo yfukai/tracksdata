@@ -1,5 +1,6 @@
 """Tests for the options system."""
 
+import numpy as np
 import pytest
 
 from tracksdata.options import Options, get_options, options_context, set_options
@@ -10,6 +11,9 @@ def test_default_options() -> None:
     options = Options()
     assert options.show_progress is True
     assert options.n_workers == 1
+    assert options.gav_chunk_shape == 512
+    assert options.gav_buffer_cache_size == 4
+    assert options.gav_default_dtype == np.uint64
 
 
 def test_get_options() -> None:
@@ -38,14 +42,26 @@ def test_set_options_with_kwargs() -> None:
     original_options = get_options()
 
     # Set options using kwargs
-    set_options(show_progress=False, n_workers=4)
+    set_options(
+        show_progress=False,
+        n_workers=4,
+        gav_chunk_shape=(1, 1024, 1024),
+        gav_default_dtype=np.uint8,
+        gav_buffer_cache_size=8,
+    )
     assert get_options().show_progress is False
     assert get_options().n_workers == 4
+    assert get_options().gav_chunk_shape == (1, 1024, 1024)
+    assert get_options().gav_default_dtype == np.uint8
+    assert get_options().gav_buffer_cache_size == 8
 
     # Restore original
     set_options(original_options)
     assert get_options().show_progress is True
     assert get_options().n_workers == 1
+    assert get_options().gav_chunk_shape == 512
+    assert get_options().gav_default_dtype == np.uint64
+    assert get_options().gav_buffer_cache_size == 4
 
 
 def test_set_options_error_both_provided() -> None:
