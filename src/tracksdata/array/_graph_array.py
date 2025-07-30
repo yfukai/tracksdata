@@ -157,7 +157,7 @@ class GraphArrayView(BaseReadOnlyArray):
                 assert np.isscalar(ind), f"Expected scalar or slice, got {type(ind)}"
                 return None
 
-        shape = [_get_size(ind, os) for ind, os in zip(self._indices, self.original_shape, strict=False)]
+        shape = [_get_size(ind, os) for ind, os in zip(self._indices, self.original_shape, strict=True)]
         return tuple(s for s in shape if s is not None)
 
     @property
