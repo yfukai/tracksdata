@@ -1011,7 +1011,6 @@ class RustWorkXGraph(BaseGraph):
 
     def assign_track_ids(
         self,
-        track_id_offset: int = 1,
         output_key: str = DEFAULT_ATTR_KEYS.TRACK_ID,
         reset: bool = True,
         track_id_offset: int = 1,
@@ -1021,8 +1020,6 @@ class RustWorkXGraph(BaseGraph):
 
         Parameters
         ----------
-        track_id_offset : int
-            The starting track id, useful when assigning track ids to a subgraph.
         output_key : str
             The key of the output track id attribute.
         reset : bool
