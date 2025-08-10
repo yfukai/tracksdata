@@ -1014,6 +1014,7 @@ class RustWorkXGraph(BaseGraph):
         track_id_offset: int = 1,
         output_key: str = DEFAULT_ATTR_KEYS.TRACK_ID,
         reset: bool = True,
+        track_id_offset: int = 1,
     ) -> rx.PyDiGraph:
         """
         Compute and assign track ids to nodes.
@@ -1026,6 +1027,8 @@ class RustWorkXGraph(BaseGraph):
             The key of the output track id attribute.
         reset : bool
             Whether to reset the track ids of the graph. If True, the track ids will be reset to -1.
+        track_id_offset : int
+            The starting track id, useful when assigning track ids to a subgraph.
 
         Returns
         -------
@@ -1328,7 +1331,6 @@ class IndexedRXGraph(RustWorkXGraph, MappedGraphMixin):
     def node_attrs(
         self,
         *,
-        node_ids: Sequence[int] | None = None,
         attr_keys: Sequence[str] | str | None = None,
         unpack: bool = False,
     ) -> pl.DataFrame:
@@ -1337,8 +1339,6 @@ class IndexedRXGraph(RustWorkXGraph, MappedGraphMixin):
 
         Parameters
         ----------
-        node_ids : Sequence[int] | None
-            The node ids to include in the subgraph.
         attr_keys : Sequence[str] | str | None
             The attributes to include in the subgraph.
         unpack : bool
@@ -1349,7 +1349,7 @@ class IndexedRXGraph(RustWorkXGraph, MappedGraphMixin):
         pl.DataFrame
             The node attributes of the graph.
         """
-        node_ids = self._get_local_ids() if node_ids is None else self._map_to_local(node_ids)
+        node_ids = self._get_local_ids()
         df = super()._node_attrs_from_node_ids(node_ids=node_ids, attr_keys=attr_keys, unpack=unpack)
         df = self._map_df_to_external(df, [DEFAULT_ATTR_KEYS.NODE_ID])
         return df
