@@ -1046,8 +1046,8 @@ class RustWorkXGraph(BaseGraph):
         elif reset:
             self.update_node_attrs(node_ids=self.node_ids(), attrs={output_key: -1})
 
-        # Casting since we don't need node_id mapping for the indexed graph.
-        # XXX better way to enforce this?
+        # node_ids are rustworkx graph ids, therefore we don't need node_id mapping
+        # and we must use RustWorkXGraph for IndexedRXGraph
         RustWorkXGraph.update_node_attrs(
             self,
             node_ids=node_ids,
