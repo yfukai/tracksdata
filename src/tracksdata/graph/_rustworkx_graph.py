@@ -1087,7 +1087,10 @@ class RustWorkXGraph(BaseGraph):
         elif reset:
             self.update_node_attrs(node_ids=self.node_ids(), attrs={output_key: -1})
 
-        self.update_node_attrs(
+        # node_ids are rustworkx graph ids, therefore we don't need node_id mapping
+        # and we must use RustWorkXGraph for IndexedRXGraph
+        RustWorkXGraph.update_node_attrs(
+            self,
             node_ids=node_ids,
             attrs={output_key: track_ids},
         )
