@@ -1331,10 +1331,6 @@ def test_assign_track_ids(graph_backend: BaseGraph):
     assert len(set(track_ids[DEFAULT_ATTR_KEYS.TRACK_ID])) == 3
     # assert len
 
-    ## Should create 2 tracks: one for each branch
-    # assert len(node_ids) == 3
-    # assert len(track_ids) == 3
-    # assert len(np.unique(track_ids)) == 3  # Three unique track IDs
     assert isinstance(tracks_graph, rx.PyDiGraph)
     assert tracks_graph.num_nodes() == 3 + 1  # Three tracks (includes null node (0))
 
