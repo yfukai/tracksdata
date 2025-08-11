@@ -2,6 +2,7 @@ import operator
 from collections.abc import Callable, Sequence
 from typing import TYPE_CHECKING, Any
 
+import bidict
 import numpy as np
 import polars as pl
 import rustworkx as rx
@@ -1242,18 +1243,30 @@ class IndexedRXGraph(RustWorkXGraph, MappedGraphMixin):
         # Initialize RustWorkXGraph
         RustWorkXGraph.__init__(self, rx_graph)
 
-        # Initialize MappedGraphMixin with inverted mapping (external -> local)
+        # Initialize MappedGraphMixin with inverted mapping (local -> external)
         inverted_map = None
         if node_id_map is not None:
             # Validate for duplicate values before inverting
             # This will raise bidict.ValueDuplicationError if there are duplicates
-            import bidict
+            inverted_map = bidict.bidict(node_id_map).inverse
+            self._next_external_id = max(node_id_map.keys()) + 1
+        else:
+            self._next_external_id = 0
 
-            bidict.bidict(node_id_map)
-            inverted_map = {v: k for k, v in node_id_map.items()}
         MappedGraphMixin.__init__(self, inverted_map)
 
-        # ID mapping handled by MappedGraphMixin
+    def _get_next_available_external_id(self) -> int:
+        """
+        Get the next available external ID in O(1) time using an internal counter.
+
+        Returns
+        -------
+        int
+            The next available external ID.
+        """
+        next_id = self._next_external_id
+        self._next_external_id += 1
+        return next_id
 
     @property
     def supports_custom_indices(self) -> bool:
@@ -1275,8 +1288,8 @@ class IndexedRXGraph(RustWorkXGraph, MappedGraphMixin):
         validate_keys : bool
             Whether to validate the keys of the attributes.
         index : int | None
-            The index of the node. If None, the node id will be used.
-            This might cause issues if the node id is not unique.
+            The index of the node. If None, the next available index will be used
+            to avoid conflicts with existing node indices.
 
         Returns
         -------
@@ -1285,7 +1298,10 @@ class IndexedRXGraph(RustWorkXGraph, MappedGraphMixin):
         """
         node_id = super().add_node(attrs, validate_keys)
         if index is None:
-            index = node_id
+            index = self._get_next_available_external_id()
+        else:
+            # Update counter if explicit index is higher to avoid future collisions
+            self._next_external_id = max(self._next_external_id, index + 1)
         # Add mapping using mixin
         self._add_id_mapping(node_id, index)
         return index
@@ -1303,21 +1319,31 @@ class IndexedRXGraph(RustWorkXGraph, MappedGraphMixin):
         nodes : list[dict[str, Any]]
             The attributes of the nodes.
         indices : list[int] | None
-            The indices of the nodes. If None, the node ids will be used.
-            This might cause issues if the node ids are not unique.
+            The indices of the nodes. If None, all nodes will get auto-generated indices.
+            If provided, must have same length as nodes and all indices must be specified.
 
         Returns
         -------
         list[int]
             The indices of the nodes.
         """
-        if indices is not None and len(indices) != len(nodes):
-            raise ValueError(f"Length of indices ({len(indices)}) must match length of nodes ({len(nodes)})")
+        if len(nodes) == 0:
+            return []
+
+        self._validate_indices_length(nodes, indices)
 
         graph_ids = super().bulk_add_nodes(nodes)
 
         if indices is None:
-            indices = graph_ids
+            # All nodes get auto-generated indices
+            indices = [self._get_next_available_external_id() for _ in nodes]
+        else:
+            # All indices are explicitly provided
+            if len(indices) != len(nodes):
+                raise ValueError(f"Length of indices ({len(indices)}) must match nodes ({len(nodes)})")
+
+            # Update counter to be after the highest explicit index
+            self._next_external_id = max(self._next_external_id, max(indices) + 1)
 
         self._add_id_mappings(list(zip(graph_ids, indices, strict=True)))
 
