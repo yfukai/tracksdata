@@ -1207,6 +1207,18 @@ class RustWorkXGraph(BaseGraph):
         rx_graph, node_map = self.rx_graph.subgraph_with_nodemap(node_ids)
         return rx_graph, node_map
 
+    def has_edge(self, source_id: int, target_id: int) -> bool:
+        """
+        Check if the graph has an edge between two nodes.
+        """
+        return self.rx_graph.has_edge(source_id, target_id)
+
+    def edge_id(self, source_id: int, target_id: int) -> int:
+        """
+        Return the edge id between two nodes.
+        """
+        return self.rx_graph.get_edge_data(source_id, target_id)[DEFAULT_ATTR_KEYS.EDGE_ID]
+
 
 class IndexedRXGraph(RustWorkXGraph, MappedGraphMixin):
     """
@@ -1629,3 +1641,29 @@ class IndexedRXGraph(RustWorkXGraph, MappedGraphMixin):
             include_targets=include_targets,
             include_sources=include_sources,
         )
+
+    def has_edge(self, source_id: int, target_id: int) -> bool:
+        """
+        Check if the graph has an edge between two nodes.
+        """
+        try:
+            source_id = self._map_to_local(source_id)
+        except KeyError:
+            LOG.warning(f"`source_id` {source_id} not found in index map.")
+            return False
+
+        try:
+            target_id = self._map_to_local(target_id)
+        except KeyError:
+            LOG.warning(f"`target_id` {target_id} not found in index map.")
+            return False
+
+        return self.rx_graph.has_edge(source_id, target_id)
+
+    def edge_id(self, source_id: int, target_id: int) -> int:
+        """
+        Return the edge id between two nodes.
+        """
+        source_id = self._map_to_local(source_id)
+        target_id = self._map_to_local(target_id)
+        return super().edge_id(source_id, target_id)
