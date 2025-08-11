@@ -1310,8 +1310,7 @@ def test_spatial_filter_basic(graph_backend: BaseGraph) -> None:
 
 def test_assign_track_ids(graph_backend: BaseGraph):
     if isinstance(graph_backend, SQLGraph):
-        return
-        # with pytest.raises()
+        pytest.skip("`assign_track_ids` is not available for `SQLGraph`")
     else:
         # Add nodes:
         #     0
