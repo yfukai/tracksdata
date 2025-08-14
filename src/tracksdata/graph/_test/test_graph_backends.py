@@ -8,8 +8,7 @@ from zarr.storage import MemoryStore
 
 from tracksdata.attrs import EdgeAttr, NodeAttr
 from tracksdata.constants import DEFAULT_ATTR_KEYS
-from tracksdata.graph import RustWorkXGraph, SQLGraph
-from tracksdata.graph._base_graph import BaseGraph
+from tracksdata.graph import BaseGraph, RustWorkXGraph, SQLGraph
 from tracksdata.io._numpy_array import from_array
 from tracksdata.nodes._mask import Mask
 

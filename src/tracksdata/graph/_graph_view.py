@@ -700,3 +700,19 @@ class GraphView(RustWorkXGraph, MappedGraphMixin):
         Return the edge id between two nodes.
         """
         return self._root.edge_id(source_id, target_id)
+
+    def copy(self, **kwargs) -> "GraphView":
+        """
+        Not supported for `GraphView`.
+
+        Use `detach` to create a new reference-less graph with the same nodes and edges.
+
+        See Also
+        --------
+        [detach][tracksdata.graph.GraphView.detach]
+            Create a new reference-less graph with the same nodes and edges.
+        """
+        raise ValueError(
+            "`copy` is not supported for `GraphView`.\n"
+            "Use `detach` to create a new reference-less graph with the same nodes and edges."
+        )
