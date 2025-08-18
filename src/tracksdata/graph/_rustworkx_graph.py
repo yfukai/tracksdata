@@ -851,7 +851,7 @@ class RustWorkXGraph(BaseGraph):
             The attribute keys to get.
             If None, all the attributes of the first node are used.
         unpack : bool
-            Whether to unpack array attributesinto multiple scalar attributes.
+            Whether to unpack array attributes into multiple scalar attributes.
 
         Returns
         -------
@@ -1055,6 +1055,7 @@ class RustWorkXGraph(BaseGraph):
         output_key: str = DEFAULT_ATTR_KEYS.TRACK_ID,
         reset: bool = True,
         track_id_offset: int = 1,
+        node_ids: Sequence[int] | None = None,
     ) -> rx.PyDiGraph:
         """
         Compute and assign track ids to nodes.
@@ -1067,14 +1068,23 @@ class RustWorkXGraph(BaseGraph):
             Whether to reset the track ids of the graph. If True, the track ids will be reset to -1.
         track_id_offset : int
             The starting track id, useful when assigning track ids to a subgraph.
+        node_ids : Sequence[int] | None
+            The IDs of the nodes to assign track ids to.
+            If None, all nodes are used.
 
         Returns
         -------
         rx.PyDiGraph
             A compressed graph (parent -> child) with track ids lineage relationships.
+            If node_ids is provided, it will only include linages including those nodes.
         """
+        if node_ids is None:
+            graph_view = self
+        else:
+            graph_view = self.filter(node_ids=node_ids)
+
         try:
-            node_ids, track_ids, tracks_graph = _assign_track_ids(self.rx_graph, track_id_offset)
+            track_node_ids, track_ids, tracks_graph = _assign_track_ids(graph_view.rx_graph, track_id_offset)
         except RuntimeError as e:
             raise RuntimeError(
                 "Are you sure this graph is a valid lineage graph?\n"
@@ -1086,12 +1096,21 @@ class RustWorkXGraph(BaseGraph):
             self.add_node_attr_key(output_key, -1)
         elif reset:
             self.update_node_attrs(node_ids=self.node_ids(), attrs={output_key: -1})
+        else:
+            # Remap track IDs so that it minimize the changes.
+            prev_track_ids_df = graph_view.node_attrs(output_key)
+            track_ids_df = pl.DataFrame(
+                {DEFAULT_ATTR_KEYS.NODE_ID: track_node_ids, output_key + "_new": track_ids}
+            ).join(prev_track_ids_df, on=DEFAULT_ATTR_KEYS.NODE_ID)
+            # Blah blah
+            track_node_ids = track_ids_df[DEFAULT_ATTR_KEYS.NODE_ID]
+            track_ids = track_ids_df[output_key + "_mapped"]
 
         # node_ids are rustworkx graph ids, therefore we don't need node_id mapping
         # and we must use RustWorkXGraph for IndexedRXGraph
         RustWorkXGraph.update_node_attrs(
             self,
-            node_ids=node_ids,
+            node_ids=track_node_ids,
             attrs={output_key: track_ids},
         )
 
