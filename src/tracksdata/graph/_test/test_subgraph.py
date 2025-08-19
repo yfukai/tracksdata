@@ -1,4 +1,6 @@
+import re
 from collections.abc import Callable
+from contextlib import contextmanager
 from copy import deepcopy
 
 import polars as pl
@@ -6,8 +8,8 @@ import pytest
 
 from tracksdata.attrs import EdgeAttr, NodeAttr
 from tracksdata.constants import DEFAULT_ATTR_KEYS
-from tracksdata.graph import GraphView
-from tracksdata.graph._base_graph import BaseGraph
+from tracksdata.graph import BaseGraph, GraphView, SQLGraph
+from tracksdata.utils._logging import LOG
 
 
 def parametrize_subgraph_tests(func: Callable[..., None]) -> Callable[..., None]:
@@ -1087,6 +1089,18 @@ def test_remove_node_updates_time_points(graph_backend: BaseGraph, use_subgraph:
 @parametrize_subgraph_tests
 def test_has_edge(graph_backend: BaseGraph, use_subgraph: bool) -> None:
     """Test has_edge functionality on both original graphs and subgraphs."""
+
+    @contextmanager
+    def _ignore_index_map_warnings():
+        def flt(r) -> bool:
+            return not re.search(r"not found in index map", r.getMessage())
+
+        LOG.addFilter(flt)
+        try:
+            yield
+        finally:
+            LOG.removeFilter(flt)
+
     graph_with_data = create_test_graph(graph_backend, use_subgraph)
 
     # Add some edges
@@ -1097,8 +1111,23 @@ def test_has_edge(graph_backend: BaseGraph, use_subgraph: bool) -> None:
     ):
         assert graph_with_data.has_edge(src_id, tgt_id)
 
-    assert not graph_with_data.has_edge(10, 15)
+    with _ignore_index_map_warnings():
+        assert not graph_with_data.has_edge(10, 15)
+
     assert not graph_with_data.has_edge(graph_with_data._test_nodes[0], graph_with_data._test_nodes[-1])
+
+    # check if filtered edges are not present in the subgraph (they are in the _root graph)
+    if isinstance(graph_with_data, GraphView):
+        parent = graph_with_data._root
+        parent_edges = parent.edge_attrs().select(["source_id", "target_id"]).to_numpy().tolist()
+        graph_edges = graph_with_data.edge_attrs().select(["source_id", "target_id"]).to_numpy().tolist()
+
+        for edge in parent_edges:
+            if edge not in graph_edges:
+                with _ignore_index_map_warnings():
+                    assert not graph_with_data.has_edge(edge[0], edge[1])
+            else:
+                assert graph_with_data.has_edge(edge[0], edge[1])
 
 
 @parametrize_subgraph_tests
@@ -1112,3 +1141,30 @@ def test_edge_id(graph_backend: BaseGraph, use_subgraph: bool) -> None:
     for attr in edge_attrs.rows(named=True):
         edge_id = graph_with_data.edge_id(attr[DEFAULT_ATTR_KEYS.EDGE_SOURCE], attr[DEFAULT_ATTR_KEYS.EDGE_TARGET])
         assert edge_id == attr[DEFAULT_ATTR_KEYS.EDGE_ID]
+
+
+@parametrize_subgraph_tests
+def test_graph_copy(graph_backend: BaseGraph, use_subgraph: bool) -> None:
+    """Test copy functionality on both original graphs and subgraphs."""
+
+    graph_with_data = create_test_graph(graph_backend, use_subgraph)
+
+    if isinstance(graph_with_data, SQLGraph):
+        kwargs = {
+            "drivername": "sqlite",
+            "database": ":memory:",
+            "overwrite": True,
+        }
+    else:
+        kwargs = {}
+
+    if isinstance(graph_with_data, GraphView):
+        with pytest.raises(ValueError):
+            copied_graph = graph_with_data.copy(**kwargs)
+
+    else:
+        copied_graph = graph_with_data.copy(**kwargs)
+        assert copied_graph.num_nodes == graph_with_data.num_nodes
+        assert copied_graph.num_edges == graph_with_data.num_edges
+        assert copied_graph.node_ids() == graph_with_data.node_ids()
+        assert copied_graph.edge_ids() == graph_with_data.edge_ids()

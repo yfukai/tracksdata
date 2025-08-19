@@ -8,8 +8,7 @@ from zarr.storage import MemoryStore
 
 from tracksdata.attrs import EdgeAttr, NodeAttr
 from tracksdata.constants import DEFAULT_ATTR_KEYS
-from tracksdata.graph import RustWorkXGraph, SQLGraph
-from tracksdata.graph._base_graph import BaseGraph
+from tracksdata.graph import BaseGraph, RustWorkXGraph, SQLGraph
 from tracksdata.io._numpy_array import from_array
 from tracksdata.nodes._mask import Mask
 
@@ -1404,6 +1403,32 @@ def test_tracklet_graph_missing_track_id_key(graph_backend: BaseGraph) -> None:
     """Test tracklet_graph raises error when track_id_key doesn't exist."""
     with pytest.raises(ValueError, match="Track id key 'track_id' not found in graph"):
         graph_backend.tracklet_graph()
+
+
+def test_nodes_interface(graph_backend: BaseGraph) -> None:
+    graph_backend.add_node_attr_key("x", 0)
+
+    # Simple test case: just check that the method accepts the parameter
+    # and filters out nodes properly when there are no edges
+    node1 = graph_backend.add_node({"t": 0, "x": 1})
+    node2 = graph_backend.add_node({"t": 1, "x": 0})
+    node3 = graph_backend.add_node({"t": 2, "x": -1})
+
+    assert graph_backend[node1]["x"] == 1
+    assert graph_backend[node2]["x"] == 0
+    assert graph_backend[node3]["x"] == -1
+
+    graph_backend.add_node_attr_key("y", -1)
+
+    graph_backend[node2]["y"] = 5
+
+    assert graph_backend[node1]["y"] == -1
+    assert graph_backend[node2]["y"] == 5
+    assert graph_backend[node3]["y"] == -1
+
+    assert graph_backend[node1].to_dict() == {"t": 0, "x": 1, "y": -1}
+    assert graph_backend[node2].to_dict() == {"t": 1, "x": 0, "y": 5}
+    assert graph_backend[node3].to_dict() == {"t": 2, "x": -1, "y": -1}
 
 
 def test_custom_indices(graph_backend: BaseGraph) -> None:

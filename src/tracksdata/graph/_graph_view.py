@@ -1,5 +1,5 @@
 from collections.abc import Callable, Sequence
-from typing import Any
+from typing import Any, Literal, overload
 
 import bidict
 import polars as pl
@@ -10,8 +10,9 @@ from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.functional._rx import _assign_track_ids
 from tracksdata.graph._base_graph import BaseGraph
 from tracksdata.graph._mapped_graph_mixin import MappedGraphMixin
-from tracksdata.graph._rustworkx_graph import RustWorkXGraph, RXFilter
+from tracksdata.graph._rustworkx_graph import IndexedRXGraph, RustWorkXGraph, RXFilter
 from tracksdata.graph.filters._indexed_filter import IndexRXFilter
+from tracksdata.utils._logging import LOG
 
 
 class GraphView(RustWorkXGraph, MappedGraphMixin):
@@ -627,12 +628,31 @@ class GraphView(RustWorkXGraph, MappedGraphMixin):
 
         return subgraph
 
-    def detach(self) -> RustWorkXGraph:
+    @overload
+    def detach(self, reset_ids: Literal[False]) -> IndexedRXGraph: ...
+
+    @overload
+    def detach(self, reset_ids: Literal[True]) -> RustWorkXGraph: ...
+
+    def detach(self, reset_ids: bool = False) -> IndexedRXGraph | RustWorkXGraph:
         """
         Detach the graph view from the root graph, returning a new graph with the same nodes and edges
         without the view's mapping and indenpendent ids.
+
+        Parameters
+        ----------
+        reset_ids : bool
+            Whether to reset the ids of the graph.
+
+        Returns
+        -------
+        IndexedRXGraph | RustWorkXGraph
+            The detached graph.
         """
-        return RustWorkXGraph.from_other(self)
+        if reset_ids:
+            return RustWorkXGraph.from_other(self)
+        else:
+            return IndexedRXGraph.from_other(self)
 
     def _rx_subgraph_with_nodemap(
         self,
@@ -660,10 +680,39 @@ class GraphView(RustWorkXGraph, MappedGraphMixin):
         """
         Check if the graph has an edge between two nodes.
         """
-        return self._root.has_edge(source_id, target_id)
+
+        try:
+            source_id = self._map_to_local(source_id)
+        except KeyError:
+            LOG.warning(f"`source_id` {source_id} not found in index map.")
+            return False
+
+        try:
+            target_id = self._map_to_local(target_id)
+        except KeyError:
+            LOG.warning(f"`target_id` {target_id} not found in index map.")
+            return False
+
+        return self.rx_graph.has_edge(source_id, target_id)
 
     def edge_id(self, source_id: int, target_id: int) -> int:
         """
         Return the edge id between two nodes.
         """
         return self._root.edge_id(source_id, target_id)
+
+    def copy(self, **kwargs) -> "GraphView":
+        """
+        Not supported for `GraphView`.
+
+        Use `detach` to create a new reference-less graph with the same nodes and edges.
+
+        See Also
+        --------
+        [detach][tracksdata.graph.GraphView.detach]
+            Create a new reference-less graph with the same nodes and edges.
+        """
+        raise ValueError(
+            "`copy` is not supported for `GraphView`.\n"
+            "Use `detach` to create a new reference-less graph with the same nodes and edges."
+        )
