@@ -524,19 +524,19 @@ class GraphView(RustWorkXGraph, MappedGraphMixin):
         active_ids = set(self.node_ids())
         while len(active_ids) > 0:
             next_active_ids = [
-                df[DEFAULT_ATTR_KEYS.NODE_ID].first() 
-                for _,df in self._root.successors(node_ids=active_ids)
-                if len(df) == 1 # Only consider non-branching nodes
+                df[DEFAULT_ATTR_KEYS.NODE_ID].first()
+                for _, df in self._root.successors(node_ids=active_ids)
+                if len(df) == 1  # Only consider non-branching nodes
             ] + [
                 df[DEFAULT_ATTR_KEYS.NODE_ID].first()
-                for _,df in self._root.predecessors(node_ids=active_ids)
-                if len(df) == 1 # Only consider non-branching nodes
+                for _, df in self._root.predecessors(node_ids=active_ids)
+                if len(df) == 1  # Only consider non-branching nodes
             ]
             next_active_ids = set(next_active_ids)
             node_ids.update(active_ids)
             active_ids = next_active_ids - node_ids
-        
-        extended_graph = self._root.filter(node_ids=node_ids)
+
+        extended_graph = self._root.filter(node_ids=node_ids).subgraph()
         try:
             node_ids, track_ids, tracks_graph = _assign_track_ids(extended_graph.rx_graph, track_id_offset)
         except RuntimeError as e:
