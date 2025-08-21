@@ -99,29 +99,31 @@ def _fast_dag_transverse(
 
 
 @njit
-def _numba_dag(node_ids: np.ndarray, parent_ids: np.ndarray) -> dict[int, int]:
+def _numba_build_dict(keys: np.ndarray, values: np.ndarray) -> dict[int, int]:
     """
-    Creates a dict DAG of track lineages
+    Creates a numba-compatible dict from keys and values. When used to build a
+    directed acyclic graph (DAG), the keys should be parent nodes and the values should be
+    child nodes.
 
     Important:
-    Parent-less (orphan) nodes should not be provided.
+    Parent-less (orphan) nodes should not be provided when building the DAG.
 
     Parameters
     ----------
-    node_ids : np.ndarray
+    keys : np.ndarray
         Nodes indices.
-    parent_ids : np.ndarray
+    values : np.ndarray
         Parent indices.
 
     Returns
     -------
     dict[int, int]
-        DAG where parent maps to their child (parent -> child)
+        Dict that maps the keys to values.
     """
     dag = {}
 
-    for i in range(len(parent_ids)):
-        dag[parent_ids[i]] = node_ids[i]
+    for i in range(len(keys)):
+        dag[keys[i]] = values[i]
 
     return dag
 
@@ -209,7 +211,7 @@ def _rx_graph_to_dict_dag(graph: rx.PyDiGraph) -> tuple[dict[int, int], np.ndarr
     starts = nodes_df["target"].filter(~has_parent).cast(pl.Int64).to_numpy()
 
     nodes_arr = nodes_df.filter(has_parent).to_numpy(order="fortran").T
-    linear_dag = _numba_dag(nodes_arr[0], nodes_arr[1])
+    linear_dag = _numba_build_dict(nodes_arr[1], nodes_arr[0])
 
     return linear_dag, starts, long_edges_df
 
@@ -220,6 +222,7 @@ def _track_id_edges_from_long_edges(
     target: np.ndarray,
     first_to_track_id: dict[int, int],
     last_to_track_id: dict[int, int],
+    track_id_to_node_id: dict[int, int],
 ) -> list[tuple[int, int]]:
     """
     Compute the track_id edges from the long edges.
@@ -234,6 +237,8 @@ def _track_id_edges_from_long_edges(
         First node -> track_id.
     last_to_track_id : dict[int, int]
         Last node -> track_id.
+    track_id_to_node_id : dict[int, int]
+        Maps track_id to node_id.
 
     Returns
     -------
@@ -242,8 +247,8 @@ def _track_id_edges_from_long_edges(
     """
     edges = []
     for i in range(len(source)):
-        child_track_id = first_to_track_id[target[i]]
-        parent_track_id = last_to_track_id[source[i]]
+        child_track_id = track_id_to_node_id[first_to_track_id[target[i]]]
+        parent_track_id = track_id_to_node_id[last_to_track_id[source[i]]]
         edges.append((parent_track_id, child_track_id))
     return edges
 
@@ -285,14 +290,19 @@ def _assign_track_ids(
     n_tracks = len(track_ids)
 
     tracks_graph = rx.PyDiGraph(node_count_hint=n_tracks, edge_count_hint=n_tracks)
-    tracks_graph.add_nodes_from([None] * (n_tracks + 1))
-
+    tracks_graph.add_node(0)
+    node_ids = tracks_graph.add_nodes_from(track_ids)
+    track_id_to_node_id = _numba_build_dict(
+        np.asarray(track_ids, dtype=np.int64),
+        np.asarray(node_ids, dtype=np.int64),
+    )
     if len(long_edges_df) > 0:
         edges = _track_id_edges_from_long_edges(
             long_edges_df["source"].to_numpy(),
             long_edges_df["target"].to_numpy(),
             first_to_track_id,
             last_to_track_id,
+            track_id_to_node_id,
         )
         tracks_graph.add_edges_from_no_data(edges)
 
