@@ -247,8 +247,8 @@ def _track_id_edges_from_long_edges(
     """
     edges = []
     for i in range(len(source)):
-        child_track_id = track_id_to_node_id[first_to_track_id[target[i]]]
-        parent_track_id = track_id_to_node_id[last_to_track_id[source[i]]]
+        child_track_id = track_id_to_rx_node_id[first_to_track_id[target[i]]]
+        parent_track_id = track_id_to_rx_node_id[last_to_track_id[source[i]]]
         edges.append((parent_track_id, child_track_id))
     return edges
 
