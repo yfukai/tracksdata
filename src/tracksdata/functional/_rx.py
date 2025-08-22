@@ -302,7 +302,7 @@ def _assign_track_ids(
             long_edges_df["target"].to_numpy(),
             first_to_track_id,
             last_to_track_id,
-            track_id_to_node_id,
+            track_id_to_rx_node_id,
         )
         tracks_graph.add_edges_from_no_data(edges)
 
