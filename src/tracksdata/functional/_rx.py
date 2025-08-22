@@ -210,6 +210,8 @@ def _rx_graph_to_dict_dag(graph: rx.PyDiGraph) -> tuple[dict[int, int], np.ndarr
     has_parent = nodes_df["source"].is_not_null()
     starts = nodes_df["target"].filter(~has_parent).cast(pl.Int64).to_numpy()
 
+    # nodes_array is a (target, source) 2xN-array
+    # source is before target, and therefore the parent nodes
     nodes_arr = nodes_df.filter(has_parent).to_numpy(order="fortran").T
     linear_dag = _numba_build_dict(nodes_arr[1], nodes_arr[0])
 
