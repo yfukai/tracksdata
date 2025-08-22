@@ -237,8 +237,8 @@ def _track_id_edges_from_long_edges(
         First node -> track_id.
     last_to_track_id : dict[int, int]
         Last node -> track_id.
-    track_id_to_node_id : dict[int, int]
-        Maps track_id to node_id.
+    track_id_to_rx_node_id : dict[int, int]
+        Maps track_id to node_id of the rx graph of tracklets.
 
     Returns
     -------
