@@ -222,7 +222,7 @@ def _track_id_edges_from_long_edges(
     target: np.ndarray,
     first_to_track_id: dict[int, int],
     last_to_track_id: dict[int, int],
-    track_id_to_node_id: dict[int, int],
+    track_id_to_rx_node_id: dict[int, int],
 ) -> list[tuple[int, int]]:
     """
     Compute the track_id edges from the long edges.
