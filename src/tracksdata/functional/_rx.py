@@ -292,7 +292,7 @@ def _assign_track_ids(
     tracks_graph = rx.PyDiGraph(node_count_hint=n_tracks, edge_count_hint=n_tracks)
     tracks_graph.add_node(0)
     node_ids = tracks_graph.add_nodes_from(track_ids)
-    track_id_to_node_id = _numba_build_dict(
+    track_id_to_rx_node_id = _numba_build_dict(
         np.asarray(track_ids, dtype=np.int64),
         np.asarray(node_ids, dtype=np.int64),
     )
