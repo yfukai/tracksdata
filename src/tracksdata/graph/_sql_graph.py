@@ -1395,6 +1395,39 @@ class SQLGraph(BaseGraph):
 
         return [degree.get(node_id, 0) for node_id in node_ids]
 
+    def assign_track_ids(
+        self,
+        output_key: str = DEFAULT_ATTR_KEYS.TRACK_ID,
+        reset: bool = True,
+        track_id_offset: int = 1,
+        node_ids: Sequence[int] | None = None,
+    ) -> rx.PyDiGraph:
+        """
+        Compute and assign track ids to nodes.
+
+        Parameters
+        ----------
+        output_key : str
+            The key of the output track id attribute.
+        reset : bool
+            Whether to reset the track ids of the graph. If True, the track ids will be reset to -1.
+        track_id_offset : int
+            The starting track id, useful when assigning track ids to a subgraph.
+        node_ids : Sequence[int] | None
+            The IDs of the nodes to assign track ids to.
+            If None, all nodes are used.
+
+        Returns
+        -------
+        rx.PyDiGraph
+            A compressed graph (parent -> child) with track ids lineage relationships.
+            If node_ids is provided, it will only include linages including those nodes.
+        """
+        raise NotImplementedError(
+            "The method assign_track_ids is not implemented in SQLGraph. "
+            "Please use the tracklet_graph method to create a compressed tracklet graph."
+        )
+
     def in_degree(self, node_ids: list[int] | int | None = None) -> list[int] | int:
         """
         Get the in-degree of a list of nodes.
