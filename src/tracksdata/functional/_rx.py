@@ -210,6 +210,8 @@ def _rx_graph_to_dict_dag(graph: rx.PyDiGraph) -> tuple[dict[int, int], np.ndarr
     has_parent = nodes_df["source"].is_not_null()
     starts = nodes_df["target"].filter(~has_parent).cast(pl.Int64).to_numpy()
 
+    # nodes_array is a (target, source) 2xN-array
+    # source is before target, and therefore the parent nodes
     nodes_arr = nodes_df.filter(has_parent).to_numpy(order="fortran").T
     linear_dag = _numba_build_dict(nodes_arr[1], nodes_arr[0])
 
@@ -222,7 +224,7 @@ def _track_id_edges_from_long_edges(
     target: np.ndarray,
     first_to_track_id: dict[int, int],
     last_to_track_id: dict[int, int],
-    track_id_to_node_id: dict[int, int],
+    track_id_to_rx_node_id: dict[int, int],
 ) -> list[tuple[int, int]]:
     """
     Compute the track_id edges from the long edges.
@@ -237,8 +239,8 @@ def _track_id_edges_from_long_edges(
         First node -> track_id.
     last_to_track_id : dict[int, int]
         Last node -> track_id.
-    track_id_to_node_id : dict[int, int]
-        Maps track_id to node_id.
+    track_id_to_rx_node_id : dict[int, int]
+        Maps track_id to node_id of the rx graph of tracklets.
 
     Returns
     -------
@@ -247,8 +249,8 @@ def _track_id_edges_from_long_edges(
     """
     edges = []
     for i in range(len(source)):
-        child_track_id = track_id_to_node_id[first_to_track_id[target[i]]]
-        parent_track_id = track_id_to_node_id[last_to_track_id[source[i]]]
+        child_track_id = track_id_to_rx_node_id[first_to_track_id[target[i]]]
+        parent_track_id = track_id_to_rx_node_id[last_to_track_id[source[i]]]
         edges.append((parent_track_id, child_track_id))
     return edges
 
@@ -292,7 +294,7 @@ def _assign_track_ids(
     tracks_graph = rx.PyDiGraph(node_count_hint=n_tracks, edge_count_hint=n_tracks)
     tracks_graph.add_node(0)
     node_ids = tracks_graph.add_nodes_from(track_ids)
-    track_id_to_node_id = _numba_build_dict(
+    track_id_to_rx_node_id = _numba_build_dict(
         np.asarray(track_ids, dtype=np.int64),
         np.asarray(node_ids, dtype=np.int64),
     )
@@ -302,7 +304,7 @@ def _assign_track_ids(
             long_edges_df["target"].to_numpy(),
             first_to_track_id,
             last_to_track_id,
-            track_id_to_node_id,
+            track_id_to_rx_node_id,
         )
         tracks_graph.add_edges_from_no_data(edges)
 
