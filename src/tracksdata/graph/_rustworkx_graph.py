@@ -1050,11 +1050,7 @@ class RustWorkXGraph(BaseGraph):
             for key, value in attrs.items():
                 edge_attr[key] = value[i]
 
-    # TODO
-    # Partially recalculating track IDs : shall I recommend filtering and calling function for GraphView?
-    # Shall I implement a method to "extend" the node IDs to the tracklets?
     # Do I map the previous and re-calculated track IDs?
-    # Merge implementation for SQLgraph, RustWorkXGraph and GraphView?
     def assign_track_ids(
         self,
         output_key: str = DEFAULT_ATTR_KEYS.TRACK_ID,
