@@ -1335,7 +1335,7 @@ def test_assign_track_ids(graph_backend: BaseGraph):
     assert len(track_ids) == 3
     assert len(set(track_ids[DEFAULT_ATTR_KEYS.TRACK_ID])) == 3
     assert isinstance(tracks_graph, rx.PyDiGraph)
-    assert tracks_graph.num_nodes() == 3 + 1  # Three tracks (includes null node (0))
+    assert tracks_graph.num_nodes() == 3  # Three tracks
 
     tracks_graph = graph_backend.assign_track_ids(track_id_offset=100)
     track_ids = graph_backend.node_attrs(attr_keys=[DEFAULT_ATTR_KEYS.TRACK_ID])
@@ -1343,7 +1343,7 @@ def test_assign_track_ids(graph_backend: BaseGraph):
     assert len(set(track_ids[DEFAULT_ATTR_KEYS.TRACK_ID])) == 3
     assert min(track_ids[DEFAULT_ATTR_KEYS.TRACK_ID]) == 100
     assert isinstance(tracks_graph, rx.PyDiGraph)
-    assert tracks_graph.num_nodes() == 3 + 1  # Three tracks (includes null node (0))
+    assert tracks_graph.num_nodes() == 3  # Three tracks
 
     filtered_graph = graph_backend.filter(node_ids=nodes[1:3]).subgraph()
     tracks_graph = filtered_graph.assign_track_ids(track_id_offset=200)
