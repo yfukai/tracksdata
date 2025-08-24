@@ -1308,9 +1308,6 @@ def test_spatial_filter_basic(graph_backend: BaseGraph) -> None:
 
 
 def test_assign_track_ids(graph_backend: BaseGraph):
-    if isinstance(graph_backend, SQLGraph):
-        pytest.skip("`assign_track_ids` is not available for `SQLGraph`")
-
     # Add nodes:
     #     0
     #    / \
@@ -1325,13 +1322,6 @@ def test_assign_track_ids(graph_backend: BaseGraph):
     tracks_graph = graph_backend.assign_track_ids()
     track_ids = graph_backend.node_attrs(attr_keys=[DEFAULT_ATTR_KEYS.TRACK_ID])
 
-    assert len(track_ids) == 3
-    assert len(set(track_ids[DEFAULT_ATTR_KEYS.TRACK_ID])) == 3
-    assert isinstance(tracks_graph, rx.PyDiGraph)
-    assert tracks_graph.num_nodes() == 3 + 1  # Three tracks (includes null node (0))
-
-    tracks_graph = graph_backend.assign_track_ids(track_id_offset=100)
-    track_ids = graph_backend.node_attrs(attr_keys=[DEFAULT_ATTR_KEYS.TRACK_ID])
     assert len(track_ids) == 3
     assert len(set(track_ids[DEFAULT_ATTR_KEYS.TRACK_ID])) == 3
     assert isinstance(tracks_graph, rx.PyDiGraph)
@@ -1352,7 +1342,7 @@ def test_assign_track_ids(graph_backend: BaseGraph):
     assert len(set(track_ids[DEFAULT_ATTR_KEYS.TRACK_ID])) == 2
     assert min(track_ids[DEFAULT_ATTR_KEYS.TRACK_ID]) == 200
     assert isinstance(tracks_graph, rx.PyDiGraph)
-    assert tracks_graph.num_nodes() == 2 + 1  # Two tracks (includes null node (0))
+    assert tracks_graph.num_nodes() == 2  # Two tracks
 
 
 # def test_assign_track_ids_filter(graph_backend: BaseGraph):

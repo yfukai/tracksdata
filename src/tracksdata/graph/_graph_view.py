@@ -7,7 +7,6 @@ import rustworkx as rx
 
 from tracksdata.attrs import AttrComparison
 from tracksdata.constants import DEFAULT_ATTR_KEYS
-from tracksdata.functional._rx import _assign_track_ids
 from tracksdata.graph._base_graph import BaseGraph
 from tracksdata.graph._mapped_graph_mixin import MappedGraphMixin
 from tracksdata.graph._rustworkx_graph import IndexedRXGraph, RustWorkXGraph, RXFilter
@@ -494,73 +493,6 @@ class GraphView(RustWorkXGraph, MappedGraphMixin):
                 )
             else:
                 self._out_of_sync = True
-
-    def assign_track_ids(
-        self,
-        output_key: str = DEFAULT_ATTR_KEYS.TRACK_ID,
-        reset: bool = True,
-        track_id_offset: int = 1,
-    ) -> rx.PyDiGraph:
-        """
-        Compute and assign track ids to nodes.
-
-        Parameters
-        ----------
-        output_key : str
-            The key of the output track id attribute.
-        reset : bool
-            Whether to reset all track ids before assigning new ones.
-        track_id_offset : int
-            The starting track id, useful when assigning track ids to a subgraph.
-
-        Returns
-        -------
-        rx.PyDiGraph
-            A compressed graph (parent -> child) with track ids lineage relationships.
-        """
-
-        # Extend the graph so that it include all tracklets containing the nodes in the view.
-        node_ids = set()
-        active_ids = set(self.node_ids())
-        while len(active_ids) > 0:
-            node_ids.update(active_ids)
-            successors = [
-                df[DEFAULT_ATTR_KEYS.NODE_ID].first()
-                for df in self._root.successors(node_ids=active_ids).values()
-                if len(df) == 1
-            ]  # Only consider non-branching nodes
-            predecessors = [
-                df[DEFAULT_ATTR_KEYS.NODE_ID].first()
-                for df in self._root.predecessors(node_ids=active_ids).values()
-                if len(df) == 1  # Only consider non-branching nodes
-            ]
-            out_degrees = self._root.out_degree(predecessors)
-            predecessors = [node for node, degree in zip(predecessors, out_degrees, strict=False) if degree == 1]
-            active_ids = set(successors + predecessors) - node_ids
-
-        extended_graph = self._root.filter(node_ids=list(node_ids)).subgraph()
-        try:
-            node_ids, track_ids, tracks_graph = _assign_track_ids(extended_graph.rx_graph, track_id_offset)
-        except RuntimeError as e:
-            raise RuntimeError(
-                "Are you sure this graph is a valid lineage graph?\n"
-                "This function expects a solved graph.\n"
-                "Often used from `graph.subgraph(edge_attr_filter={'solution': True})`"
-            ) from e
-
-        node_ids = extended_graph._map_to_external(node_ids)
-
-        if output_key not in extended_graph.node_attr_keys:
-            extended_graph.add_node_attr_key(output_key, -1)
-        elif reset:
-            extended_graph.update_node_attrs(attrs={output_key: -1})
-
-        extended_graph.update_node_attrs(
-            node_ids=node_ids,
-            attrs={output_key: track_ids},
-        )
-
-        return tracks_graph
 
     def in_degree(self, node_ids: list[int] | int | None = None) -> list[int] | int:
         """

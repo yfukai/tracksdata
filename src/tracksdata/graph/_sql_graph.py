@@ -1419,9 +1419,13 @@ class SQLGraph(BaseGraph):
             A compressed graph (parent -> child) with track ids lineage relationships.
             If node_ids is provided, it will only include linages including those nodes.
         """
+        if output_key in self.node_attr_keys:
+            node_attr_keys = [DEFAULT_ATTR_KEYS.NODE_ID, DEFAULT_ATTR_KEYS.T, output_key]
+        else:
+            node_attr_keys = [DEFAULT_ATTR_KEYS.NODE_ID, DEFAULT_ATTR_KEYS.T]
         return (
             self.filter()
-            .subgraph(node_attr_keys=[output_key], edge_attr_keys=[])
+            .subgraph(node_attr_keys=node_attr_keys)
             .assign_track_ids(
                 output_key=output_key,
                 reset=reset,
