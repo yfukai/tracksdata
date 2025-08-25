@@ -70,7 +70,19 @@ class BaseGraph(abc.ABC):
                     f"`graph.add_{mode}_attr_key(key, default_value)`"
                 )
 
-        for ref_key in reference_keys:
+        required_keys = set(reference_keys)
+        if mode == "node":
+            required_keys.discard(DEFAULT_ATTR_KEYS.NODE_ID)
+        elif mode == "edge":
+            required_keys.difference_update(
+                {
+                    DEFAULT_ATTR_KEYS.EDGE_ID,
+                    DEFAULT_ATTR_KEYS.EDGE_SOURCE,
+                    DEFAULT_ATTR_KEYS.EDGE_TARGET,
+                }
+            )
+
+        for ref_key in required_keys:
             if ref_key not in attrs.keys():
                 raise ValueError(
                     f"Attribute '{ref_key}' not found in attrs: '{attrs.keys()}'\nRequested keys: '{reference_keys}'"
