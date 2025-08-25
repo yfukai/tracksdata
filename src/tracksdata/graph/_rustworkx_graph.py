@@ -232,10 +232,30 @@ class RXFilter(BaseFilter):
                 if not _filter_func(attr):
                     rx_graph.remove_edge(src, tgt)
 
+        full_node_keys = list(self._graph.node_attr_keys)
+        if node_attr_keys is None:
+            node_attr_keys = full_node_keys
+        elif isinstance(node_attr_keys, str):
+            node_attr_keys = [node_attr_keys]
+        else:
+            node_attr_keys = list(node_attr_keys)
+        node_attr_keys = list(dict.fromkeys(node_attr_keys))
+
+        full_edge_keys = list(self._graph.edge_attr_keys)
+        if edge_attr_keys is None:
+            edge_attr_keys = full_edge_keys
+        elif isinstance(edge_attr_keys, str):
+            edge_attr_keys = [edge_attr_keys]
+        else:
+            edge_attr_keys = list(edge_attr_keys)
+        edge_attr_keys = list(dict.fromkeys(edge_attr_keys))
+
         graph_view = GraphView(
             rx_graph,
             node_map_to_root=dict(node_map.items()),
             root=self._graph,
+            node_attr_keys=node_attr_keys,
+            edge_attr_keys=edge_attr_keys,
         )
 
         return graph_view

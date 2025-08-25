@@ -281,10 +281,32 @@ class SQLFilter(BaseFilter):
     ) -> "GraphView":
         from tracksdata.graph._graph_view import GraphView
 
+        if node_attr_keys is None:
+            node_attr_keys = list(self._graph.node_attr_keys)
+        elif isinstance(node_attr_keys, str):
+            node_attr_keys = [node_attr_keys]
+        else:
+            node_attr_keys = list(node_attr_keys)
+        node_attr_keys = list(dict.fromkeys(node_attr_keys))
+
+        if edge_attr_keys is None:
+            edge_attr_keys = list(self._graph.edge_attr_keys)
+        elif isinstance(edge_attr_keys, str):
+            edge_attr_keys = [edge_attr_keys]
+        else:
+            edge_attr_keys = list(edge_attr_keys)
+        edge_attr_keys = list(dict.fromkeys(edge_attr_keys))
+
+        node_query_keys = list(node_attr_keys)
+        if DEFAULT_ATTR_KEYS.NODE_ID not in node_query_keys:
+            node_query_keys.append(DEFAULT_ATTR_KEYS.NODE_ID)
+        if DEFAULT_ATTR_KEYS.T not in node_query_keys:
+            node_query_keys.append(DEFAULT_ATTR_KEYS.T)
+
         node_query = self._query_from_attr_keys(
             query=self._node_query,
             table=self._graph.Node,
-            attr_keys=node_attr_keys,
+            attr_keys=node_query_keys,
         )
 
         edge_query = self._query_from_attr_keys(
@@ -299,22 +321,22 @@ class SQLFilter(BaseFilter):
         )
 
         with Session(self._graph._engine) as session:
-            node_query = session.execute(node_query)
-            edge_query = session.execute(edge_query)
+            node_rows = session.execute(node_query).mappings().all()
+            edge_rows = session.execute(edge_query).mappings().all()
 
             node_map_to_root = {}
             node_map_from_root = {}
             rx_graph = rx.PyDiGraph()
 
-            for row in node_query.scalars().all():
-                data = {k: v for k, v in row.__dict__.items() if not k.startswith("_")}
+            for row in node_rows:
+                data = dict(row)
                 root_node_id = data.pop(DEFAULT_ATTR_KEYS.NODE_ID)
                 node_id = rx_graph.add_node(data)
                 node_map_to_root[node_id] = root_node_id
                 node_map_from_root[root_node_id] = node_id
 
-            for row in edge_query.scalars().all():
-                data = {k: v for k, v in row.__dict__.items() if not k.startswith("_")}
+            for row in edge_rows:
+                data = dict(row)
                 source_id = node_map_from_root[data.pop(DEFAULT_ATTR_KEYS.EDGE_SOURCE)]
                 target_id = node_map_from_root[data.pop(DEFAULT_ATTR_KEYS.EDGE_TARGET)]
                 rx_graph.add_edge(source_id, target_id, data)
@@ -323,6 +345,8 @@ class SQLFilter(BaseFilter):
             rx_graph=rx_graph,
             node_map_to_root=node_map_to_root,
             root=self._graph,
+            node_attr_keys=node_attr_keys,
+            edge_attr_keys=edge_attr_keys,
         )
 
         return graph
