@@ -274,6 +274,9 @@ def test_subgraph_with_node_and_edge_attr_filters(graph_backend: BaseGraph) -> N
         edge_attr_keys=["weight"],
     )
 
+    assert set(subgraph.node_attr_keys) == {"t", "x"}
+    assert set(subgraph.edge_attr_keys) == {"weight"}
+
     assert subgraph.num_nodes == 3
     assert subgraph.num_edges == 1
 
