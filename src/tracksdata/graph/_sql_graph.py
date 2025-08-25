@@ -280,26 +280,25 @@ class SQLFilter(BaseFilter):
         edge_attr_keys: Sequence[str] | str | None = None,
     ) -> "GraphView":
         from tracksdata.graph._graph_view import GraphView
+        from tracksdata.graph._utils import normalize_attr_keys
 
-        if node_attr_keys is None:
-            node_attr_keys = list(self._graph.node_attr_keys)
-        elif isinstance(node_attr_keys, str):
-            node_attr_keys = [node_attr_keys]
-        else:
-            node_attr_keys = list(node_attr_keys)
-        node_attr_keys = list(dict.fromkeys(node_attr_keys))
+        node_attr_keys = normalize_attr_keys(
+            node_attr_keys,
+            self._graph.node_attr_keys,
+            [DEFAULT_ATTR_KEYS.NODE_ID],
+        )
 
-        if edge_attr_keys is None:
-            edge_attr_keys = list(self._graph.edge_attr_keys)
-        elif isinstance(edge_attr_keys, str):
-            edge_attr_keys = [edge_attr_keys]
-        else:
-            edge_attr_keys = list(edge_attr_keys)
-        edge_attr_keys = list(dict.fromkeys(edge_attr_keys))
+        edge_attr_keys = normalize_attr_keys(
+            edge_attr_keys,
+            self._graph.edge_attr_keys,
+            [
+                DEFAULT_ATTR_KEYS.EDGE_ID,
+                DEFAULT_ATTR_KEYS.EDGE_SOURCE,
+                DEFAULT_ATTR_KEYS.EDGE_TARGET,
+            ],
+        )
 
         node_query_keys = list(node_attr_keys)
-        if DEFAULT_ATTR_KEYS.NODE_ID not in node_query_keys:
-            node_query_keys.append(DEFAULT_ATTR_KEYS.NODE_ID)
         if DEFAULT_ATTR_KEYS.T not in node_query_keys:
             node_query_keys.append(DEFAULT_ATTR_KEYS.T)
 
@@ -313,11 +312,6 @@ class SQLFilter(BaseFilter):
             query=self._edge_query,
             table=self._graph.Edge,
             attr_keys=edge_attr_keys,
-            extra_columns=[
-                DEFAULT_ATTR_KEYS.EDGE_ID,
-                DEFAULT_ATTR_KEYS.EDGE_SOURCE,
-                DEFAULT_ATTR_KEYS.EDGE_TARGET,
-            ],
         )
 
         with Session(self._graph._engine) as session:
