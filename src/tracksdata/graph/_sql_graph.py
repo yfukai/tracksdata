@@ -280,38 +280,19 @@ class SQLFilter(BaseFilter):
         edge_attr_keys: Sequence[str] | str | None = None,
     ) -> "GraphView":
         from tracksdata.graph._graph_view import GraphView
-        from tracksdata.graph._utils import normalize_attr_keys
-
-        node_attr_keys = normalize_attr_keys(
-            node_attr_keys,
-            self._graph.node_attr_keys,
-            [DEFAULT_ATTR_KEYS.NODE_ID],
-        )
-
-        edge_attr_keys = normalize_attr_keys(
-            edge_attr_keys,
-            self._graph.edge_attr_keys,
-            [
-                DEFAULT_ATTR_KEYS.EDGE_ID,
-                DEFAULT_ATTR_KEYS.EDGE_SOURCE,
-                DEFAULT_ATTR_KEYS.EDGE_TARGET,
-            ],
-        )
-
-        node_query_keys = list(node_attr_keys)
-        if DEFAULT_ATTR_KEYS.T not in node_query_keys:
-            node_query_keys.append(DEFAULT_ATTR_KEYS.T)
 
         node_query = self._query_from_attr_keys(
             query=self._node_query,
             table=self._graph.Node,
-            attr_keys=node_query_keys,
+            attr_keys=node_attr_keys,
+            extra_columns=[DEFAULT_ATTR_KEYS.NODE_ID],
         )
 
         edge_query = self._query_from_attr_keys(
             query=self._edge_query,
             table=self._graph.Edge,
             attr_keys=edge_attr_keys,
+            extra_columns=[DEFAULT_ATTR_KEYS.EDGE_SOURCE, DEFAULT_ATTR_KEYS.EDGE_TARGET],
         )
 
         with Session(self._graph._engine) as session:
@@ -323,7 +304,7 @@ class SQLFilter(BaseFilter):
             rx_graph = rx.PyDiGraph()
 
             for row in node_rows:
-                data = dict(row)
+                data = dict(row["Node"])
                 root_node_id = data.pop(DEFAULT_ATTR_KEYS.NODE_ID)
                 node_id = rx_graph.add_node(data)
                 node_map_to_root[node_id] = root_node_id
