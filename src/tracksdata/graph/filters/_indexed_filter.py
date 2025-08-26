@@ -72,6 +72,8 @@ class IndexRXFilter(RXFilter):
             rx_graph,
             node_map_to_root=dict(node_map.items()),
             root=root,
+            node_attr_keys=node_attr_keys,
+            edge_attr_keys=edge_attr_keys,
         )
 
         return graph_view

@@ -81,6 +81,9 @@ class GraphView(RustWorkXGraph, MappedGraphMixin):
         node_map_to_root: dict[int, int],
         root: BaseGraph,
         sync: bool = True,
+        *,
+        node_attr_keys: list[str] | None = None,
+        edge_attr_keys: list[str] | None = None,
     ) -> None:
         # Initialize RustWorkXGraph
         RustWorkXGraph.__init__(self, rx_graph=None)  # rx_graph is not used to avoid initialization
@@ -105,10 +108,10 @@ class GraphView(RustWorkXGraph, MappedGraphMixin):
         self._sync = sync
         self._out_of_sync = False
 
-        # making sure these are not used
-        # they should be accessed through the root graph
-        self._node_attr_keys = None
-        self._edge_attr_keys = None
+        # Existing for API compatibility for the SQLGraph generating GraphView,
+        # but RXGraph always uses the root graph's attributes and just filtering them
+        self._node_attr_keys = node_attr_keys
+        self._edge_attr_keys = edge_attr_keys
 
         # use parent graph overlaps
         self._overlaps = None
@@ -221,11 +224,11 @@ class GraphView(RustWorkXGraph, MappedGraphMixin):
 
     @property
     def node_attr_keys(self) -> list[str]:
-        return self._root.node_attr_keys
+        return self._root.node_attr_keys if self._node_attr_keys is None else self._node_attr_keys
 
     @property
     def edge_attr_keys(self) -> list[str]:
-        return self._root.edge_attr_keys
+        return self._root.edge_attr_keys if self._edge_attr_keys is None else self._edge_attr_keys
 
     def add_node_attr_key(self, key: str, default_value: Any) -> None:
         self._root.add_node_attr_key(key, default_value)

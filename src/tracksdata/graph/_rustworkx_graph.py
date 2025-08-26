@@ -218,8 +218,8 @@ class RXFilter(BaseFilter):
     @cache_method
     def subgraph(
         self,
-        node_attr_keys: Sequence[str] | str | None = None,
-        edge_attr_keys: Sequence[str] | str | None = None,
+        node_attr_keys: Sequence[str] | None = None,
+        edge_attr_keys: Sequence[str] | None = None,
     ) -> "GraphView":
         from tracksdata.graph._graph_view import GraphView
 
@@ -236,6 +236,8 @@ class RXFilter(BaseFilter):
             rx_graph,
             node_map_to_root=dict(node_map.items()),
             root=self._graph,
+            node_attr_keys=node_attr_keys,
+            edge_attr_keys=edge_attr_keys,
         )
 
         return graph_view
