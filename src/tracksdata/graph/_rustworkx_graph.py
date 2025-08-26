@@ -226,10 +226,11 @@ class RXFilter(BaseFilter):
     @cache_method
     def subgraph(
         self,
-        node_attr_keys: Sequence[str] | None = None,
-        edge_attr_keys: Sequence[str] | None = None,
+        node_attr_keys: Sequence[str] | str | None = None,
+        edge_attr_keys: Sequence[str] | str | None = None,
     ) -> "GraphView":
         from tracksdata.graph._graph_view import GraphView
+        from tracksdata.graph._utils import normalize_attr_keys
 
         node_ids = self.node_ids()
 
@@ -239,6 +240,22 @@ class RXFilter(BaseFilter):
             for src, tgt, attr in rx_graph.weighted_edge_list():
                 if not _filter_func(attr):
                     rx_graph.remove_edge(src, tgt)
+
+        node_attr_keys = normalize_attr_keys(
+            node_attr_keys,
+            self._graph.node_attr_keys,
+            [DEFAULT_ATTR_KEYS.NODE_ID],
+        )
+
+        edge_attr_keys = normalize_attr_keys(
+            edge_attr_keys,
+            self._graph.edge_attr_keys,
+            [
+                DEFAULT_ATTR_KEYS.EDGE_ID,
+                DEFAULT_ATTR_KEYS.EDGE_SOURCE,
+                DEFAULT_ATTR_KEYS.EDGE_TARGET,
+            ],
+        )
 
         graph_view = GraphView(
             rx_graph,
