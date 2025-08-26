@@ -276,15 +276,19 @@ class SQLFilter(BaseFilter):
     @cache_method
     def subgraph(
         self,
-        node_attr_keys: Sequence[str] | str | None = None,
-        edge_attr_keys: Sequence[str] | str | None = None,
+        node_attr_keys: Sequence[str] | None = None,
+        edge_attr_keys: Sequence[str] | None = None,
     ) -> "GraphView":
         from tracksdata.graph._graph_view import GraphView
 
+        # Ensure the time key is in the node attributes
+        if node_attr_keys is not None:
+            node_attr_keys = [DEFAULT_ATTR_KEYS.T, *node_attr_keys]
         node_query = self._query_from_attr_keys(
             query=self._node_query,
             table=self._graph.Node,
             attr_keys=node_attr_keys,
+            extra_columns=[DEFAULT_ATTR_KEYS.NODE_ID],
         )
 
         edge_query = self._query_from_attr_keys(
@@ -306,15 +310,15 @@ class SQLFilter(BaseFilter):
             node_map_from_root = {}
             rx_graph = rx.PyDiGraph()
 
-            for row in node_query.scalars().all():
-                data = {k: v for k, v in row.__dict__.items() if not k.startswith("_")}
+            for row in node_query.mappings().all():
+                data = dict(row)
                 root_node_id = data.pop(DEFAULT_ATTR_KEYS.NODE_ID)
                 node_id = rx_graph.add_node(data)
                 node_map_to_root[node_id] = root_node_id
                 node_map_from_root[root_node_id] = node_id
 
-            for row in edge_query.scalars().all():
-                data = {k: v for k, v in row.__dict__.items() if not k.startswith("_")}
+            for row in edge_query.mappings().all():
+                data = dict(row)
                 source_id = node_map_from_root[data.pop(DEFAULT_ATTR_KEYS.EDGE_SOURCE)]
                 target_id = node_map_from_root[data.pop(DEFAULT_ATTR_KEYS.EDGE_TARGET)]
                 rx_graph.add_edge(source_id, target_id, data)
@@ -323,6 +327,8 @@ class SQLFilter(BaseFilter):
             rx_graph=rx_graph,
             node_map_to_root=node_map_to_root,
             root=self._graph,
+            node_attr_keys=node_attr_keys,
+            edge_attr_keys=edge_attr_keys,
         )
 
         return graph
