@@ -275,13 +275,8 @@ def test_subgraph_with_node_and_edge_attr_filters(graph_backend: BaseGraph) -> N
             edge_attr_keys=edge_attrs,
         )
 
-        assert set(subgraph.node_attr_keys) == {DEFAULT_ATTR_KEYS.NODE_ID, *node_attrs}
-        assert set(subgraph.edge_attr_keys) == {
-            DEFAULT_ATTR_KEYS.EDGE_ID,
-            DEFAULT_ATTR_KEYS.EDGE_SOURCE,
-            DEFAULT_ATTR_KEYS.EDGE_TARGET,
-            *edge_attrs,
-        }
+        assert set(subgraph.node_attr_keys) == set(node_attrs)
+        assert set(subgraph.edge_attr_keys) == set(edge_attrs)
 
         assert subgraph.num_nodes == 3
         assert subgraph.num_edges == 1
