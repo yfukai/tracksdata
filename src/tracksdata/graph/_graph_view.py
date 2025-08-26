@@ -232,6 +232,8 @@ class GraphView(RustWorkXGraph, MappedGraphMixin):
 
     def add_node_attr_key(self, key: str, default_value: Any) -> None:
         self._root.add_node_attr_key(key, default_value)
+        if self._node_attr_keys is not None:
+            self._node_attr_keys.append(key)
         # because attributes are passed by reference, we need don't need if both are rustworkx graphs
         if not self._is_root_rx_graph:
             if self.sync:
@@ -243,6 +245,8 @@ class GraphView(RustWorkXGraph, MappedGraphMixin):
 
     def add_edge_attr_key(self, key: str, default_value: Any) -> None:
         self._root.add_edge_attr_key(key, default_value)
+        if self._edge_attr_keys is not None:
+            self._edge_attr_keys.append(key)
         # because attributes are passed by reference, we need don't need if both are rustworkx graphs
         if not self._is_root_rx_graph:
             if self.sync:

@@ -281,9 +281,15 @@ class SQLFilter(BaseFilter):
     ) -> "GraphView":
         from tracksdata.graph._graph_view import GraphView
 
+        # Give the node_attr_keys as a list, since otherwise the SQL results return the
         # Ensure the time key is in the node attributes
         if node_attr_keys is not None:
             node_attr_keys = [DEFAULT_ATTR_KEYS.T, *node_attr_keys]
+        else:
+            node_attr_keys = [DEFAULT_ATTR_KEYS.T, *self._graph.node_attr_keys]
+        if edge_attr_keys is None:
+            edge_attr_keys = self._graph.edge_attr_keys
+
         node_query = self._query_from_attr_keys(
             query=self._node_query,
             table=self._graph.Node,
