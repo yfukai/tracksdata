@@ -218,8 +218,8 @@ class RXFilter(BaseFilter):
     @cache_method
     def subgraph(
         self,
-        node_attr_keys: Sequence[str] | str | None = None,
-        edge_attr_keys: Sequence[str] | str | None = None,
+        node_attr_keys: Sequence[str] | None = None,
+        edge_attr_keys: Sequence[str] | None = None,
     ) -> "GraphView":
         from tracksdata.graph._graph_view import GraphView
 
@@ -232,10 +232,17 @@ class RXFilter(BaseFilter):
                 if not _filter_func(attr):
                     rx_graph.remove_edge(src, tgt)
 
+        # Ensure the time key is in the node attributes
+        if node_attr_keys is not None:
+            node_attr_keys = [DEFAULT_ATTR_KEYS.T, *node_attr_keys]
+            node_attr_keys = list(dict.fromkeys(node_attr_keys))
+
         graph_view = GraphView(
             rx_graph,
             node_map_to_root=dict(node_map.items()),
             root=self._graph,
+            node_attr_keys=node_attr_keys,
+            edge_attr_keys=edge_attr_keys,
         )
 
         return graph_view
