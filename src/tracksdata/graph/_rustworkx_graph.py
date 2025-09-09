@@ -1062,47 +1062,60 @@ class RustWorkXGraph(BaseGraph):
         output_key: str = DEFAULT_ATTR_KEYS.TRACK_ID,
         reset: bool = True,
         track_id_offset: int = 1,
+        node_ids: list[int] | None = None,
     ) -> rx.PyDiGraph:
-        """
-        Compute and assign track ids to nodes.
+        if node_ids is not None:
+            track_node_ids = set()
+            active_ids = set(self.node_ids())
+            while len(active_ids) > 0:
+                track_node_ids.update(active_ids)
+                successors = [
+                    df[DEFAULT_ATTR_KEYS.NODE_ID].first()
+                    for df in self.successors(node_ids=list(active_ids)).values()
+                    if len(df) == 1
+                ]  # Only consider non-branching nodes
+                predecessors = [
+                    df[DEFAULT_ATTR_KEYS.NODE_ID].first()
+                    for df in self.predecessors(node_ids=list(active_ids)).values()
+                    if len(df) == 1  # Only consider non-branching nodes
+                ]
+                out_degrees = self.out_degree(predecessors)
+                predecessors = [node for node, degree in zip(predecessors, out_degrees, strict=True) if degree == 1]
+                active_ids = set(successors + predecessors) - track_node_ids 
+            return (
+                self.filter(node_ids=list(track_node_ids))
+                .subgraph(node_attr_keys=[output_key], edge_attr_keys=[])
+                .assign_track_ids(
+                    output_key=output_key,
+                    reset=reset,
+                    track_id_offset=track_id_offset,
+                )
+            )
+        else:
+            try:
+                track_node_ids, track_ids, tracks_graph = _assign_track_ids(self.rx_graph, track_id_offset)
+            except RuntimeError as e:
+                raise RuntimeError(
+                    "Are you sure this graph is a valid lineage graph?\n"
+                    "This function expects a solved graph.\n"
+                    "Often used from `graph.subgraph(edge_attr_filter={'solution': True})`"
+                ) from e
 
-        Parameters
-        ----------
-        output_key : str
-            The key of the output track id attribute.
-        reset : bool
-            Whether to reset the track ids of the graph. If True, the track ids will be reset to -1.
-        track_id_offset : int
-            The starting track id, useful when assigning track ids to a subgraph.
+            # For the IndexedRXGraph, we need to map the track_node_ids to the external node ids
+            if hasattr(self, "_map_to_external"):
+                track_node_ids = self._map_to_external(track_node_ids) # type: ignore
 
-        Returns
-        -------
-        rx.PyDiGraph
-            A compressed graph (parent -> child) with track ids lineage relationships.
-        """
-        try:
-            node_ids, track_ids, tracks_graph = _assign_track_ids(self.rx_graph, track_id_offset)
-        except RuntimeError as e:
-            raise RuntimeError(
-                "Are you sure this graph is a valid lineage graph?\n"
-                "This function expects a solved graph.\n"
-                "Often used from `graph.subgraph(edge_attr_filter={'solution': True})`"
-            ) from e
+            if output_key not in self.node_attr_keys:
+                self.add_node_attr_key(output_key, -1)
+            elif reset:
+                self.update_node_attrs(attrs={output_key: -1})
 
-        if output_key not in self.node_attr_keys:
-            self.add_node_attr_key(output_key, -1)
-        elif reset:
-            self.update_node_attrs(node_ids=self.node_ids(), attrs={output_key: -1})
+            self.update_node_attrs(
+                node_ids=track_node_ids,
+                attrs={output_key: track_ids},
+            )
 
-        # node_ids are rustworkx graph ids, therefore we don't need node_id mapping
-        # and we must use RustWorkXGraph for IndexedRXGraph
-        RustWorkXGraph.update_node_attrs(
-            self,
-            node_ids=node_ids,
-            attrs={output_key: track_ids},
-        )
-
-        return tracks_graph
+            return tracks_graph
 
     def in_degree(self, node_ids: list[int] | int | None = None) -> list[int] | int:
         """

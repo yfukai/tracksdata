@@ -1377,6 +1377,28 @@ class SQLGraph(BaseGraph):
     ) -> None:
         self._update_table(self.Edge, edge_ids, DEFAULT_ATTR_KEYS.EDGE_ID, attrs)
 
+    def assign_track_ids(
+        self,
+        output_key: str = DEFAULT_ATTR_KEYS.TRACK_ID,
+        reset: bool = True,
+        track_id_offset: int = 1,
+        node_ids: list[int] | None = None,
+    ) -> rx.PyDiGraph:
+        if output_key in self.node_attr_keys:
+            node_attr_keys = [output_key]
+        else:
+            node_attr_keys = []
+        return (
+            self.filter()
+            .subgraph(node_attr_keys=node_attr_keys)
+            .assign_track_ids(
+                output_key=output_key,
+                reset=reset,
+                track_id_offset=track_id_offset,
+                node_ids=node_ids,
+            )
+        )
+
     def _get_degree(
         self,
         node_ids: list[int] | int | None,
