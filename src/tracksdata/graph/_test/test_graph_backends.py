@@ -1396,10 +1396,10 @@ def test_assign_track_ids_node_id_filter(graph_backend: BaseGraph):
         graph_backend.add_node_attr_key(DEFAULT_ATTR_KEYS.TRACK_ID, -1)
 
     for seeds, expected in (
-        ([A1], {A0, A1, A2, A3}),
-        ([B2], {B2, B3}),
-        ([B1], {B0, B1}),
-        ([A1, B4], {A0, A1, A2, A3, B4, B5}),
+        ([A1], [[A0, A1, A2, A3]]),
+        ([B2], [[B2, B3]]),
+        ([B1], [[B0, B1]]),
+        ([A1, B4], [[A0, A1, A2, A3], [B4, B5]]),
     ):
         # Ensure all nodes start unassigned across backends (avoid NULL/default discrepancies)
         graph_backend.update_node_attrs(attrs={DEFAULT_ATTR_KEYS.TRACK_ID: -1})
@@ -1413,7 +1413,15 @@ def test_assign_track_ids_node_id_filter(graph_backend: BaseGraph):
                 strict=True,
             )
         )
-        assigned = {n for n, v in ids_map.items() if v != -1}
+        assigned = {}
+        for node_id, track_id in ids_map.items():
+            if track_id == -1:
+                continue
+            if track_id not in assigned:
+                assigned[track_id] = []
+            assigned[track_id].append(node_id)
+        assigned = set(frozenset(group) for group in assigned.values())
+        expected = set(frozenset(group) for group in expected)
         assert assigned == expected
         assert isinstance(tracks_graph, rx.PyDiGraph)
 
