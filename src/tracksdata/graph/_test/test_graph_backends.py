@@ -1354,32 +1354,25 @@ def test_assign_track_ids(graph_backend: BaseGraph):
     assert tracks_graph.num_nodes() == 2  # Two tracks
 
 
-# def test_assign_track_ids_node_id_filter(graph_backend: BaseGraph):
-#    if isinstance(graph_backend, SQLGraph):
-#        pytest.skip("`assign_track_ids` is not available for `SQLGraph`")
-#
-#    # 0 - 1 - 2 - 3 - 4 - 5
-#    #           |
-#    #           - 6 - 7 - 8
-#    #
-#    #     9 - 10- 11- 12
-#    segments = [range(6), range(3, 6), range(1, 5)]
-#    nodes = [graph_backend.add_node({DEFAULT_ATTR_KEYS.T: t}) for t in sum(map(list, segments), [])]
-#    i = 0
-#    for l in [len(s) for s in segments]:
-#        for j in range(l - 1):
-#            graph_backend.add_edge(nodes[i + j], nodes[i + j + 1], {})
-#        i += l
-#    graph_backend.add_edge(nodes[3], nodes[6], {})
-#
-#
-#    track_ids = graph_backend.node_attrs(attr_keys=[DEFAULT_ATTR_KEYS.TRACK_ID])
-#    assert len(track_ids) == 3
-#    assert len(set(track_ids[DEFAULT_ATTR_KEYS.TRACK_ID])) == 3
-#    # assert len
-#
-#    assert isinstance(tracks_graph, rx.PyDiGraph)
-#    assert tracks_graph.num_nodes() == 3 + 1  # Three tracks (includes null node (0))
+def test_assign_track_ids_node_id_filter(graph_backend: BaseGraph):
+    # Create a graph with three segments (three tracks):
+    # 0 - 1 - 2 - 3 - 4 - 5
+    #           |
+    #           - 6 - 7 - 8
+    #
+    #     9 - 10- 11- 12
+    segments = [range(6), range(3, 6), range(1, 5)]
+    nodes = [graph_backend.add_node({DEFAULT_ATTR_KEYS.T: t}) for t in sum(map(list, segments), [])]
+    i = 0
+    for l in [len(s) for s in segments]:
+        for j in range(l - 1):
+            graph_backend.add_edge(nodes[i + j], nodes[i + j + 1], {})
+        i += l
+    graph_backend.add_edge(nodes[2], nodes[6], {})
+    
+    tracks_graph = graph_backend.assign_track_ids()
+    track_ids = graph_backend.node_attrs(attr_keys=[DEFAULT_ATTR_KEYS.TRACK_ID])
+    assert len(set(track_ids[DEFAULT_ATTR_KEYS.TRACK_ID])) == 4
 
 def test_tracklet_graph_basic(graph_backend: BaseGraph) -> None:
     """Test basic tracklet_graph functionality."""

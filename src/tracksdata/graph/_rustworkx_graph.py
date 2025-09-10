@@ -1066,7 +1066,7 @@ class RustWorkXGraph(BaseGraph):
     ) -> rx.PyDiGraph:
         if node_ids is not None:
             track_node_ids = set()
-            active_ids = set(self.node_ids())
+            active_ids = set(node_ids)
             while len(active_ids) > 0:
                 track_node_ids.update(active_ids)
                 successors = [
@@ -1111,10 +1111,11 @@ class RustWorkXGraph(BaseGraph):
                 self.update_node_attrs(attrs={output_key: -1})
 
             self.update_node_attrs(
-                node_ids=track_node_ids,
+                node_ids=track_node_ids, #type: ignore
                 attrs={output_key: track_ids},
             )
 
+            # TODO mapping to already existing track IDs
             return tracks_graph
 
     def in_degree(self, node_ids: list[int] | int | None = None) -> list[int] | int:
