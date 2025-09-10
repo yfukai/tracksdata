@@ -1359,7 +1359,7 @@ def test_assign_track_ids_node_id_filter(graph_backend: BaseGraph):
 
     Graph:
       - A: linear chain A0 -> A1 -> A2 -> A3
-      - B: P -> B0 with B0 -> {B1, B2}, and B1 -> B1c, B2 -> B2c
+      - B: B0 -> B1 with B1 -> {B2, B4}, and B2 -> B3, B4 -> B5
 
     Cases:
       1) node_ids=[A1] -> closure = {A0, A1, A2, A3}
@@ -1381,17 +1381,17 @@ def test_assign_track_ids_node_id_filter(graph_backend: BaseGraph):
     graph_backend.add_edge(A2, A3, {})
 
     # B branched with parent and children
-    P = graph_backend.add_node({DEFAULT_ATTR_KEYS.T: 0})  # parent of B0
-    B0 = graph_backend.add_node({DEFAULT_ATTR_KEYS.T: 1})
-    B1 = graph_backend.add_node({DEFAULT_ATTR_KEYS.T: 2})
+    B0 = graph_backend.add_node({DEFAULT_ATTR_KEYS.T: 0})  
+    B1 = graph_backend.add_node({DEFAULT_ATTR_KEYS.T: 1})
     B2 = graph_backend.add_node({DEFAULT_ATTR_KEYS.T: 2})
-    B1c = graph_backend.add_node({DEFAULT_ATTR_KEYS.T: 3})
-    B2c = graph_backend.add_node({DEFAULT_ATTR_KEYS.T: 3})
-    graph_backend.add_edge(P, B0, {})
+    B4 = graph_backend.add_node({DEFAULT_ATTR_KEYS.T: 2})
+    B3 = graph_backend.add_node({DEFAULT_ATTR_KEYS.T: 3})
+    B5 = graph_backend.add_node({DEFAULT_ATTR_KEYS.T: 3})
     graph_backend.add_edge(B0, B1, {})
-    graph_backend.add_edge(B0, B2, {})
-    graph_backend.add_edge(B1, B1c, {})
-    graph_backend.add_edge(B2, B2c, {})
+    graph_backend.add_edge(B1, B2, {})
+    graph_backend.add_edge(B1, B4, {})
+    graph_backend.add_edge(B2, B3, {})
+    graph_backend.add_edge(B4, B5, {})
 
     # Ensure track_id attribute exists after nodes were added
     if DEFAULT_ATTR_KEYS.TRACK_ID not in graph_backend.node_attr_keys:
@@ -1419,7 +1419,7 @@ def test_assign_track_ids_node_id_filter(graph_backend: BaseGraph):
     graph_backend.update_node_attrs(attrs={DEFAULT_ATTR_KEYS.TRACK_ID: -1})
 
     # Case 2: node_ids=[B1]
-    seeds = [B1]
+    seeds = [B2]
     expected = non_branching_closure(graph_backend, seeds)
     tracks_graph = graph_backend.assign_track_ids(node_ids=seeds)
     ids_df = graph_backend.node_attrs(attr_keys=[DEFAULT_ATTR_KEYS.NODE_ID, DEFAULT_ATTR_KEYS.TRACK_ID])
@@ -1438,7 +1438,7 @@ def test_assign_track_ids_node_id_filter(graph_backend: BaseGraph):
     graph_backend.update_node_attrs(attrs={DEFAULT_ATTR_KEYS.TRACK_ID: -1})
 
     # Case 3: node_ids=[B1, B2]
-    seeds = [B1, B2]
+    seeds = [B2, B4]
     expected = non_branching_closure(graph_backend, seeds)
     tracks_graph = graph_backend.assign_track_ids(node_ids=seeds)
     ids_df = graph_backend.node_attrs(attr_keys=[DEFAULT_ATTR_KEYS.NODE_ID, DEFAULT_ATTR_KEYS.TRACK_ID])

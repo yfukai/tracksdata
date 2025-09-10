@@ -1384,13 +1384,10 @@ class SQLGraph(BaseGraph):
         track_id_offset: int = 1,
         node_ids: list[int] | None = None,
     ) -> rx.PyDiGraph:
-        # Mirror RX semantics: when node_ids are provided, compute the non-branching closure
-        # using the common implementation in BaseGraph, then assign only within that subgraph.
         if node_ids is not None:
             track_node_ids = list(set(self._compute_track_node_ids(node_ids)))
         else:
             track_node_ids = None
-        # Full-graph assignment (no node_ids provided)
         if output_key in self.node_attr_keys:
             node_attr_keys = [output_key]
         else:

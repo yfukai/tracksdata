@@ -1095,9 +1095,9 @@ class BaseGraph(abc.ABC):
         raise NotImplementedError(f"{self.__class__.__name__} backend does not support track id assignment.")
 
     # Internal utility to compute the exact set of nodes to assign when a subset is requested
-    def _compute_track_node_ids(self, seeds: list[int]) -> list[int]:
+    def _compute_track_node_ids(self, seeds: list[int] | None) -> list[int]:
         """
-        Compute the non-branching closure around the provided seed node_ids.
+        Compute the non-branching tracklets around the provided seed node_ids.
 
         Walks forward to successors only through nodes with exactly one successor,
         and backward to predecessors that also have out_degree == 1, until closure.
@@ -1123,25 +1123,19 @@ class BaseGraph(abc.ABC):
 
             # Successors: only nodes with exactly one successor
             succ_map = self.successors(node_ids=list(active_ids))
-            if isinstance(succ_map, dict):
-                successors = [
-                    df[DEFAULT_ATTR_KEYS.NODE_ID].first()
-                    for df in succ_map.values()
-                    if len(df) == 1
-                ]
-            else:
-                successors = succ_map[DEFAULT_ATTR_KEYS.NODE_ID].to_list() if len(succ_map) == 1 else []
+            successors = [
+                int(df[DEFAULT_ATTR_KEYS.NODE_ID].first())
+                for df in succ_map.values()
+                if len(df) == 1
+            ]
 
             # Predecessors: only nodes with exactly one predecessor and predecessor out_degree == 1
             pred_map = self.predecessors(node_ids=list(active_ids))
-            if isinstance(pred_map, dict):
-                predecessors = [
-                    df[DEFAULT_ATTR_KEYS.NODE_ID].first()
-                    for df in pred_map.values()
-                    if len(df) == 1
-                ]
-            else:
-                predecessors = pred_map[DEFAULT_ATTR_KEYS.NODE_ID].to_list() if len(pred_map) == 1 else []
+            predecessors = [
+                int(df[DEFAULT_ATTR_KEYS.NODE_ID].first())
+                for df in pred_map.values()
+                if len(df) == 1
+            ]
 
             if len(predecessors) > 0:
                 out_degrees = self.out_degree(predecessors)
