@@ -1355,24 +1355,103 @@ def test_assign_track_ids(graph_backend: BaseGraph):
 
 
 def test_assign_track_ids_node_id_filter(graph_backend: BaseGraph):
-    # Create a graph with three segments (three tracks):
-    # 0 - 1 - 2 - 3 - 4 - 5
-    #           |
-    #           - 6 - 7 - 8
-    #
-    #     9 - 10- 11- 12
-    segments = [range(6), range(3, 6), range(1, 5)]
-    nodes = [graph_backend.add_node({DEFAULT_ATTR_KEYS.T: t}) for t in sum(map(list, segments), [])]
-    i = 0
-    for l in [len(s) for s in segments]:
-        for j in range(l - 1):
-            graph_backend.add_edge(nodes[i + j], nodes[i + j + 1], {})
-        i += l
-    graph_backend.add_edge(nodes[2], nodes[6], {})
-    
-    tracks_graph = graph_backend.assign_track_ids()
-    track_ids = graph_backend.node_attrs(attr_keys=[DEFAULT_ATTR_KEYS.TRACK_ID])
-    assert len(set(track_ids[DEFAULT_ATTR_KEYS.TRACK_ID])) == 4
+    """Assign track IDs for subsets selected via node_ids and validate exact non-branching closure.
+
+    Graph:
+      - A: linear chain A0 -> A1 -> A2 -> A3
+      - B: P -> B0 with B0 -> {B1, B2}, and B1 -> B1c, B2 -> B2c
+
+    Cases:
+      1) node_ids=[A1] -> closure = {A0, A1, A2, A3}
+      2) node_ids=[B1] -> closure = {B1, B1c}
+      3) node_ids=[B1, B2] -> closure = {B1, B1c, B2, B2c}
+    """
+
+    def non_branching_closure(g: BaseGraph, seeds: list[int]) -> set[int]:
+        return set(g._compute_track_node_ids(seeds))
+
+    # Build graph components
+    # A chain
+    A0 = graph_backend.add_node({DEFAULT_ATTR_KEYS.T: 0})
+    A1 = graph_backend.add_node({DEFAULT_ATTR_KEYS.T: 1})
+    A2 = graph_backend.add_node({DEFAULT_ATTR_KEYS.T: 2})
+    A3 = graph_backend.add_node({DEFAULT_ATTR_KEYS.T: 3})
+    graph_backend.add_edge(A0, A1, {})
+    graph_backend.add_edge(A1, A2, {})
+    graph_backend.add_edge(A2, A3, {})
+
+    # B branched with parent and children
+    P = graph_backend.add_node({DEFAULT_ATTR_KEYS.T: 0})  # parent of B0
+    B0 = graph_backend.add_node({DEFAULT_ATTR_KEYS.T: 1})
+    B1 = graph_backend.add_node({DEFAULT_ATTR_KEYS.T: 2})
+    B2 = graph_backend.add_node({DEFAULT_ATTR_KEYS.T: 2})
+    B1c = graph_backend.add_node({DEFAULT_ATTR_KEYS.T: 3})
+    B2c = graph_backend.add_node({DEFAULT_ATTR_KEYS.T: 3})
+    graph_backend.add_edge(P, B0, {})
+    graph_backend.add_edge(B0, B1, {})
+    graph_backend.add_edge(B0, B2, {})
+    graph_backend.add_edge(B1, B1c, {})
+    graph_backend.add_edge(B2, B2c, {})
+
+    # Ensure track_id attribute exists after nodes were added
+    if DEFAULT_ATTR_KEYS.TRACK_ID not in graph_backend.node_attr_keys:
+        graph_backend.add_node_attr_key(DEFAULT_ATTR_KEYS.TRACK_ID, -1)
+    # Ensure all nodes start unassigned across backends (avoid NULL/default discrepancies)
+    graph_backend.update_node_attrs(attrs={DEFAULT_ATTR_KEYS.TRACK_ID: -1})
+
+    # Case 1: node_ids=[A1]
+    seeds = [A1]
+    expected = non_branching_closure(graph_backend, seeds)
+    tracks_graph = graph_backend.assign_track_ids(node_ids=seeds)
+    ids_df = graph_backend.node_attrs(attr_keys=[DEFAULT_ATTR_KEYS.NODE_ID, DEFAULT_ATTR_KEYS.TRACK_ID])
+    ids_map = dict(
+        zip(
+            ids_df[DEFAULT_ATTR_KEYS.NODE_ID].to_list(),
+            ids_df[DEFAULT_ATTR_KEYS.TRACK_ID].to_list(),
+            strict=True,
+        )
+    )
+    assigned = {n for n, v in ids_map.items() if v != -1}
+    assert assigned == expected
+    assert isinstance(tracks_graph, rx.PyDiGraph)
+
+    # Reset for next case
+    graph_backend.update_node_attrs(attrs={DEFAULT_ATTR_KEYS.TRACK_ID: -1})
+
+    # Case 2: node_ids=[B1]
+    seeds = [B1]
+    expected = non_branching_closure(graph_backend, seeds)
+    tracks_graph = graph_backend.assign_track_ids(node_ids=seeds)
+    ids_df = graph_backend.node_attrs(attr_keys=[DEFAULT_ATTR_KEYS.NODE_ID, DEFAULT_ATTR_KEYS.TRACK_ID])
+    ids_map = dict(
+        zip(
+            ids_df[DEFAULT_ATTR_KEYS.NODE_ID].to_list(),
+            ids_df[DEFAULT_ATTR_KEYS.TRACK_ID].to_list(),
+            strict=True,
+        )
+    )
+    assigned = {n for n, v in ids_map.items() if v != -1}
+    assert assigned == expected
+    assert isinstance(tracks_graph, rx.PyDiGraph)
+
+    # Reset for next case
+    graph_backend.update_node_attrs(attrs={DEFAULT_ATTR_KEYS.TRACK_ID: -1})
+
+    # Case 3: node_ids=[B1, B2]
+    seeds = [B1, B2]
+    expected = non_branching_closure(graph_backend, seeds)
+    tracks_graph = graph_backend.assign_track_ids(node_ids=seeds)
+    ids_df = graph_backend.node_attrs(attr_keys=[DEFAULT_ATTR_KEYS.NODE_ID, DEFAULT_ATTR_KEYS.TRACK_ID])
+    ids_map = dict(
+        zip(
+            ids_df[DEFAULT_ATTR_KEYS.NODE_ID].to_list(),
+            ids_df[DEFAULT_ATTR_KEYS.TRACK_ID].to_list(),
+            strict=True,
+        )
+    )
+    assigned = {n for n, v in ids_map.items() if v != -1}
+    assert assigned == expected
+    assert isinstance(tracks_graph, rx.PyDiGraph)
 
 def test_tracklet_graph_basic(graph_backend: BaseGraph) -> None:
     """Test basic tracklet_graph functionality."""
@@ -1752,3 +1831,4 @@ def test_geff_roundtrip(graph_backend: BaseGraph) -> None:
         rx_graph,
         geff_graph.rx_graph,
     )
+    # Ensure SQLGraph matches RX behavior as well

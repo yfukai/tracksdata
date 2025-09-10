@@ -1093,6 +1093,67 @@ class BaseGraph(abc.ABC):
             If node_ids is provided, it will only include linages including those nodes.
         """
         raise NotImplementedError(f"{self.__class__.__name__} backend does not support track id assignment.")
+
+    # Internal utility to compute the exact set of nodes to assign when a subset is requested
+    def _compute_track_node_ids(self, seeds: list[int]) -> list[int]:
+        """
+        Compute the non-branching closure around the provided seed node_ids.
+
+        Walks forward to successors only through nodes with exactly one successor,
+        and backward to predecessors that also have out_degree == 1, until closure.
+
+        Parameters
+        ----------
+        seeds : list[int]
+            Seed node IDs where to start the closure.
+
+        Returns
+        -------
+        list[int]
+            Sorted unique node IDs forming the closure.
+        """
+        if seeds is None or len(seeds) == 0:
+            return []
+
+        track_node_ids: set[int] = set()
+        active_ids: set[int] = set(seeds)
+
+        while len(active_ids) > 0:
+            track_node_ids.update(active_ids)
+
+            # Successors: only nodes with exactly one successor
+            succ_map = self.successors(node_ids=list(active_ids))
+            if isinstance(succ_map, dict):
+                successors = [
+                    df[DEFAULT_ATTR_KEYS.NODE_ID].first()
+                    for df in succ_map.values()
+                    if len(df) == 1
+                ]
+            else:
+                successors = succ_map[DEFAULT_ATTR_KEYS.NODE_ID].to_list() if len(succ_map) == 1 else []
+
+            # Predecessors: only nodes with exactly one predecessor and predecessor out_degree == 1
+            pred_map = self.predecessors(node_ids=list(active_ids))
+            if isinstance(pred_map, dict):
+                predecessors = [
+                    df[DEFAULT_ATTR_KEYS.NODE_ID].first()
+                    for df in pred_map.values()
+                    if len(df) == 1
+                ]
+            else:
+                predecessors = pred_map[DEFAULT_ATTR_KEYS.NODE_ID].to_list() if len(pred_map) == 1 else []
+
+            if len(predecessors) > 0:
+                out_degrees = self.out_degree(predecessors)
+                if isinstance(out_degrees, int):
+                    out_degrees = [out_degrees]
+                predecessors = [
+                    node for node, degree in zip(predecessors, out_degrees, strict=True) if degree == 1
+                ]
+
+            active_ids = (set(successors) | set(predecessors)) - track_node_ids
+
+        return sorted(track_node_ids)
     
         
     def tracklet_graph(

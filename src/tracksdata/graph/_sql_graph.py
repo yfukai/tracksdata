@@ -12,6 +12,7 @@ from sqlalchemy.sql.type_api import TypeEngine
 from tracksdata.attrs import AttrComparison, split_attr_comps
 from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.graph._base_graph import BaseGraph
+from tracksdata.functional._rx import _assign_track_ids
 from tracksdata.graph.filters._base_filter import BaseFilter, cache_method
 from tracksdata.utils._dataframe import unpack_array_attrs, unpickle_bytes_columns
 from tracksdata.utils._logging import LOG
@@ -1383,18 +1384,25 @@ class SQLGraph(BaseGraph):
         track_id_offset: int = 1,
         node_ids: list[int] | None = None,
     ) -> rx.PyDiGraph:
+        # Mirror RX semantics: when node_ids are provided, compute the non-branching closure
+        # using the common implementation in BaseGraph, then assign only within that subgraph.
+        if node_ids is not None:
+            track_node_ids = list(set(self._compute_track_node_ids(node_ids)))
+        else:
+            track_node_ids = None
+        # Full-graph assignment (no node_ids provided)
         if output_key in self.node_attr_keys:
             node_attr_keys = [output_key]
         else:
             node_attr_keys = []
+
         return (
-            self.filter()
+            self.filter(node_ids=track_node_ids)
             .subgraph(node_attr_keys=node_attr_keys)
             .assign_track_ids(
                 output_key=output_key,
                 reset=reset,
                 track_id_offset=track_id_offset,
-                node_ids=node_ids,
             )
         )
 

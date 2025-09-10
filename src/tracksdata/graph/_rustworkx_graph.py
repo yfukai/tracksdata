@@ -1066,23 +1066,7 @@ class RustWorkXGraph(BaseGraph):
         node_ids: list[int] | None = None,
     ) -> rx.PyDiGraph:
         if node_ids is not None:
-            track_node_ids = set()
-            active_ids = set(node_ids)
-            while len(active_ids) > 0:
-                track_node_ids.update(active_ids)
-                successors = [
-                    df[DEFAULT_ATTR_KEYS.NODE_ID].first()
-                    for df in self.successors(node_ids=list(active_ids)).values()
-                    if len(df) == 1
-                ]  # Only consider non-branching nodes
-                predecessors = [
-                    df[DEFAULT_ATTR_KEYS.NODE_ID].first()
-                    for df in self.predecessors(node_ids=list(active_ids)).values()
-                    if len(df) == 1  # Only consider non-branching nodes
-                ]
-                out_degrees = self.out_degree(predecessors)
-                predecessors = [node for node, degree in zip(predecessors, out_degrees, strict=True) if degree == 1]
-                active_ids = set(successors + predecessors) - track_node_ids 
+            track_node_ids = set(self._compute_track_node_ids(node_ids))
             return (
                 self.filter(node_ids=list(track_node_ids))
                 .subgraph(node_attr_keys=[output_key], edge_attr_keys=[])
