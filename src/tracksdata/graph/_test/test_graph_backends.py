@@ -1379,7 +1379,7 @@ def test_assign_track_ids_node_id_filter(graph_backend: BaseGraph):
     graph_backend.add_edge(A2, A3, {})
 
     # B branched with parent and children
-    B0 = graph_backend.add_node({DEFAULT_ATTR_KEYS.T: 0})  
+    B0 = graph_backend.add_node({DEFAULT_ATTR_KEYS.T: 0})
     B1 = graph_backend.add_node({DEFAULT_ATTR_KEYS.T: 1})
     B2 = graph_backend.add_node({DEFAULT_ATTR_KEYS.T: 2})
     B4 = graph_backend.add_node({DEFAULT_ATTR_KEYS.T: 2})
@@ -1420,8 +1420,8 @@ def test_assign_track_ids_node_id_filter(graph_backend: BaseGraph):
             if track_id not in assigned:
                 assigned[track_id] = []
             assigned[track_id].append(node_id)
-        assigned = set(frozenset(group) for group in assigned.values())
-        expected = set(frozenset(group) for group in expected)
+        assigned = {frozenset(group) for group in assigned.values()}
+        expected = {frozenset(group) for group in expected}
         assert assigned == expected
         assert isinstance(tracks_graph, rx.PyDiGraph)
 

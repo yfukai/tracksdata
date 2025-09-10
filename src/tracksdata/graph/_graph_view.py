@@ -501,7 +501,6 @@ class GraphView(RustWorkXGraph, MappedGraphMixin):
             else:
                 self._out_of_sync = True
 
-
     def in_degree(self, node_ids: list[int] | int | None = None) -> list[int] | int:
         """
         Get the in-degree of a list of nodes.

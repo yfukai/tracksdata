@@ -1064,7 +1064,6 @@ class BaseGraph(abc.ABC):
 
         return BBoxSpatialFilter(self, frame_attr_key=frame_attr_key, bbox_attr_key=bbox_attr_key)
 
-
     @abc.abstractmethod
     def assign_track_ids(
         self,
@@ -1085,7 +1084,7 @@ class BaseGraph(abc.ABC):
             The starting track id, useful when assigning track ids to a subgraph.
         node_ids : list[int] | None
             The node ids to assign track ids to. If None, all nodes are used.
-            
+
         Returns
         -------
         rx.PyDiGraph
@@ -1123,33 +1122,22 @@ class BaseGraph(abc.ABC):
 
             # Successors: only nodes with exactly one successor
             succ_map = self.successors(node_ids=list(active_ids))
-            successors = [
-                int(df[DEFAULT_ATTR_KEYS.NODE_ID].first())
-                for df in succ_map.values()
-                if len(df) == 1
-            ]
+            successors = [int(df[DEFAULT_ATTR_KEYS.NODE_ID].first()) for df in succ_map.values() if len(df) == 1]
 
             # Predecessors: only nodes with exactly one predecessor and predecessor out_degree == 1
             pred_map = self.predecessors(node_ids=list(active_ids))
-            predecessors = [
-                int(df[DEFAULT_ATTR_KEYS.NODE_ID].first())
-                for df in pred_map.values()
-                if len(df) == 1
-            ]
+            predecessors = [int(df[DEFAULT_ATTR_KEYS.NODE_ID].first()) for df in pred_map.values() if len(df) == 1]
 
             if len(predecessors) > 0:
                 out_degrees = self.out_degree(predecessors)
                 if isinstance(out_degrees, int):
                     out_degrees = [out_degrees]
-                predecessors = [
-                    node for node, degree in zip(predecessors, out_degrees, strict=True) if degree == 1
-                ]
+                predecessors = [node for node, degree in zip(predecessors, out_degrees, strict=True) if degree == 1]
 
             active_ids = (set(successors) | set(predecessors)) - track_node_ids
 
         return sorted(track_node_ids)
-    
-        
+
     def tracklet_graph(
         self,
         track_id_key: str = DEFAULT_ATTR_KEYS.TRACK_ID,

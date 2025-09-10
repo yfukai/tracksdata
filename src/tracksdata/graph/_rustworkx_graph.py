@@ -1088,7 +1088,7 @@ class RustWorkXGraph(BaseGraph):
 
             # For the IndexedRXGraph, we need to map the track_node_ids to the external node ids
             if hasattr(self, "_map_to_external"):
-                track_node_ids = self._map_to_external(track_node_ids) # type: ignore
+                track_node_ids = self._map_to_external(track_node_ids)  # type: ignore
 
             if output_key not in self.node_attr_keys:
                 self.add_node_attr_key(output_key, -1)
@@ -1096,7 +1096,7 @@ class RustWorkXGraph(BaseGraph):
                 self.update_node_attrs(attrs={output_key: -1})
 
             self.update_node_attrs(
-                node_ids=track_node_ids, #type: ignore
+                node_ids=track_node_ids,  # type: ignore
                 attrs={output_key: track_ids},
             )
 

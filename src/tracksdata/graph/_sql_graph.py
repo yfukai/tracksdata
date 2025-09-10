@@ -12,7 +12,6 @@ from sqlalchemy.sql.type_api import TypeEngine
 from tracksdata.attrs import AttrComparison, split_attr_comps
 from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.graph._base_graph import BaseGraph
-from tracksdata.functional._rx import _assign_track_ids
 from tracksdata.graph.filters._base_filter import BaseFilter, cache_method
 from tracksdata.utils._dataframe import unpack_array_attrs, unpickle_bytes_columns
 from tracksdata.utils._logging import LOG
