@@ -1363,12 +1363,10 @@ def test_assign_track_ids_node_id_filter(graph_backend: BaseGraph):
 
     Cases:
       1) node_ids=[A1] -> closure = {A0, A1, A2, A3}
-      2) node_ids=[B1] -> closure = {B1, B1c}
-      3) node_ids=[B1, B2] -> closure = {B1, B1c, B2, B2c}
+      2) node_ids=[B2] -> closure = {B2, B3}
+      3) node_ids=[B1] -> closure = {B0, B1}
+      3) node_ids=[A1, B4] -> closure = {A0, A1, A2, A3, B4, B5}
     """
-
-    def non_branching_closure(g: BaseGraph, seeds: list[int]) -> set[int]:
-        return set(g._compute_track_node_ids(seeds))
 
     # Build graph components
     # A chain
@@ -1396,62 +1394,29 @@ def test_assign_track_ids_node_id_filter(graph_backend: BaseGraph):
     # Ensure track_id attribute exists after nodes were added
     if DEFAULT_ATTR_KEYS.TRACK_ID not in graph_backend.node_attr_keys:
         graph_backend.add_node_attr_key(DEFAULT_ATTR_KEYS.TRACK_ID, -1)
-    # Ensure all nodes start unassigned across backends (avoid NULL/default discrepancies)
-    graph_backend.update_node_attrs(attrs={DEFAULT_ATTR_KEYS.TRACK_ID: -1})
 
-    # Case 1: node_ids=[A1]
-    seeds = [A1]
-    expected = non_branching_closure(graph_backend, seeds)
-    tracks_graph = graph_backend.assign_track_ids(node_ids=seeds)
-    ids_df = graph_backend.node_attrs(attr_keys=[DEFAULT_ATTR_KEYS.NODE_ID, DEFAULT_ATTR_KEYS.TRACK_ID])
-    ids_map = dict(
-        zip(
-            ids_df[DEFAULT_ATTR_KEYS.NODE_ID].to_list(),
-            ids_df[DEFAULT_ATTR_KEYS.TRACK_ID].to_list(),
-            strict=True,
+    for seeds, expected in (
+        ([A1], {A0, A1, A2, A3}),
+        ([B2], {B2, B3}),
+        ([B1], {B0, B1}),
+        ([A1, B4], {A0, A1, A2, A3, B4, B5}),
+    ):
+        # Ensure all nodes start unassigned across backends (avoid NULL/default discrepancies)
+        graph_backend.update_node_attrs(attrs={DEFAULT_ATTR_KEYS.TRACK_ID: -1})
+
+        tracks_graph = graph_backend.assign_track_ids(node_ids=seeds)
+        ids_df = graph_backend.node_attrs(attr_keys=[DEFAULT_ATTR_KEYS.NODE_ID, DEFAULT_ATTR_KEYS.TRACK_ID])
+        ids_map = dict(
+            zip(
+                ids_df[DEFAULT_ATTR_KEYS.NODE_ID].to_list(),
+                ids_df[DEFAULT_ATTR_KEYS.TRACK_ID].to_list(),
+                strict=True,
+            )
         )
-    )
-    assigned = {n for n, v in ids_map.items() if v != -1}
-    assert assigned == expected
-    assert isinstance(tracks_graph, rx.PyDiGraph)
+        assigned = {n for n, v in ids_map.items() if v != -1}
+        assert assigned == expected
+        assert isinstance(tracks_graph, rx.PyDiGraph)
 
-    # Reset for next case
-    graph_backend.update_node_attrs(attrs={DEFAULT_ATTR_KEYS.TRACK_ID: -1})
-
-    # Case 2: node_ids=[B1]
-    seeds = [B2]
-    expected = non_branching_closure(graph_backend, seeds)
-    tracks_graph = graph_backend.assign_track_ids(node_ids=seeds)
-    ids_df = graph_backend.node_attrs(attr_keys=[DEFAULT_ATTR_KEYS.NODE_ID, DEFAULT_ATTR_KEYS.TRACK_ID])
-    ids_map = dict(
-        zip(
-            ids_df[DEFAULT_ATTR_KEYS.NODE_ID].to_list(),
-            ids_df[DEFAULT_ATTR_KEYS.TRACK_ID].to_list(),
-            strict=True,
-        )
-    )
-    assigned = {n for n, v in ids_map.items() if v != -1}
-    assert assigned == expected
-    assert isinstance(tracks_graph, rx.PyDiGraph)
-
-    # Reset for next case
-    graph_backend.update_node_attrs(attrs={DEFAULT_ATTR_KEYS.TRACK_ID: -1})
-
-    # Case 3: node_ids=[B1, B2]
-    seeds = [B2, B4]
-    expected = non_branching_closure(graph_backend, seeds)
-    tracks_graph = graph_backend.assign_track_ids(node_ids=seeds)
-    ids_df = graph_backend.node_attrs(attr_keys=[DEFAULT_ATTR_KEYS.NODE_ID, DEFAULT_ATTR_KEYS.TRACK_ID])
-    ids_map = dict(
-        zip(
-            ids_df[DEFAULT_ATTR_KEYS.NODE_ID].to_list(),
-            ids_df[DEFAULT_ATTR_KEYS.TRACK_ID].to_list(),
-            strict=True,
-        )
-    )
-    assigned = {n for n, v in ids_map.items() if v != -1}
-    assert assigned == expected
-    assert isinstance(tracks_graph, rx.PyDiGraph)
 
 def test_tracklet_graph_basic(graph_backend: BaseGraph) -> None:
     """Test basic tracklet_graph functionality."""
