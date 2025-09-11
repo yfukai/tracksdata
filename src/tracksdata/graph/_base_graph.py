@@ -1069,7 +1069,7 @@ class BaseGraph(abc.ABC):
         self,
         output_key: str = DEFAULT_ATTR_KEYS.TRACK_ID,
         reset: bool = True,
-        track_id_offset: int = 1,
+        track_id_offset: int | None = None,
         node_ids: list[int] | None = None,
     ) -> rx.PyDiGraph:
         """
@@ -1080,8 +1080,10 @@ class BaseGraph(abc.ABC):
             The key of the output track id attribute.
         reset : bool
             Whether to reset the track ids of the graph. If True, the track ids will be reset to -1.
-        track_id_offset : int
+        track_id_offset : int | None
             The starting track id, useful when assigning track ids to a subgraph.
+            If None, the track ids will start from 1 or from the maximum existing track id + 1
+            if the output_key already exists and reset is False.
         node_ids : list[int] | None
             The node ids to assign track ids to. If None, all nodes are used.
 

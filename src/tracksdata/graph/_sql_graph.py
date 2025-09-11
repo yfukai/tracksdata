@@ -1380,7 +1380,7 @@ class SQLGraph(BaseGraph):
         self,
         output_key: str = DEFAULT_ATTR_KEYS.TRACK_ID,
         reset: bool = True,
-        track_id_offset: int = 1,
+        track_id_offset: int | None = None,
         node_ids: list[int] | None = None,
     ) -> rx.PyDiGraph:
         if node_ids is not None:

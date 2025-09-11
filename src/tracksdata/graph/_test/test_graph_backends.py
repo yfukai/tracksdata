@@ -1425,6 +1425,19 @@ def test_assign_track_ids_node_id_filter(graph_backend: BaseGraph):
         assert assigned == expected
         assert isinstance(tracks_graph, rx.PyDiGraph)
 
+    graph_backend.update_node_attrs(attrs={DEFAULT_ATTR_KEYS.TRACK_ID: -1})
+    tracks_graph = graph_backend.assign_track_ids()
+    ids_df = graph_backend.node_attrs(attr_keys=[DEFAULT_ATTR_KEYS.NODE_ID, DEFAULT_ATTR_KEYS.TRACK_ID])
+    assert tracks_graph.num_nodes() == 4
+    tracks_graph_reassign = graph_backend.assign_track_ids(node_ids=[A1, B4], reset=False)
+    ids_df_reassign = graph_backend.node_attrs(attr_keys=[DEFAULT_ATTR_KEYS.NODE_ID, DEFAULT_ATTR_KEYS.TRACK_ID])
+    assert tracks_graph_reassign.num_nodes() == 2
+    # Full reassignment should yield same result as previous partial reassignment
+    # df must be sorted by node_id for direct comparison
+    ids_df = ids_df.sort(DEFAULT_ATTR_KEYS.NODE_ID)
+    ids_df_reassign = ids_df_reassign.sort(DEFAULT_ATTR_KEYS.NODE_ID)
+    assert ids_df.equals(ids_df_reassign)
+
 
 def test_tracklet_graph_basic(graph_backend: BaseGraph) -> None:
     """Test basic tracklet_graph functionality."""

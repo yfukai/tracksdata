@@ -1062,7 +1062,7 @@ class RustWorkXGraph(BaseGraph):
         self,
         output_key: str = DEFAULT_ATTR_KEYS.TRACK_ID,
         reset: bool = True,
-        track_id_offset: int = 1,
+        track_id_offset: int | None = None,
         node_ids: list[int] | None = None,
     ) -> rx.PyDiGraph:
         if node_ids is not None:
@@ -1077,6 +1077,23 @@ class RustWorkXGraph(BaseGraph):
                 )
             )
         else:
+            if output_key not in self.node_attr_keys:
+                self.add_node_attr_key(output_key, -1)
+                previous_id_df = None
+                if track_id_offset is None:
+                    track_id_offset = 1
+            elif reset:
+                self.update_node_attrs(attrs={output_key: -1})
+                previous_id_df = None
+                if track_id_offset is None:
+                    track_id_offset = 1
+            else:
+                previous_id_df = self.node_attrs(attr_keys=[DEFAULT_ATTR_KEYS.NODE_ID, output_key])
+                if track_id_offset is None:
+                    existing_ids = previous_id_df[output_key].unique().to_list()
+                    existing_ids = [i for i in existing_ids if i != -1]
+                    track_id_offset: int = max(existing_ids, default=0) + 1
+
             try:
                 track_node_ids, track_ids, tracks_graph = _assign_track_ids(self.rx_graph, track_id_offset)
             except RuntimeError as e:
@@ -1090,17 +1107,26 @@ class RustWorkXGraph(BaseGraph):
             if hasattr(self, "_map_to_external"):
                 track_node_ids = self._map_to_external(track_node_ids)  # type: ignore
 
-            if output_key not in self.node_attr_keys:
-                self.add_node_attr_key(output_key, -1)
-            elif reset:
-                self.update_node_attrs(attrs={output_key: -1})
-
+            # mapping to already existing track IDs as much as possible
+            if previous_id_df is not None:
+                new_id_df = pl.DataFrame({DEFAULT_ATTR_KEYS.NODE_ID: track_node_ids, output_key + "_new": track_ids})
+                merged = new_id_df.join(
+                    previous_id_df,
+                    left_on=DEFAULT_ATTR_KEYS.NODE_ID,
+                    right_on=DEFAULT_ATTR_KEYS.NODE_ID,
+                    how="left",
+                ).filter(pl.col(output_key) != -1)
+                if merged.height > 0:
+                    track_id_map = merged.unique([output_key, output_key + "_new"], keep="first").unique(
+                        output_key + "_new", keep="first"
+                    )
+                    track_id_map = dict(zip(track_id_map[output_key + "_new"], track_id_map[output_key], strict=True))
+                    track_ids = [track_id_map.get(tid, tid) for tid in track_ids]  # type: ignore
             self.update_node_attrs(
                 node_ids=track_node_ids,  # type: ignore
                 attrs={output_key: track_ids},
             )
 
-            # TODO mapping to already existing track IDs
             return tracks_graph
 
     def in_degree(self, node_ids: list[int] | int | None = None) -> list[int] | int:
