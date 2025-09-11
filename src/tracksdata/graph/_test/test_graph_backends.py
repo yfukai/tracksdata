@@ -1506,10 +1506,11 @@ def test_assign_track_ids_node_id_filter(graph_backend: BaseGraph):
 
     # Changing the topology
     A4 = graph_backend.add_node({DEFAULT_ATTR_KEYS.T: 1, DEFAULT_ATTR_KEYS.TRACK_ID: -1})
-    A5 = graph_backend.add_node({DEFAULT_ATTR_KEYS.T: 3, DEFAULT_ATTR_KEYS.TRACK_ID: -1})
+    graph_backend.remove_edge(A2, A3)
     graph_backend.add_edge(A0, A4, {})
-    graph_backend.add_edge(A2, A5, {})
-    tracks_graph_reassign = graph_backend.assign_track_ids(node_ids=[A1, A5, B4], reset=False)
+    tracks_graph_reassign = graph_backend.assign_track_ids(node_ids=[A1, A4, B4], reset=False)
+    ids_df_reassign = graph_backend.node_attrs(attr_keys=[DEFAULT_ATTR_KEYS.NODE_ID, DEFAULT_ATTR_KEYS.TRACK_ID])
+    assert tracks_graph_reassign.num_nodes() == 3
 
 
 def test_tracklet_graph_basic(graph_backend: BaseGraph) -> None:

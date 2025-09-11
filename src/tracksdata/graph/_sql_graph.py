@@ -1138,12 +1138,12 @@ class SQLGraph(BaseGraph):
                     *[getattr(self.Node, key) for key in attr_keys],
                 )
 
-        nodes_df = pl.read_database(
-            self._raw_query(query),
-            connection=session.connection(),
-        )
-        nodes_df = self._cast_boolean_columns(self.Node, nodes_df)
-        nodes_df = unpickle_bytes_columns(nodes_df)
+            nodes_df = pl.read_database(
+                self._raw_query(query),
+                connection=session.connection(),
+            )
+            nodes_df = self._cast_boolean_columns(self.Node, nodes_df)
+            nodes_df = unpickle_bytes_columns(nodes_df)
 
         # indices are included by default and must be removed
         if attr_keys is not None:
