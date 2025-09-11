@@ -1425,10 +1425,12 @@ def test_assign_track_ids_node_id_filter(graph_backend: BaseGraph):
         assert assigned == expected
         assert isinstance(tracks_graph, rx.PyDiGraph)
 
+    # Check that re-assigning track IDs without reset works as expected
     graph_backend.update_node_attrs(attrs={DEFAULT_ATTR_KEYS.TRACK_ID: -1})
     tracks_graph = graph_backend.assign_track_ids()
     ids_df = graph_backend.node_attrs(attr_keys=[DEFAULT_ATTR_KEYS.NODE_ID, DEFAULT_ATTR_KEYS.TRACK_ID])
     assert tracks_graph.num_nodes() == 4
+
     tracks_graph_reassign = graph_backend.assign_track_ids(node_ids=[A1, B4], reset=False)
     ids_df_reassign = graph_backend.node_attrs(attr_keys=[DEFAULT_ATTR_KEYS.NODE_ID, DEFAULT_ATTR_KEYS.TRACK_ID])
     assert tracks_graph_reassign.num_nodes() == 2
@@ -1437,6 +1439,13 @@ def test_assign_track_ids_node_id_filter(graph_backend: BaseGraph):
     ids_df = ids_df.sort(DEFAULT_ATTR_KEYS.NODE_ID)
     ids_df_reassign = ids_df_reassign.sort(DEFAULT_ATTR_KEYS.NODE_ID)
     assert ids_df.equals(ids_df_reassign)
+
+    # Cutting an edge
+    A4 = graph_backend.add_node({DEFAULT_ATTR_KEYS.T: 1})
+    A5 = graph_backend.add_node({DEFAULT_ATTR_KEYS.T: 3})
+    graph_backend.add_edge(A0, A4, {})
+    graph_backend.add_edge(A2, A5, {})
+    tracks_graph_reassign = graph_backend.assign_track_ids(node_ids=[A1, A5, B4], reset=False)
 
 
 def test_tracklet_graph_basic(graph_backend: BaseGraph) -> None:
