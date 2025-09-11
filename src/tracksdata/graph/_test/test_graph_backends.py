@@ -103,6 +103,70 @@ def test_add_edge(graph_backend: BaseGraph) -> None:
     assert df["weight"].to_list() == [0.5, 0.1]
 
 
+def test_remove_edge_by_id(graph_backend: BaseGraph) -> None:
+    """Test removing an edge by ID across backends using unified API."""
+    # Setup
+    graph_backend.add_node_attr_key("x", None)
+    graph_backend.add_edge_attr_key("weight", 0.0)
+
+    n1 = graph_backend.add_node({"t": 0, "x": 1.0})
+    n2 = graph_backend.add_node({"t": 1, "x": 2.0})
+    n3 = graph_backend.add_node({"t": 2, "x": 3.0})
+
+    e1 = graph_backend.add_edge(n1, n2, {"weight": 0.5})
+    e2 = graph_backend.add_edge(n2, n3, {"weight": 0.7})
+
+    assert graph_backend.num_edges == 2
+    assert graph_backend.has_edge(n1, n2)
+    assert graph_backend.has_edge(n2, n3)
+
+    # Delete first edge
+    graph_backend.remove_edge(edge_id=e1)
+    assert graph_backend.num_edges == 1
+    assert not graph_backend.has_edge(n1, n2)
+    assert graph_backend.has_edge(n2, n3)
+
+    remaining_ids = set(graph_backend.edge_ids())
+    assert e1 not in remaining_ids
+    assert e2 in remaining_ids
+
+    # Delete non-existing edge should raise
+    with pytest.raises(ValueError):
+        graph_backend.remove_edge(edge_id=e1)
+
+    with pytest.raises(ValueError):
+        graph_backend.remove_edge(edge_id=999999)
+
+
+def test_remove_edge_by_nodes(graph_backend: BaseGraph) -> None:
+    """Test removing an edge by its source/target IDs."""
+    graph_backend.add_node_attr_key("x", None)
+    graph_backend.add_edge_attr_key("weight", 0.0)
+
+    a = graph_backend.add_node({"t": 0, "x": 0.0})
+    b = graph_backend.add_node({"t": 1, "x": 1.0})
+    c = graph_backend.add_node({"t": 2, "x": 2.0})
+
+    graph_backend.add_edge(a, b, {"weight": 0.2})
+    graph_backend.add_edge(b, c, {"weight": 0.8})
+
+    assert graph_backend.has_edge(a, b)
+    assert graph_backend.has_edge(b, c)
+
+    # Remove a->b
+    graph_backend.remove_edge(a, b)
+    assert not graph_backend.has_edge(a, b)
+    assert graph_backend.has_edge(b, c)
+
+    # Removing again should raise
+    with pytest.raises(ValueError):
+        graph_backend.remove_edge(a, b)
+
+    # Removing non-existent pair should raise
+    with pytest.raises(ValueError):
+        graph_backend.remove_edge(a, c)
+
+
 def test_node_ids(graph_backend: BaseGraph) -> None:
     """Test retrieving node IDs."""
     graph_backend.add_node({"t": 0})
