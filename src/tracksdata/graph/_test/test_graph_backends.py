@@ -1440,9 +1440,9 @@ def test_assign_track_ids_node_id_filter(graph_backend: BaseGraph):
     ids_df_reassign = ids_df_reassign.sort(DEFAULT_ATTR_KEYS.NODE_ID)
     assert ids_df.equals(ids_df_reassign)
 
-    # Cutting an edge
-    A4 = graph_backend.add_node({DEFAULT_ATTR_KEYS.T: 1})
-    A5 = graph_backend.add_node({DEFAULT_ATTR_KEYS.T: 3})
+    # Changing the topology
+    A4 = graph_backend.add_node({DEFAULT_ATTR_KEYS.T: 1, DEFAULT_ATTR_KEYS.TRACK_ID: -1})
+    A5 = graph_backend.add_node({DEFAULT_ATTR_KEYS.T: 3, DEFAULT_ATTR_KEYS.TRACK_ID: -1})
     graph_backend.add_edge(A0, A4, {})
     graph_backend.add_edge(A2, A5, {})
     tracks_graph_reassign = graph_backend.assign_track_ids(node_ids=[A1, A5, B4], reset=False)
