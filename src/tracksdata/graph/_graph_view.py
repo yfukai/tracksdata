@@ -394,10 +394,8 @@ class GraphView(RustWorkXGraph, MappedGraphMixin):
         if source_id is None or target_id is None:
             raise ValueError("Provide either edge_id or both source_id and target_id")
 
-        if not self._root.has_edge(source_id, target_id):
-            raise ValueError(f"Edge {source_id}->{target_id} does not exist in the graph")
-        parent_edge_id = self._root.edge_id(source_id, target_id)
         self._root.remove_edge(source_id, target_id)
+        parent_edge_id = self._root.edge_id(source_id, target_id)
 
         if self.sync:
             try:
