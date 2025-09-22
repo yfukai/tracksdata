@@ -1143,7 +1143,11 @@ class RustWorkXGraph(BaseGraph):
                 if merged.height > 0:
                     track_id_map = merged.unique(output_key + "_new", keep="first")
                     track_id_map = dict(zip(track_id_map[output_key + "_new"], track_id_map[output_key], strict=True))
-                    track_ids = [track_id_map.get(tid, tid) for tid in track_ids]  # type: ignore
+                else:
+                    track_id_map = {}
+                # Ensure that the result is a list of integers (using numpy integer causes issues with SQLGraph)
+                # Later on, we will make it safe to use numpy integers everywhere for updating attributes.
+                track_ids = [int(track_id_map.get(tid, tid)) for tid in track_ids]  # type: ignore
             self.update_node_attrs(
                 node_ids=track_node_ids,  # type: ignore
                 attrs={output_key: track_ids},
