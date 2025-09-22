@@ -137,6 +137,9 @@ def test_remove_edge_by_id(graph_backend: BaseGraph) -> None:
     with pytest.raises(ValueError):
         graph_backend.remove_edge(edge_id=999999)
 
+    with pytest.raises(ValueError):
+        graph_backend.remove_edge()
+
 
 def test_remove_edge_by_nodes(graph_backend: BaseGraph) -> None:
     """Test removing an edge by its source/target IDs."""

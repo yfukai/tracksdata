@@ -551,19 +551,19 @@ class RustWorkXGraph(BaseGraph):
         """
         Remove an edge by ID or by endpoints.
         """
-        if edge_id is not None:
+        if edge_id is None:
+            if source_id is None or target_id is None:
+                raise ValueError("Provide either edge_id or both source_id and target_id.")
+            try:
+                self.rx_graph.remove_edge(source_id, target_id)
+            except rx.NoEdgeBetweenNodes as e:
+                raise ValueError(f"Edge {source_id}->{target_id} does not exist in the graph") from e
+        else:
             edge_map = self.rx_graph.edge_index_map()
             if edge_id not in edge_map:
                 raise ValueError(f"Edge {edge_id} does not exist in the graph")
             src, tgt, _ = edge_map[edge_id]
             self.rx_graph.remove_edge(src, tgt)
-            return
-
-        if source_id is None or target_id is None:
-            raise ValueError("Provide either edge_id or both source_id and target_id")
-        if not self.rx_graph.has_edge(source_id, target_id):
-            raise ValueError(f"Edge {source_id}->{target_id} does not exist in the graph")
-        self.rx_graph.remove_edge(source_id, target_id)
 
     def add_overlap(
         self,
