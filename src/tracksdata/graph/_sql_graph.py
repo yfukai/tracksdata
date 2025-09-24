@@ -1561,10 +1561,10 @@ class SQLGraph(BaseGraph):
                     .filter(self.Edge.source_id == source_id, self.Edge.target_id == target_id)
                     .delete()
                 )
-                if edge_id is not None:
-                    raise ValueError(f"Edge {edge_id} does not exist in the graph")
+                if not deleted:
+                    raise ValueError(f"Edge {source_id}->{target_id} does not exist in the graph")
             else:
                 deleted = session.query(self.Edge).filter(self.Edge.edge_id == edge_id).delete()
-            if not deleted:
-                raise ValueError(f"Edge {source_id}->{target_id} does not exist in the graph")
+                if not deleted:
+                    raise ValueError(f"Edge {edge_id} does not exist in the graph")
             session.commit()
