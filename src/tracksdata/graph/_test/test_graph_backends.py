@@ -103,6 +103,73 @@ def test_add_edge(graph_backend: BaseGraph) -> None:
     assert df["weight"].to_list() == [0.5, 0.1]
 
 
+def test_remove_edge_by_id(graph_backend: BaseGraph) -> None:
+    """Test removing an edge by ID across backends using unified API."""
+    # Setup
+    graph_backend.add_node_attr_key("x", None)
+    graph_backend.add_edge_attr_key("weight", 0.0)
+
+    n1 = graph_backend.add_node({"t": 0, "x": 1.0})
+    n2 = graph_backend.add_node({"t": 1, "x": 2.0})
+    n3 = graph_backend.add_node({"t": 2, "x": 3.0})
+
+    e1 = graph_backend.add_edge(n1, n2, {"weight": 0.5})
+    e2 = graph_backend.add_edge(n2, n3, {"weight": 0.7})
+
+    assert graph_backend.num_edges == 2
+    assert graph_backend.has_edge(n1, n2)
+    assert graph_backend.has_edge(n2, n3)
+
+    # Delete first edge
+    graph_backend.remove_edge(edge_id=e1)
+    assert graph_backend.num_edges == 1
+    assert not graph_backend.has_edge(n1, n2)
+    assert graph_backend.has_edge(n2, n3)
+
+    remaining_ids = set(graph_backend.edge_ids())
+    assert e1 not in remaining_ids
+    assert e2 in remaining_ids
+
+    # Delete non-existing edge should raise
+    with pytest.raises(ValueError, match=rf"Edge {e1} does not exist in the graph\."):
+        graph_backend.remove_edge(edge_id=e1)
+
+    with pytest.raises(ValueError, match=r"Edge 999999 does not exist in the graph\."):
+        graph_backend.remove_edge(edge_id=999999)
+
+    with pytest.raises(ValueError, match=r"Provide either edge_id or both source_id and target_id\."):
+        graph_backend.remove_edge()
+
+
+def test_remove_edge_by_nodes(graph_backend: BaseGraph) -> None:
+    """Test removing an edge by its source/target IDs."""
+    graph_backend.add_node_attr_key("x", None)
+    graph_backend.add_edge_attr_key("weight", 0.0)
+
+    a = graph_backend.add_node({"t": 0, "x": 0.0})
+    b = graph_backend.add_node({"t": 1, "x": 1.0})
+    c = graph_backend.add_node({"t": 2, "x": 2.0})
+
+    graph_backend.add_edge(a, b, {"weight": 0.2})
+    graph_backend.add_edge(b, c, {"weight": 0.8})
+
+    assert graph_backend.has_edge(a, b)
+    assert graph_backend.has_edge(b, c)
+
+    # Remove a->b
+    graph_backend.remove_edge(a, b)
+    assert not graph_backend.has_edge(a, b)
+    assert graph_backend.has_edge(b, c)
+
+    # Removing again should raise
+    with pytest.raises(ValueError, match=rf"Edge {a}->{b} does not exist in the graph\."):
+        graph_backend.remove_edge(a, b)
+
+    # Removing non-existent pair should raise
+    with pytest.raises(ValueError, match=rf"Edge {a}->{c} does not exist in the graph\."):
+        graph_backend.remove_edge(a, c)
+
+
 def test_node_ids(graph_backend: BaseGraph) -> None:
     """Test retrieving node IDs."""
     graph_backend.add_node({"t": 0})
@@ -1258,10 +1325,10 @@ def test_compute_overlaps_multiple_timepoints(graph_backend: BaseGraph) -> None:
 
 def test_compute_overlaps_invalid_threshold(graph_backend: BaseGraph) -> None:
     """Test compute_overlaps with invalid threshold values."""
-    with pytest.raises(ValueError, match=r"iou_threshold must be between 0.0 and 1.0"):
+    with pytest.raises(ValueError, match=r"iou_threshold must be between 0.0 and 1\.0"):
         graph_backend.compute_overlaps(iou_threshold=-0.1)
 
-    with pytest.raises(ValueError, match=r"iou_threshold must be between 0.0 and 1.0"):
+    with pytest.raises(ValueError, match=r"iou_threshold must be between 0.0 and 1\.0"):
         graph_backend.compute_overlaps(iou_threshold=1.1)
 
 
@@ -1548,11 +1615,11 @@ def test_remove_node(graph_backend: BaseGraph) -> None:
     assert [node1, node3] in remaining_overlaps
 
     # Test error when removing non-existent node
-    with pytest.raises(ValueError, match=r"Node .* does not exist in the graph"):
+    with pytest.raises(ValueError, match=r"Node .* does not exist in the graph."):
         graph_backend.remove_node(99999)
 
     # Test error when removing already removed node
-    with pytest.raises(ValueError, match=r"Node .* does not exist in the graph"):
+    with pytest.raises(ValueError, match=r"Node .* does not exist in the graph."):
         graph_backend.remove_node(node2)
 
 

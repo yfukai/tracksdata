@@ -456,7 +456,7 @@ class RustWorkXGraph(BaseGraph):
             If the node_id does not exist in the graph.
         """
         if node_id not in self.rx_graph.node_indices():
-            raise ValueError(f"Node {node_id} does not exist in the graph")
+            raise ValueError(f"Node {node_id} does not exist in the graph.")
 
         # Get the time value before removing the node
         t = self.rx_graph[node_id]["t"]
@@ -540,6 +540,30 @@ class RustWorkXGraph(BaseGraph):
         #     d[DEFAULT_ATTR_KEYS.EDGE_ID] = i
         # return indices
         return super().bulk_add_edges(edges, return_ids=return_ids)
+
+    def remove_edge(
+        self,
+        source_id: int | None = None,
+        target_id: int | None = None,
+        *,
+        edge_id: int | None = None,
+    ) -> None:
+        """
+        Remove an edge by ID or by endpoints.
+        """
+        if edge_id is None:
+            if source_id is None or target_id is None:
+                raise ValueError("Provide either edge_id or both source_id and target_id.")
+            try:
+                self.rx_graph.remove_edge(source_id, target_id)
+            except rx.NoEdgeBetweenNodes as e:
+                raise ValueError(f"Edge {source_id}->{target_id} does not exist in the graph.") from e
+        else:
+            edge_map = self.rx_graph.edge_index_map()
+            if edge_id not in edge_map:
+                raise ValueError(f"Edge {edge_id} does not exist in the graph.")
+            src, tgt, _ = edge_map[edge_id]
+            self.rx_graph.remove_edge(src, tgt)
 
     def add_overlap(
         self,
@@ -1534,6 +1558,30 @@ class IndexedRXGraph(RustWorkXGraph, MappedGraphMixin):
         target_id = self._map_to_local(target_id)
         return super().add_edge(source_id, target_id, attrs, validate_keys)
 
+    def remove_edge(
+        self,
+        source_id: int | None = None,
+        target_id: int | None = None,
+        *,
+        edge_id: int | None = None,
+    ) -> None:
+        """
+        Remove an edge by endpoints (external IDs) or by edge_id.
+        """
+        if edge_id is not None:
+            return super().remove_edge(edge_id=edge_id)
+        if source_id is None or target_id is None:
+            raise ValueError("Provide either edge_id or both source_id and target_id.")
+        try:
+            local_source = self._map_to_local(source_id)
+            local_target = self._map_to_local(target_id)
+        except KeyError as e:
+            raise ValueError(f"Edge {source_id}->{target_id} does not exist in the graph.") from e
+        try:
+            return super().remove_edge(local_source, local_target)
+        except ValueError as e:
+            raise ValueError(f"Edge {source_id}->{target_id} does not exist in the graph.") from e
+
     def add_overlap(self, source_id: int, target_id: int) -> int:
         """
         Add an overlap to the graph.
@@ -1630,7 +1678,7 @@ class IndexedRXGraph(RustWorkXGraph, MappedGraphMixin):
             If the node_id does not exist in the graph.
         """
         if node_id not in self._external_to_local:
-            raise ValueError(f"Node {node_id} does not exist in the graph")
+            raise ValueError(f"Node {node_id} does not exist in the graph.")
 
         local_node_id = self._map_to_local(node_id)
         super().remove_node(local_node_id)
