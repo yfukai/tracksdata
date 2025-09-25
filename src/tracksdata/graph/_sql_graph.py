@@ -1536,11 +1536,14 @@ class SQLGraph(BaseGraph):
         Return the edge id between two nodes.
         """
         with Session(self._engine) as session:
-            return (
+            edge_id = (
                 session.query(self.Edge.edge_id)
                 .filter(self.Edge.source_id == source_id, self.Edge.target_id == target_id)
                 .scalar()
             )
+            if edge_id is None:
+                raise ValueError(f"Edge {source_id}->{target_id} does not exist in the graph.")
+            return edge_id
 
     def remove_edge(
         self,
