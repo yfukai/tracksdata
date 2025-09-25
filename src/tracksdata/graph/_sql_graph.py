@@ -711,7 +711,7 @@ class SQLGraph(BaseGraph):
             # Check if the node exists
             node = session.query(self.Node).filter(self.Node.node_id == node_id).first()
             if node is None:
-                raise ValueError(f"Node {node_id} does not exist in the graph")
+                raise ValueError(f"Node {node_id} does not exist in the graph.")
 
             # Remove all edges where this node is source or target
             session.query(self.Edge).filter(
@@ -1562,11 +1562,14 @@ class SQLGraph(BaseGraph):
         Return the edge id between two nodes.
         """
         with Session(self._engine) as session:
-            return (
+            edge_id = (
                 session.query(self.Edge.edge_id)
                 .filter(self.Edge.source_id == source_id, self.Edge.target_id == target_id)
                 .scalar()
             )
+            if edge_id is None:
+                raise ValueError(f"Edge {source_id}->{target_id} does not exist in the graph.")
+            return edge_id
 
     def remove_edge(
         self,
@@ -1581,16 +1584,16 @@ class SQLGraph(BaseGraph):
         with Session(self._engine) as session:
             if edge_id is None:
                 if source_id is None or target_id is None:
-                    raise ValueError("Provide either edge_id or both source_id and target_id")
+                    raise ValueError("Provide either edge_id or both source_id and target_id.")
                 deleted = (
                     session.query(self.Edge)
                     .filter(self.Edge.source_id == source_id, self.Edge.target_id == target_id)
                     .delete()
                 )
-                if edge_id is not None:
-                    raise ValueError(f"Edge {edge_id} does not exist in the graph")
+                if not deleted:
+                    raise ValueError(f"Edge {source_id}->{target_id} does not exist in the graph.")
             else:
                 deleted = session.query(self.Edge).filter(self.Edge.edge_id == edge_id).delete()
-            if not deleted:
-                raise ValueError(f"Edge {source_id}->{target_id} does not exist in the graph")
+                if not deleted:
+                    raise ValueError(f"Edge {edge_id} does not exist in the graph.")
             session.commit()
