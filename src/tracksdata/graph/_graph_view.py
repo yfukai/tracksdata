@@ -306,7 +306,7 @@ class GraphView(RustWorkXGraph, MappedGraphMixin):
             If the node_id does not exist in the graph.
         """
         if node_id not in self._external_to_local:
-            raise ValueError(f"Node {node_id} does not exist in the graph")
+            raise ValueError(f"Node {node_id} does not exist in the graph.")
 
         # Remove from root graph first
         self._root.remove_node(node_id)
@@ -383,7 +383,7 @@ class GraphView(RustWorkXGraph, MappedGraphMixin):
                 edge_id = self._root.edge_id(source_id, target_id)
             # Ensure the same error raised by the SQLGraph
             except rx.NoEdgeBetweenNodes as e:
-                raise ValueError(f"Edge {source_id}->{target_id} does not exist in the graph") from e
+                raise ValueError(f"Edge {source_id}->{target_id} does not exist in the graph.") from e
         self._root.remove_edge(edge_id=edge_id)  # Error raised from root if edge_id not found
 
         # Remove from the local graph if synced

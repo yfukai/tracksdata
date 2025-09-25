@@ -131,13 +131,13 @@ def test_remove_edge_by_id(graph_backend: BaseGraph) -> None:
     assert e2 in remaining_ids
 
     # Delete non-existing edge should raise
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match=rf"Edge {e1} does not exist in the graph\."):
         graph_backend.remove_edge(edge_id=e1)
 
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match=r"Edge 999999 does not exist in the graph\."):
         graph_backend.remove_edge(edge_id=999999)
 
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match=r"Provide either edge_id or both source_id and target_id\."):
         graph_backend.remove_edge()
 
 
@@ -162,11 +162,11 @@ def test_remove_edge_by_nodes(graph_backend: BaseGraph) -> None:
     assert graph_backend.has_edge(b, c)
 
     # Removing again should raise
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match=rf"Edge {a}->{b} does not exist in the graph\."):
         graph_backend.remove_edge(a, b)
 
     # Removing non-existent pair should raise
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match=rf"Edge {a}->{c} does not exist in the graph\."):
         graph_backend.remove_edge(a, c)
 
 
@@ -1615,11 +1615,11 @@ def test_remove_node(graph_backend: BaseGraph) -> None:
     assert [node1, node3] in remaining_overlaps
 
     # Test error when removing non-existent node
-    with pytest.raises(ValueError, match=r"Node .* does not exist in the graph"):
+    with pytest.raises(ValueError, match=r"Node .* does not exist in the graph."):
         graph_backend.remove_node(99999)
 
     # Test error when removing already removed node
-    with pytest.raises(ValueError, match=r"Node .* does not exist in the graph"):
+    with pytest.raises(ValueError, match=r"Node .* does not exist in the graph."):
         graph_backend.remove_node(node2)
 
 

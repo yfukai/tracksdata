@@ -1126,9 +1126,9 @@ def test_graph_view_remove_edge(graph_backend: BaseGraph) -> None:
     assert not graph_backend.has_edge(n0, n1)
 
     # Removing a non-existent edge via the view raises
-    with pytest.raises(ValueError, match=rf"Edge {n0}->{n1} does not exist in the graph"):
+    with pytest.raises(ValueError, match=rf"Edge {n0}->{n1} does not exist in the graph\."):
         view.remove_edge(n0, n1)
-    with pytest.raises(ValueError, match=rf"Edge {vid} does not exist in the graph"):
+    with pytest.raises(ValueError, match=rf"Edge {vid} does not exist in the graph\."):
         view.remove_edge(edge_id=vid)
     with pytest.raises(ValueError, match=r"Provide either edge_id or both source_id and target_id\."):
         view.remove_edge()
