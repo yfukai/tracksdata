@@ -375,6 +375,7 @@ class GraphView(RustWorkXGraph, MappedGraphMixin):
         """
         Remove an edge by ID or by endpoints in both the root and (if present) the view.
         """
+        # Remove from root first
         if edge_id is None:
             if source_id is None or target_id is None:
                 raise ValueError("Provide either edge_id or both source_id and target_id.")
@@ -382,12 +383,10 @@ class GraphView(RustWorkXGraph, MappedGraphMixin):
                 edge_id = self._root.edge_id(source_id, target_id)
             # Ensure the same error raised by the SQLGraph
             except rx.NoEdgeBetweenNodes as e:
-                if edge_id is None:
-                    raise ValueError(f"Edge {source_id}->{target_id} does not exist in the graph") from e
-                else:
-                    raise ValueError(f"Edge id {edge_id} does not exist in the graph") from e
-        # Remove from root first
-        self._root.remove_edge(edge_id=edge_id)
+                raise ValueError(f"Edge {source_id}->{target_id} does not exist in the graph") from e
+        self._root.remove_edge(edge_id=edge_id)  # Error raised from root if edge_id not found
+
+        # Remove from the local graph if synced
         if self.sync:
             if edge_id in self._edge_map_from_root:
                 local_edge_id = self._edge_map_from_root[edge_id]
