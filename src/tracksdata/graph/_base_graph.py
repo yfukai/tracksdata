@@ -1141,6 +1141,7 @@ class BaseGraph(abc.ABC):
         list[int]
             Sorted unique node IDs forming the closure.
         """
+        # NOTE: if this function becomes a bottleneck in the future it might be worth having a specialized version per backend
         if seeds is None or len(seeds) == 0:
             return []
 
