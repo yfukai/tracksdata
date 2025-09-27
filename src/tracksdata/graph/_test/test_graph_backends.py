@@ -1421,6 +1421,27 @@ def test_assign_track_ids(graph_backend: BaseGraph):
     assert tracks_graph.num_nodes() == 2  # Two tracks
 
 
+def _compare_track_id_assignments(expected_node_sets, graph_backend: BaseGraph):
+    ids_df = graph_backend.node_attrs(attr_keys=[DEFAULT_ATTR_KEYS.NODE_ID, DEFAULT_ATTR_KEYS.TRACK_ID])
+    ids_map = dict(
+        zip(
+            ids_df[DEFAULT_ATTR_KEYS.NODE_ID].to_list(),
+            ids_df[DEFAULT_ATTR_KEYS.TRACK_ID].to_list(),
+            strict=True,
+        )
+    )
+    assigned = {}
+    for node_id, track_id in ids_map.items():
+        if track_id == -1:
+            continue
+        if track_id not in assigned:
+            assigned[track_id] = []
+        assigned[track_id].append(node_id)
+    assigned = {frozenset(group) for group in assigned.values()}
+    expected = {frozenset(group) for group in expected_node_sets}
+    assert assigned == expected
+
+
 def test_assign_track_ids_node_id_filter(graph_backend: BaseGraph):
     """Assign track IDs for subsets selected via node_ids and validate exact non-branching closure.
 
@@ -1472,24 +1493,7 @@ def test_assign_track_ids_node_id_filter(graph_backend: BaseGraph):
         graph_backend.update_node_attrs(attrs={DEFAULT_ATTR_KEYS.TRACK_ID: -1})
 
         tracks_graph = graph_backend.assign_track_ids(node_ids=seeds)
-        ids_df = graph_backend.node_attrs(attr_keys=[DEFAULT_ATTR_KEYS.NODE_ID, DEFAULT_ATTR_KEYS.TRACK_ID])
-        ids_map = dict(
-            zip(
-                ids_df[DEFAULT_ATTR_KEYS.NODE_ID].to_list(),
-                ids_df[DEFAULT_ATTR_KEYS.TRACK_ID].to_list(),
-                strict=True,
-            )
-        )
-        assigned = {}
-        for node_id, track_id in ids_map.items():
-            if track_id == -1:
-                continue
-            if track_id not in assigned:
-                assigned[track_id] = []
-            assigned[track_id].append(node_id)
-        assigned = {frozenset(group) for group in assigned.values()}
-        expected = {frozenset(group) for group in expected}
-        assert assigned == expected
+        _compare_track_id_assignments(expected, graph_backend)
         assert isinstance(tracks_graph, rx.PyDiGraph)
 
     # Check that re-assigning track IDs without reset works as expected
@@ -1508,9 +1512,18 @@ def test_assign_track_ids_node_id_filter(graph_backend: BaseGraph):
     assert ids_df.equals(ids_df_reassign)
 
     # Changing the topology
+    C0 = graph_backend.add_node({DEFAULT_ATTR_KEYS.T: 0, DEFAULT_ATTR_KEYS.TRACK_ID: -1})
+    C1 = graph_backend.add_node({DEFAULT_ATTR_KEYS.T: 0, DEFAULT_ATTR_KEYS.TRACK_ID: -1})
+    graph_backend.assign_track_ids(reset=True)
+
     A4 = graph_backend.add_node({DEFAULT_ATTR_KEYS.T: 1, DEFAULT_ATTR_KEYS.TRACK_ID: -1})
     graph_backend.remove_edge(A2, A3)
     graph_backend.add_edge(A0, A4, {})
+    graph_backend.add_edge(C0, C1, {})
+    tracks_graph_reassign = graph_backend.assign_track_ids(node_ids=None, reset=False)
+    _compare_track_id_assignments([[A0], [A1, A2], [A3], [A4], [B0, B1], [B2, B3], [B4, B5], [C0, C1]], graph_backend)
+    assert tracks_graph_reassign.num_nodes() == 8
+
     tracks_graph_reassign = graph_backend.assign_track_ids(node_ids=[A1, A4, B4], reset=False)
     ids_df_reassign = graph_backend.node_attrs(attr_keys=[DEFAULT_ATTR_KEYS.NODE_ID, DEFAULT_ATTR_KEYS.TRACK_ID])
     assert tracks_graph_reassign.num_nodes() == 3

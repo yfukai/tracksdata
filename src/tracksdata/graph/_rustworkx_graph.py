@@ -1139,7 +1139,7 @@ class RustWorkXGraph(BaseGraph):
                     how="left",
                 ).filter(pl.col(output_key) != -1)
                 if merged.height > 0:
-                    track_id_map = merged.unique(output_key + "_new", keep="first")
+                    track_id_map = merged.unique(output_key + "_new", keep="first").unique(output_key, keep="first")
                     track_id_map = dict(zip(track_id_map[output_key + "_new"], track_id_map[output_key], strict=True))
                 else:
                     track_id_map = {}
