@@ -1114,9 +1114,7 @@ class RustWorkXGraph(BaseGraph):
             else:
                 previous_id_df = self.node_attrs(attr_keys=[DEFAULT_ATTR_KEYS.NODE_ID, output_key])
                 if track_id_offset is None:
-                    existing_ids = previous_id_df[output_key].unique().to_list()
-                    existing_ids = [i for i in existing_ids if i != -1]
-                    track_id_offset: int = max(existing_ids, default=0) + 1
+                    track_id_offset: int = max(previous_id_df[output_key].max(), 0) + 1
 
             try:
                 track_node_ids, track_ids, tracks_graph = _assign_track_ids(self.rx_graph, track_id_offset)
