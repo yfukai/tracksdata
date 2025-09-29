@@ -1384,7 +1384,7 @@ class SQLGraph(BaseGraph):
         node_ids: list[int] | None = None,
     ) -> rx.PyDiGraph:
         if node_ids is not None:
-            track_node_ids = list(set(self._compute_track_node_ids(node_ids)))
+            track_node_ids = list(set(self.tracklet_nodes(node_ids)))
         else:
             track_node_ids = None
         if output_key in self.node_attr_keys:

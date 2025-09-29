@@ -1123,8 +1123,7 @@ class BaseGraph(abc.ABC):
         """
         raise NotImplementedError(f"{self.__class__.__name__} backend does not support track id assignment.")
 
-    # Internal utility to compute the exact set of nodes to assign when a subset is requested
-    def _compute_track_node_ids(self, seeds: list[int] | None) -> list[int]:
+    def tracklet_nodes(self, seeds: list[int] | None) -> list[int]:
         """
         Compute the non-branching tracklets around the provided seed node_ids.
 

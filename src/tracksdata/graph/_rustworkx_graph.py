@@ -1090,7 +1090,7 @@ class RustWorkXGraph(BaseGraph):
         node_ids: list[int] | None = None,
     ) -> rx.PyDiGraph:
         if node_ids is not None:
-            track_node_ids = set(self._compute_track_node_ids(node_ids))
+            track_node_ids = set(self.tracklet_nodes(node_ids))
             return (
                 self.filter(node_ids=list(track_node_ids))
                 .subgraph(node_attr_keys=[output_key], edge_attr_keys=[])
