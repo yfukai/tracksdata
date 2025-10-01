@@ -255,7 +255,7 @@ def to_ctc(
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    view = GraphArrayView(graph, shape=shape, attr_key=track_id_key)
+    view = GraphArrayView(graph, full_shape=shape, attr_key=track_id_key)
 
     n_digits = max(len(str(view.shape[0])), 3)
 

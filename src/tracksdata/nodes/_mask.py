@@ -156,6 +156,7 @@ class Mask:
         buffer: np.ndarray,
         value: int | float,
         offset: NDArray[np.integer] | int = 0,
+        strides: NDArray[np.integer] | int = 1,
     ) -> None:
         """
         Paint object into a buffer.
@@ -168,15 +169,22 @@ class Mask:
             The value to paint the object.
         offset : NDArray[np.integer] | int, optional
             The offset to add to the indices, should be used with bounding box information.
+        strides : NDArray[np.integer] | int, optional
+            The strides to apply to the mask when painting.
         """
         if isinstance(offset, int):
             offset = np.full(self._mask.ndim, offset)
+        if isinstance(strides, int):
+            strides = np.full(self._mask.ndim, strides)
 
         window = tuple(
-            slice(i + o, j + o)
-            for i, j, o in zip(self._bbox[: self._mask.ndim], self._bbox[self._mask.ndim :], offset, strict=True)
+            slice((i + o) // st, (j + o) // st)
+            for i, j, o, st in zip(
+                self._bbox[: self._mask.ndim], self._bbox[self._mask.ndim :], offset, strides, strict=True
+            )
         )
-        buffer[window][self._mask] = value
+        mask_slices = tuple(slice(None, None, st) for st in strides)
+        buffer[window][self._mask[mask_slices]] = value
 
     def iou(self, other: "Mask") -> float:
         """
