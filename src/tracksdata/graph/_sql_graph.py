@@ -711,7 +711,7 @@ class SQLGraph(BaseGraph):
             # Check if the node exists
             node = session.query(self.Node).filter(self.Node.node_id == node_id).first()
             if node is None:
-                raise ValueError(f"Node {node_id} does not exist in the graph")
+                raise ValueError(f"Node {node_id} does not exist in the graph.")
 
             # Remove all edges where this node is source or target
             session.query(self.Edge).filter(
@@ -1138,12 +1138,12 @@ class SQLGraph(BaseGraph):
                     *[getattr(self.Node, key) for key in attr_keys],
                 )
 
-        nodes_df = pl.read_database(
-            self._raw_query(query),
-            connection=session.connection(),
-        )
-        nodes_df = self._cast_boolean_columns(self.Node, nodes_df)
-        nodes_df = unpickle_bytes_columns(nodes_df)
+            nodes_df = pl.read_database(
+                self._raw_query(query),
+                connection=session.connection(),
+            )
+            nodes_df = self._cast_boolean_columns(self.Node, nodes_df)
+            nodes_df = unpickle_bytes_columns(nodes_df)
 
         # indices are included by default and must be removed
         if attr_keys is not None:
@@ -1376,6 +1376,32 @@ class SQLGraph(BaseGraph):
     ) -> None:
         self._update_table(self.Edge, edge_ids, DEFAULT_ATTR_KEYS.EDGE_ID, attrs)
 
+    def assign_track_ids(
+        self,
+        output_key: str = DEFAULT_ATTR_KEYS.TRACK_ID,
+        reset: bool = True,
+        track_id_offset: int | None = None,
+        node_ids: list[int] | None = None,
+    ) -> rx.PyDiGraph:
+        if node_ids is not None:
+            track_node_ids = list(set(self.tracklet_nodes(node_ids)))
+        else:
+            track_node_ids = None
+        if output_key in self.node_attr_keys:
+            node_attr_keys = [output_key]
+        else:
+            node_attr_keys = []
+
+        return (
+            self.filter(node_ids=track_node_ids)
+            .subgraph(node_attr_keys=node_attr_keys)
+            .assign_track_ids(
+                output_key=output_key,
+                reset=reset,
+                track_id_offset=track_id_offset,
+            )
+        )
+
     def _get_degree(
         self,
         node_ids: list[int] | int | None,
@@ -1536,8 +1562,38 @@ class SQLGraph(BaseGraph):
         Return the edge id between two nodes.
         """
         with Session(self._engine) as session:
-            return (
+            edge_id = (
                 session.query(self.Edge.edge_id)
                 .filter(self.Edge.source_id == source_id, self.Edge.target_id == target_id)
                 .scalar()
             )
+            if edge_id is None:
+                raise ValueError(f"Edge {source_id}->{target_id} does not exist in the graph.")
+            return edge_id
+
+    def remove_edge(
+        self,
+        source_id: int | None = None,
+        target_id: int | None = None,
+        *,
+        edge_id: int | None = None,
+    ) -> None:
+        """
+        Remove an edge from the graph either by its ID or by its endpoints.
+        """
+        with Session(self._engine) as session:
+            if edge_id is None:
+                if source_id is None or target_id is None:
+                    raise ValueError("Provide either edge_id or both source_id and target_id.")
+                deleted = (
+                    session.query(self.Edge)
+                    .filter(self.Edge.source_id == source_id, self.Edge.target_id == target_id)
+                    .delete()
+                )
+                if not deleted:
+                    raise ValueError(f"Edge {source_id}->{target_id} does not exist in the graph.")
+            else:
+                deleted = session.query(self.Edge).filter(self.Edge.edge_id == edge_id).delete()
+                if not deleted:
+                    raise ValueError(f"Edge {edge_id} does not exist in the graph.")
+            session.commit()

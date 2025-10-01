@@ -5,19 +5,18 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, TypeVar, overload
 
+import geff
 import numpy as np
 import polars as pl
 import rustworkx as rx
-from geff import GeffMetadata
-from geff.metadata_schema import Axis
-from geff.rustworkx.io import read_rx
-from geff.write_arrays import write_arrays
+from geff.core_io import construct_var_len_props, write_arrays
+from geff_spec import Axis, PropMetadata
 from numpy.typing import ArrayLike
 from zarr.storage import StoreLike
 
 from tracksdata.attrs import AttrComparison, NodeAttr
 from tracksdata.constants import DEFAULT_ATTR_KEYS
-from tracksdata.utils._dtypes import column_to_bytes, column_to_numpy
+from tracksdata.utils._dtypes import column_to_numpy, polars_dtype_to_numpy_dtype
 from tracksdata.utils._logging import LOG
 from tracksdata.utils._multiprocessing import multiprocessing_apply
 
@@ -197,6 +196,35 @@ class BaseGraph(abc.ABC):
         -------
         int
             The ID of the added edge.
+        """
+
+    @abc.abstractmethod
+    def remove_edge(
+        self,
+        source_id: int | None = None,
+        target_id: int | None = None,
+        *,
+        edge_id: int | None = None,
+    ) -> None:
+        """
+        Remove an edge from the graph.
+
+        Either provide `edge_id` to remove by edge identifier, or
+        provide both `source_id` and `target_id` to remove by endpoints.
+
+        Parameters
+        ----------
+        source_id : int | None
+            The ID of the source node (when removing by endpoints).
+        target_id : int | None
+            The ID of the target node (when removing by endpoints).
+        edge_id : int | None
+            The ID of the edge to delete (when removing by ID).
+
+        Raises
+        ------
+        ValueError
+            If the specified edge does not exist or insufficient identifiers are provided.
         """
 
     @overload
@@ -1064,6 +1092,83 @@ class BaseGraph(abc.ABC):
 
         return BBoxSpatialFilter(self, frame_attr_key=frame_attr_key, bbox_attr_key=bbox_attr_key)
 
+    @abc.abstractmethod
+    def assign_track_ids(
+        self,
+        output_key: str = DEFAULT_ATTR_KEYS.TRACK_ID,
+        reset: bool = True,
+        track_id_offset: int | None = None,
+        node_ids: list[int] | None = None,
+    ) -> rx.PyDiGraph:
+        """
+        Compute and assign track ids to nodes.
+        Parameters
+        ----------
+        output_key : str
+            The key of the output track id attribute.
+        reset : bool
+            Whether to reset the track ids of the graph. If True, the track ids will be reset to -1.
+        track_id_offset : int | None
+            The starting track id, useful when assigning track ids to a subgraph.
+            If None, the track ids will start from 1 or from the maximum existing track id + 1
+            if the output_key already exists and reset is False.
+        node_ids : list[int] | None
+            The node ids to assign track ids to. If None, all nodes are used.
+
+        Returns
+        -------
+        rx.PyDiGraph
+            A compressed graph (parent -> child) with track ids lineage relationships.
+            If node_ids is provided, it will only include linages including those nodes.
+        """
+        raise NotImplementedError(f"{self.__class__.__name__} backend does not support track id assignment.")
+
+    def tracklet_nodes(self, seeds: list[int] | None) -> list[int]:
+        """
+        Compute the non-branching tracklets around the provided seed node_ids.
+
+        Walks forward to successors only through nodes with exactly one successor,
+        and backward to predecessors that also have out_degree == 1, until closure.
+
+        Parameters
+        ----------
+        seeds : list[int]
+            Seed node IDs where to start the closure.
+
+        Returns
+        -------
+        list[int]
+            Sorted unique node IDs forming the closure.
+        """
+        # NOTE: if this function becomes a bottleneck in the future it might be worth having
+        # a specialized version per backend
+        if seeds is None or len(seeds) == 0:
+            return []
+
+        track_node_ids: set[int] = set()
+        active_ids: set[int] = set(seeds)
+
+        while len(active_ids) > 0:
+            track_node_ids.update(active_ids)
+
+            # Successors: only nodes with exactly one successor
+            succ_map = self.successors(node_ids=list(active_ids))
+            successors = [int(df[DEFAULT_ATTR_KEYS.NODE_ID].first()) for df in succ_map.values() if len(df) == 1]
+
+            # Predecessors: only nodes with exactly one predecessor and predecessor out_degree == 1
+            pred_map = self.predecessors(node_ids=list(active_ids))
+            predecessors = [int(df[DEFAULT_ATTR_KEYS.NODE_ID].first()) for df in pred_map.values() if len(df) == 1]
+
+            if len(predecessors) > 0:
+                out_degrees = self.out_degree(predecessors)
+                if isinstance(out_degrees, int):
+                    out_degrees = [out_degrees]
+                predecessors = [node for node, degree in zip(predecessors, out_degrees, strict=True) if degree == 1]
+
+            active_ids = (set(successors) | set(predecessors)) - track_node_ids
+
+        return sorted(track_node_ids)
+
     def tracklet_graph(
         self,
         track_id_key: str = DEFAULT_ATTR_KEYS.TRACK_ID,
@@ -1155,7 +1260,7 @@ class BaseGraph(abc.ABC):
         from tracksdata.graph import IndexedRXGraph
 
         # this performs a roundtrip with the rustworkx graph
-        rx_graph, _ = read_rx(geff_store)
+        rx_graph, _ = geff.read(geff_store, backend="rustworkx")
 
         if not isinstance(rx_graph, rx.PyDiGraph):
             LOG.warning("The graph is not a directed graph, converting to directed graph.")
@@ -1167,6 +1272,16 @@ class BaseGraph(abc.ABC):
             **kwargs,
         )
 
+        if DEFAULT_ATTR_KEYS.MASK in indexed_graph.node_attr_keys:
+            from tracksdata.nodes._mask import Mask
+
+            # unsafe operation, changing graph content inplace
+            for node_attr in indexed_graph.rx_graph.nodes():
+                node_attr[DEFAULT_ATTR_KEYS.MASK] = Mask(
+                    node_attr[DEFAULT_ATTR_KEYS.MASK].astype(bool),
+                    bbox=node_attr[DEFAULT_ATTR_KEYS.BBOX],
+                )
+
         if cls == IndexedRXGraph:
             return indexed_graph
 
@@ -1175,7 +1290,7 @@ class BaseGraph(abc.ABC):
     def to_geff(
         self,
         geff_store: StoreLike,
-        geff_metadata: GeffMetadata | None = None,
+        geff_metadata: geff.GeffMetadata | None = None,
         zarr_format: Literal[2, 3] = 3,
     ) -> None:
         """
@@ -1196,9 +1311,12 @@ class BaseGraph(abc.ABC):
         """
 
         node_attrs = self.node_attrs()
+        node_ids = node_attrs[DEFAULT_ATTR_KEYS.NODE_ID].to_numpy()
+        node_attrs = node_attrs.drop(DEFAULT_ATTR_KEYS.NODE_ID)
 
-        if DEFAULT_ATTR_KEYS.MASK in node_attrs.columns:
-            node_attrs = column_to_bytes(node_attrs, DEFAULT_ATTR_KEYS.MASK)
+        edge_attrs = self.edge_attrs().drop(DEFAULT_ATTR_KEYS.EDGE_ID)
+        edge_ids = edge_attrs.select(DEFAULT_ATTR_KEYS.EDGE_SOURCE, DEFAULT_ATTR_KEYS.EDGE_TARGET).to_numpy()
+        edge_attrs = edge_attrs.drop(DEFAULT_ATTR_KEYS.EDGE_SOURCE, DEFAULT_ATTR_KEYS.EDGE_TARGET)
 
         if geff_metadata is None:
             axes = [Axis(name=DEFAULT_ATTR_KEYS.T, type="time")]
@@ -1211,37 +1329,47 @@ class BaseGraph(abc.ABC):
             else:
                 track_node_props = None
 
-            geff_metadata = GeffMetadata(
+            node_props_metadata = {
+                k: PropMetadata(
+                    identifier=k,
+                    dtype=polars_dtype_to_numpy_dtype(v.dtype) if k != DEFAULT_ATTR_KEYS.MASK else np.uint64,
+                    varlength=k == DEFAULT_ATTR_KEYS.MASK,
+                )
+                for k, v in node_attrs.to_dict().items()
+            }
+            edge_props_metadata = {
+                k: PropMetadata(identifier=k, dtype=polars_dtype_to_numpy_dtype(v.dtype))
+                for k, v in edge_attrs.to_dict().items()
+            }
+
+            geff_metadata = geff.GeffMetadata(
                 directed=True,
                 axes=axes,
+                node_props_metadata=node_props_metadata,
+                edge_props_metadata=edge_props_metadata,
                 track_node_props=track_node_props,
             )
 
-        edge_attrs = self.edge_attrs().drop(DEFAULT_ATTR_KEYS.EDGE_ID)
-
         node_dict = {
-            k: (column_to_numpy(v), None) for k, v in node_attrs.drop(DEFAULT_ATTR_KEYS.NODE_ID).to_dict().items()
+            k: {"values": column_to_numpy(v), "missing": None}
+            for k, v in node_attrs.to_dict().items()
+            if k != DEFAULT_ATTR_KEYS.MASK
         }
 
-        edge_ids = edge_attrs.select(DEFAULT_ATTR_KEYS.EDGE_SOURCE, DEFAULT_ATTR_KEYS.EDGE_TARGET).to_numpy()
-
-        edge_dict = {
-            k: (column_to_numpy(v), None)
-            for k, v in edge_attrs.drop(
-                DEFAULT_ATTR_KEYS.EDGE_SOURCE,
-                DEFAULT_ATTR_KEYS.EDGE_TARGET,
+        if DEFAULT_ATTR_KEYS.MASK in node_attrs.columns:
+            node_dict[DEFAULT_ATTR_KEYS.MASK] = construct_var_len_props(
+                [mask.mask.astype(np.uint64) for mask in node_attrs[DEFAULT_ATTR_KEYS.MASK]]
             )
-            .to_dict()
-            .items()
-        }
+
+        edge_dict = {k: {"values": column_to_numpy(v), "missing": None} for k, v in edge_attrs.to_dict().items()}
 
         write_arrays(
             geff_store,
-            metadata=geff_metadata,
-            node_ids=node_attrs[DEFAULT_ATTR_KEYS.NODE_ID].to_numpy(),
+            node_ids=node_ids.astype(np.uint64),
             node_props=node_dict,
-            edge_ids=edge_ids,
+            edge_ids=edge_ids.astype(np.uint64),
             edge_props=edge_dict,
+            metadata=geff_metadata,
             zarr_format=zarr_format,
         )
 
