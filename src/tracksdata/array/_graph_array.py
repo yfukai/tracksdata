@@ -146,7 +146,7 @@ class GraphArrayView(BaseReadOnlyArray):
         self._offset = offset
         self._strides = strides if strides is not None else tuple([1] * (len(full_shape) - 1))
         self._original_shape = tuple(
-            [full_shape[0]] + [fs // st for fs, st in zip(full_shape[1:], self._strides, strict=True)]
+            [full_shape[0]] + [(fs - 1) // st + 1 for fs, st in zip(full_shape[1:], self._strides, strict=True)]
         )
 
         if dtype is None:
@@ -337,4 +337,4 @@ class GraphArrayView(BaseReadOnlyArray):
 
         for mask, value in zip(df[DEFAULT_ATTR_KEYS.MASK], df[self._attr_key], strict=True):
             mask: Mask
-            mask.paint_buffer(buffer, value, offset=self._offset)
+            mask.paint_buffer(buffer, value, offset=self._offset, strides=self._strides)

@@ -174,18 +174,52 @@ class Mask:
             The strides to apply to the mask when painting.
         """
         if isinstance(offset, int):
-            offset = np.full(self._mask.ndim, offset)
-        if isinstance(strides, int):
-            strides = np.full(self._mask.ndim, strides)
+            offset = np.full(self._mask.ndim, offset, dtype=np.int64)
+        else:
+            offset = np.asarray(offset, dtype=np.int64)
 
-        window = tuple(
-            slice((i + o) // st, (j + o) // st)
-            for i, j, o, st in zip(
-                self._bbox[: self._mask.ndim], self._bbox[self._mask.ndim :], offset, strides, strict=True
-            )
-        )
-        mask_slices = tuple(slice(None, None, st) for st in strides)
-        buffer[window][self._mask[mask_slices]] = value
+        if isinstance(strides, int):
+            strides = np.full(self._mask.ndim, strides, dtype=np.int64)
+        else:
+            strides = np.asarray(strides, dtype=np.int64)
+
+        windows: list[slice] = []
+        mask_slices: list[slice] = []
+
+        for start, stop, off, stride in zip(
+            self._bbox[: self._mask.ndim],
+            self._bbox[self._mask.ndim :],
+            offset,
+            strides,
+            strict=True,
+        ):
+            if stride <= 0:
+                raise ValueError("Strides must be positive when painting a buffer.")
+
+            global_start = start + off
+            global_stop = stop + off
+
+            # Find the first coordinate within [global_start, global_stop)
+            # that aligns with the stride grid starting at zero.
+            slice_start = (-global_start) % stride
+            first_coord = global_start + slice_start
+
+            if first_coord >= global_stop:
+                # Nothing aligns with the stride grid along this axis.
+                return
+
+            window_start = first_coord // stride
+            window_stop = (global_stop - 1) // stride + 1
+
+            windows.append(slice(window_start, window_stop))
+            mask_slices.append(slice(slice_start, None, stride))
+
+        sliced_mask = self._mask[tuple(mask_slices)]
+
+        if sliced_mask.size == 0 or not np.any(sliced_mask):
+            return
+
+        buffer[tuple(windows)][sliced_mask] = value
 
     def iou(self, other: "Mask") -> float:
         """
