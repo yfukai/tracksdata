@@ -1,11 +1,15 @@
+import binascii
 from collections.abc import Sequence
 from enum import Enum
 from typing import TYPE_CHECKING, Any
 
+import cloudpickle
 import numpy as np
 import polars as pl
 import rustworkx as rx
 import sqlalchemy as sa
+from polars._typing import SchemaDict
+from polars.datatypes.convert import numpy_char_code_to_dtype
 from sqlalchemy.orm import DeclarativeBase, Session, aliased, load_only
 from sqlalchemy.sql.type_api import TypeEngine
 
@@ -204,13 +208,14 @@ class SQLFilter(BaseFilter):
             nodes_attrs = pl.read_database(
                 self._graph._raw_query(query),
                 connection=session.connection(),
+                schema_overrides=self._graph._polars_schema_override(self._graph.Node),
             )
 
         if attr_keys is not None:
             nodes_attrs = nodes_attrs.select(attr_keys)
 
-        nodes_attrs = self._graph._cast_boolean_columns(self._graph.Node, nodes_attrs)
         nodes_attrs = unpickle_bytes_columns(nodes_attrs)
+        nodes_attrs = self._graph._cast_array_columns(self._graph.Node, nodes_attrs)
 
         if unpack:
             nodes_attrs = unpack_array_attrs(nodes_attrs)
@@ -263,10 +268,11 @@ class SQLFilter(BaseFilter):
             edges_df = pl.read_database(
                 self._graph._raw_query(query),
                 connection=session.connection(),
+                schema_overrides=self._graph._polars_schema_override(self._graph.Edge),
             )
 
-        edges_df = self._graph._cast_boolean_columns(self._graph.Edge, edges_df)
         edges_df = unpickle_bytes_columns(edges_df)
+        edges_df = self._graph._cast_array_columns(self._graph.Edge, edges_df)
 
         if unpack:
             edges_df = unpack_array_attrs(edges_df)
@@ -338,6 +344,19 @@ class SQLFilter(BaseFilter):
         )
 
         return graph
+
+
+def blob_default(engine: sa.Engine, value: bytes) -> sa.Text:
+    """Return a dialect-correct server_default for LargeBinary."""
+    hex_blob = binascii.hexlify(value).decode("ascii")
+    if engine.dialect.name == "sqlite":
+        return sa.text(f"X'{hex_blob}'")
+    elif engine.dialect.name in {"postgresql", "postgres"}:
+        # either works:
+        # return sa.text(f"decode('{hex_blob}','hex')")
+        return sa.text(f"'\\x{hex_blob}'::bytea")
+    else:
+        raise RuntimeError(f"Unsupported dialect {engine.dialect.name}")
 
 
 class SQLGraph(BaseGraph):
@@ -440,7 +459,8 @@ class SQLGraph(BaseGraph):
 
         # Create unique classes for this instance
         self._define_schema(overwrite=overwrite)
-        self._boolean_columns: dict[str, list[str]] = {self.Node.__tablename__: [], self.Edge.__tablename__: []}
+        self._boolean_columns: dict[str, SchemaDict] = {self.Node.__tablename__: {}, self.Edge.__tablename__: {}}
+        self._array_columns: dict[str, SchemaDict] = {self.Node.__tablename__: {}, self.Edge.__tablename__: {}}
 
         if overwrite:
             self.Base.metadata.drop_all(self._engine)
@@ -511,13 +531,16 @@ class SQLGraph(BaseGraph):
         self.Edge = Edge
         self.Overlap = Overlap
 
-    def _cast_boolean_columns(self, table_class: type[DeclarativeBase], df: pl.DataFrame) -> pl.DataFrame:
-        """
-        This is required because polars bypasses the boolean type and converts it to integer.
-        """
+    def _polars_schema_override(self, table_class: type[DeclarativeBase]) -> SchemaDict:
+        return {
+            **self._boolean_columns[table_class.__tablename__],
+        }
+
+    def _cast_array_columns(self, table_class: type[DeclarativeBase], df: pl.DataFrame) -> pl.DataFrame:
+        # this operation cannot be done with schema_overrides because they are blobs at the database level
         df = df.with_columns(
-            pl.col(col).cast(pl.Boolean)
-            for col in self._boolean_columns[table_class.__tablename__]
+            pl.Series(col, df[col].to_list(), dtype=pl_dtype)
+            for col, pl_dtype in self._array_columns[table_class.__tablename__].items()
             if col in df.columns
         )
         return df
@@ -977,9 +1000,10 @@ class SQLGraph(BaseGraph):
             node_df = pl.read_database(
                 query.statement,
                 connection=session.connection(),
+                schema_overrides=self._polars_schema_override(self.Node),
             )
-            node_df = self._cast_boolean_columns(self.Node, node_df)
             node_df = unpickle_bytes_columns(node_df)
+            node_df = self._cast_array_columns(self.Node, node_df)
 
         if single_node:
             return node_df
@@ -1141,9 +1165,10 @@ class SQLGraph(BaseGraph):
             nodes_df = pl.read_database(
                 self._raw_query(query),
                 connection=session.connection(),
+                schema_overrides=self._polars_schema_override(self.Node),
             )
-            nodes_df = self._cast_boolean_columns(self.Node, nodes_df)
             nodes_df = unpickle_bytes_columns(nodes_df)
+            nodes_df = self._cast_array_columns(self.Node, nodes_df)
 
         # indices are included by default and must be removed
         if attr_keys is not None:
@@ -1183,9 +1208,10 @@ class SQLGraph(BaseGraph):
             edges_df = pl.read_database(
                 self._raw_query(query),
                 connection=session.connection(),
+                schema_overrides=self._polars_schema_override(self.Edge),
             )
-            edges_df = self._cast_boolean_columns(self.Edge, edges_df)
             edges_df = unpickle_bytes_columns(edges_df)
+            edges_df = self._cast_array_columns(self.Edge, edges_df)
 
         if unpack:
             edges_df = unpack_array_attrs(edges_df)
@@ -1239,7 +1265,13 @@ class SQLGraph(BaseGraph):
         sa_type = self._sqlalchemy_type_inference(default_value)
 
         if sa_type == sa.Boolean:
-            self._boolean_columns[table_class.__tablename__].append(key)
+            self._boolean_columns[table_class.__tablename__][key] = pl.Boolean
+
+        if sa_type == sa.PickleType and isinstance(default_value, np.ndarray):
+            self._array_columns[table_class.__tablename__][key] = pl.Array(
+                numpy_char_code_to_dtype(default_value.dtype.char), default_value.shape
+            )
+            default_value = blob_default(self._engine, cloudpickle.dumps(default_value))  # None
 
         sa_column = sa.Column(key, sa_type, default=default_value)
 
