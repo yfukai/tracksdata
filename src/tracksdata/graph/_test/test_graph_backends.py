@@ -1114,7 +1114,7 @@ def test_from_numpy_array_basic(graph_backend: BaseGraph) -> None:
         from_array(positions, graph_backend)
 
     assert graph_backend.num_nodes == 3
-    assert graph_backend.num_edges == 0  # No track_ids, so no edges
+    assert graph_backend.num_edges == 0  # No tracklet_ids, so no edges
 
     # Check node attributes
     nodes_df = graph_backend.node_attrs(attr_keys=["t", "y", "x"])
@@ -1133,14 +1133,14 @@ def test_from_numpy_array_3d(graph_backend: BaseGraph) -> None:
         ]
     )
 
-    track_ids = np.asarray([1, 2, 3])
+    tracklet_ids = np.asarray([1, 2, 3])
     track_id_graph = {3: 1, 2: 1}
 
     if isinstance(graph_backend, RustWorkXGraph):
         # for RustWorkXGraph we validate if the OOP API is working
         graph_backend = RustWorkXGraph.from_array(
             positions,
-            track_ids=track_ids,
+            tracklet_ids=tracklet_ids,
             track_id_graph=track_id_graph,
             rx_graph=None,
         )
@@ -1148,7 +1148,7 @@ def test_from_numpy_array_3d(graph_backend: BaseGraph) -> None:
         from_array(
             positions,
             graph_backend,
-            track_ids=track_ids,
+            tracklet_ids=tracklet_ids,
             track_id_graph=track_id_graph,
         )
 
@@ -1166,7 +1166,7 @@ def test_from_numpy_array_3d(graph_backend: BaseGraph) -> None:
     assert [node_ids[0], node_ids[2]] in edges
 
     np.testing.assert_array_equal(nodes_df.select(["t", "z", "y", "x"]).to_numpy(), positions)
-    np.testing.assert_array_equal(nodes_df[DEFAULT_ATTR_KEYS.TRACK_ID].to_list(), track_ids)
+    np.testing.assert_array_equal(nodes_df[DEFAULT_ATTR_KEYS.TRACK_ID].to_list(), tracklet_ids)
 
 
 def test_from_numpy_array_validation_errors() -> None:
@@ -1178,14 +1178,14 @@ def test_from_numpy_array_validation_errors() -> None:
 
     positions = np.array([[0, 10, 20], [1, 15, 25]])
 
-    # Test track_id_graph without track_ids
+    # Test track_id_graph without tracklet_ids
     with pytest.raises(ValueError, match="must be provided if"):
         RustWorkXGraph.from_array(positions, track_id_graph={2: 1})
 
-    # Test track_ids length mismatch
-    track_ids = np.array([1, 2, 3])  # Length 3, positions length 2
+    # Test tracklet_ids length mismatch
+    tracklet_ids = np.array([1, 2, 3])  # Length 3, positions length 2
     with pytest.raises(ValueError, match="must have the same length"):
-        RustWorkXGraph.from_array(positions, track_ids=track_ids)
+        RustWorkXGraph.from_array(positions, tracklet_ids=tracklet_ids)
 
 
 def test_from_other_with_edges(graph_backend: BaseGraph) -> None:
@@ -1383,7 +1383,7 @@ def test_spatial_filter_basic(graph_backend: BaseGraph) -> None:
     assert set(bb_filter[0:0, 0:2, 0:2, 0:2].node_ids()) == {node3}
 
 
-def test_assign_track_ids(graph_backend: BaseGraph):
+def test_assign_tracklet_ids(graph_backend: BaseGraph):
     # Add nodes:
     #     0
     #    / \
@@ -1396,27 +1396,27 @@ def test_assign_track_ids(graph_backend: BaseGraph):
     graph_backend.add_edge(nodes[0], nodes[1], {})
     graph_backend.add_edge(nodes[0], nodes[2], {})
 
-    tracks_graph = graph_backend.assign_track_ids()
-    track_ids = graph_backend.node_attrs(attr_keys=[DEFAULT_ATTR_KEYS.TRACK_ID])
-    assert len(track_ids) == 3
-    assert len(set(track_ids[DEFAULT_ATTR_KEYS.TRACK_ID])) == 3
+    tracks_graph = graph_backend.assign_tracklet_ids()
+    tracklet_ids = graph_backend.node_attrs(attr_keys=[DEFAULT_ATTR_KEYS.TRACK_ID])
+    assert len(tracklet_ids) == 3
+    assert len(set(tracklet_ids[DEFAULT_ATTR_KEYS.TRACK_ID])) == 3
     assert isinstance(tracks_graph, rx.PyDiGraph)
     assert tracks_graph.num_nodes() == 3  # Three tracks
 
-    tracks_graph = graph_backend.assign_track_ids(track_id_offset=100)
-    track_ids = graph_backend.node_attrs(attr_keys=[DEFAULT_ATTR_KEYS.TRACK_ID])
-    assert len(track_ids) == 3
-    assert len(set(track_ids[DEFAULT_ATTR_KEYS.TRACK_ID])) == 3
-    assert min(track_ids[DEFAULT_ATTR_KEYS.TRACK_ID]) == 100
+    tracks_graph = graph_backend.assign_tracklet_ids(track_id_offset=100)
+    tracklet_ids = graph_backend.node_attrs(attr_keys=[DEFAULT_ATTR_KEYS.TRACK_ID])
+    assert len(tracklet_ids) == 3
+    assert len(set(tracklet_ids[DEFAULT_ATTR_KEYS.TRACK_ID])) == 3
+    assert min(tracklet_ids[DEFAULT_ATTR_KEYS.TRACK_ID]) == 100
     assert isinstance(tracks_graph, rx.PyDiGraph)
     assert tracks_graph.num_nodes() == 3  # Three tracks
 
     filtered_graph = graph_backend.filter(node_ids=nodes[1:3]).subgraph()
-    tracks_graph = filtered_graph.assign_track_ids(track_id_offset=200)
-    track_ids = filtered_graph.node_attrs(attr_keys=[DEFAULT_ATTR_KEYS.TRACK_ID])
-    assert len(track_ids) == 2
-    assert len(set(track_ids[DEFAULT_ATTR_KEYS.TRACK_ID])) == 2
-    assert min(track_ids[DEFAULT_ATTR_KEYS.TRACK_ID]) == 200
+    tracks_graph = filtered_graph.assign_tracklet_ids(track_id_offset=200)
+    tracklet_ids = filtered_graph.node_attrs(attr_keys=[DEFAULT_ATTR_KEYS.TRACK_ID])
+    assert len(tracklet_ids) == 2
+    assert len(set(tracklet_ids[DEFAULT_ATTR_KEYS.TRACK_ID])) == 2
+    assert min(tracklet_ids[DEFAULT_ATTR_KEYS.TRACK_ID]) == 200
     assert isinstance(tracks_graph, rx.PyDiGraph)
     assert tracks_graph.num_nodes() == 2  # Two tracks
 
@@ -1442,7 +1442,7 @@ def _compare_track_id_assignments(expected_node_sets, graph_backend: BaseGraph):
     assert assigned == expected
 
 
-def test_assign_track_ids_node_id_filter(graph_backend: BaseGraph):
+def test_assign_tracklet_ids_node_id_filter(graph_backend: BaseGraph):
     """Assign track IDs for subsets selected via node_ids and validate exact non-branching closure.
 
     Graph:
@@ -1492,17 +1492,17 @@ def test_assign_track_ids_node_id_filter(graph_backend: BaseGraph):
         # Ensure all nodes start unassigned across backends (avoid NULL/default discrepancies)
         graph_backend.update_node_attrs(attrs={DEFAULT_ATTR_KEYS.TRACK_ID: -1})
 
-        tracks_graph = graph_backend.assign_track_ids(node_ids=seeds)
+        tracks_graph = graph_backend.assign_tracklet_ids(node_ids=seeds)
         _compare_track_id_assignments(expected, graph_backend)
         assert isinstance(tracks_graph, rx.PyDiGraph)
 
     # Check that re-assigning track IDs without reset works as expected
     graph_backend.update_node_attrs(attrs={DEFAULT_ATTR_KEYS.TRACK_ID: -1})
-    tracks_graph = graph_backend.assign_track_ids()
+    tracks_graph = graph_backend.assign_tracklet_ids()
     ids_df = graph_backend.node_attrs(attr_keys=[DEFAULT_ATTR_KEYS.NODE_ID, DEFAULT_ATTR_KEYS.TRACK_ID])
     assert tracks_graph.num_nodes() == 4
 
-    tracks_graph_reassign = graph_backend.assign_track_ids(node_ids=[A1, B4], reset=False)
+    tracks_graph_reassign = graph_backend.assign_tracklet_ids(node_ids=[A1, B4], reset=False)
     ids_df_reassign = graph_backend.node_attrs(attr_keys=[DEFAULT_ATTR_KEYS.NODE_ID, DEFAULT_ATTR_KEYS.TRACK_ID])
     assert tracks_graph_reassign.num_nodes() == 2
     # Full reassignment should yield same result as previous partial reassignment
@@ -1514,17 +1514,17 @@ def test_assign_track_ids_node_id_filter(graph_backend: BaseGraph):
     # Changing the topology
     C0 = graph_backend.add_node({DEFAULT_ATTR_KEYS.T: 0, DEFAULT_ATTR_KEYS.TRACK_ID: -1})
     C1 = graph_backend.add_node({DEFAULT_ATTR_KEYS.T: 0, DEFAULT_ATTR_KEYS.TRACK_ID: -1})
-    graph_backend.assign_track_ids(reset=True)
+    graph_backend.assign_tracklet_ids(reset=True)
 
     A4 = graph_backend.add_node({DEFAULT_ATTR_KEYS.T: 1, DEFAULT_ATTR_KEYS.TRACK_ID: -1})
     graph_backend.remove_edge(A2, A3)
     graph_backend.add_edge(A0, A4, {})
     graph_backend.add_edge(C0, C1, {})
-    tracks_graph_reassign = graph_backend.assign_track_ids(node_ids=None, reset=False)
+    tracks_graph_reassign = graph_backend.assign_tracklet_ids(node_ids=None, reset=False)
     _compare_track_id_assignments([[A0], [A1, A2], [A3], [A4], [B0, B1], [B2, B3], [B4, B5], [C0, C1]], graph_backend)
     assert tracks_graph_reassign.num_nodes() == 8
 
-    tracks_graph_reassign = graph_backend.assign_track_ids(node_ids=[A1, A4, B4], reset=False)
+    tracks_graph_reassign = graph_backend.assign_tracklet_ids(node_ids=[A1, A4, B4], reset=False)
     ids_df_reassign = graph_backend.node_attrs(attr_keys=[DEFAULT_ATTR_KEYS.NODE_ID, DEFAULT_ATTR_KEYS.TRACK_ID])
     assert tracks_graph_reassign.num_nodes() == 3
 

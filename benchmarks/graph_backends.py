@@ -142,7 +142,7 @@ def _build_pipeline(
                 EdgeAttr(DEFAULT_ATTR_KEYS.SOLUTION) == True,
             ).subgraph(),
         ),
-        ("assign_tracks", lambda graph: graph.assign_track_ids()),
+        ("assign_tracks", lambda graph: graph.assign_tracklet_ids()),
     ]
 
 

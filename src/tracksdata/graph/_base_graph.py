@@ -666,7 +666,7 @@ class BaseGraph(abc.ABC):
         ```python
         # ...
         solution_graph = solver.solve(graph)
-        solution_graph.assign_track_ids()
+        solution_graph.assign_tracklet_ids()
         solution_graph.to_ctc(shape=(10, 100, 100), output_dir="01_RES")
         ```
 
@@ -689,7 +689,7 @@ class BaseGraph(abc.ABC):
     def from_array(
         cls: type[T],
         positions: ArrayLike,
-        track_ids: ArrayLike | None = None,
+        tracklet_ids: ArrayLike | None = None,
         track_id_graph: dict[int, int] | None = None,
         **kwargs,
     ) -> T:
@@ -701,7 +701,7 @@ class BaseGraph(abc.ABC):
         positions : np.ndarray
             (N, 4 or 3) dimensional array of positions.
             Defined by (T, (Z), Y, X) coordinates.
-        track_ids : np.ndarray | None
+        tracklet_ids : np.ndarray | None
             Track ids of the nodes if available.
         track_id_graph : dict[int, int] | None
             Mapping of division as child track id (key) to parent track id (value) relationships.
@@ -719,7 +719,7 @@ class BaseGraph(abc.ABC):
         from_array(
             positions=np.asarray(positions),
             graph=graph,
-            track_ids=track_ids,
+            tracklet_ids=tracklet_ids,
             track_id_graph=track_id_graph,
         )
         return graph
@@ -1093,7 +1093,7 @@ class BaseGraph(abc.ABC):
         return BBoxSpatialFilter(self, frame_attr_key=frame_attr_key, bbox_attr_key=bbox_attr_key)
 
     @abc.abstractmethod
-    def assign_track_ids(
+    def assign_tracklet_ids(
         self,
         output_key: str = DEFAULT_ATTR_KEYS.TRACK_ID,
         reset: bool = True,

@@ -6,7 +6,7 @@ from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.graph._base_graph import BaseGraph
 
 
-def _add_edges_from_track_ids(
+def _add_edges_from_tracklet_ids(
     graph: BaseGraph,
     tracks_df: pl.DataFrame,
     track_id_graph: dict[int, int],
@@ -64,7 +64,7 @@ def _add_edges_from_track_ids(
 def from_array(
     positions: np.ndarray,
     graph: BaseGraph,
-    track_ids: np.ndarray | None = None,
+    tracklet_ids: np.ndarray | None = None,
     track_id_graph: dict[int, int] | None = None,
 ) -> None:
     """
@@ -77,7 +77,7 @@ def from_array(
         Defined by (T, (Z), Y, X) coordinates.
     graph : BaseGraph
         The graph to load the data into.
-    track_ids : np.ndarray | None
+    tracklet_ids : np.ndarray | None
         Track ids of the nodes if available.
     track_id_graph : dict[int, int] | None
         Mapping of division as child track id (key) to parent track id (value) relationships.
@@ -98,20 +98,20 @@ def from_array(
     else:
         raise ValueError(f"Expected 4 or 5 dimensions, got {positions.shape[1]}.")
 
-    if track_id_graph is not None and track_ids is None:
-        raise ValueError("`track_ids` must be provided if `tracks_graph` is provided.")
+    if track_id_graph is not None and tracklet_ids is None:
+        raise ValueError("`tracklet_ids` must be provided if `tracks_graph` is provided.")
 
     if track_id_graph is None:
         track_id_graph = {}
 
-    if track_ids is not None:
-        if len(track_ids) != positions.shape[0]:
+    if tracklet_ids is not None:
+        if len(tracklet_ids) != positions.shape[0]:
             raise ValueError(
-                "`track_ids` must have the same length as `positions`. "
-                f"Expected {positions.shape[0]}, got {len(track_ids)}."
+                "`tracklet_ids` must have the same length as `positions`. "
+                f"Expected {positions.shape[0]}, got {len(tracklet_ids)}."
             )
         graph.add_node_attr_key(DEFAULT_ATTR_KEYS.TRACK_ID, -1)
-        track_ids = track_ids.tolist()
+        tracklet_ids = tracklet_ids.tolist()
 
     for col in spatial_cols:
         graph.add_node_attr_key(col, -999_999)
@@ -132,22 +132,22 @@ def from_array(
         if ndim == 3:
             attr["z"] = position[1]
 
-        if track_ids is not None:
-            attr[DEFAULT_ATTR_KEYS.TRACK_ID] = track_ids[i]
+        if tracklet_ids is not None:
+            attr[DEFAULT_ATTR_KEYS.TRACK_ID] = tracklet_ids[i]
 
         node_attrs.append(attr)
 
     node_ids = graph.bulk_add_nodes(node_attrs)
 
-    if track_ids is not None:
+    if tracklet_ids is not None:
         tracks_df = pl.DataFrame(
             {
-                DEFAULT_ATTR_KEYS.TRACK_ID: track_ids,
+                DEFAULT_ATTR_KEYS.TRACK_ID: tracklet_ids,
                 DEFAULT_ATTR_KEYS.T: positions[:, 0],
                 DEFAULT_ATTR_KEYS.NODE_ID: node_ids,
             }
         )
-        _add_edges_from_track_ids(
+        _add_edges_from_tracklet_ids(
             graph,
             tracks_df,
             track_id_graph,

@@ -333,10 +333,10 @@ def evaluate_ctc_metrics(
         return dict.fromkeys(metrics, -1.0)
 
     if input_track_id_key not in input_graph.node_attr_keys:
-        input_graph.assign_track_ids(input_track_id_key, reset=input_reset)
+        input_graph.assign_tracklet_ids(input_track_id_key, reset=input_reset)
 
     if reference_track_id_key not in reference_graph.node_attr_keys:
-        reference_graph.assign_track_ids(reference_track_id_key, reset=reference_reset)
+        reference_graph.assign_tracklet_ids(reference_track_id_key, reset=reference_reset)
 
     input_tracks, reference_tracks, matching_data = compute_ctc_metrics_data(
         input_graph, reference_graph, input_track_id_key, reference_track_id_key

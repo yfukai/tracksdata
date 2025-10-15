@@ -11,7 +11,7 @@ from dask.array.image import imread as dask_imread
 from tracksdata.array._graph_array import GraphArrayView
 from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.graph._base_graph import BaseGraph
-from tracksdata.io._numpy_array import _add_edges_from_track_ids
+from tracksdata.io._numpy_array import _add_edges_from_tracklet_ids
 from tracksdata.nodes import RegionPropsNodes
 from tracksdata.utils._logging import LOG
 from tracksdata.utils._multiprocessing import multiprocessing_apply
@@ -211,7 +211,7 @@ def from_ctc(
         ]
     )
 
-    _add_edges_from_track_ids(
+    _add_edges_from_tracklet_ids(
         graph,
         nodes_df,
         track_id_graph,

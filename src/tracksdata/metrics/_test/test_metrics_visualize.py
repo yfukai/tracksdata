@@ -26,12 +26,12 @@ def test_visualize_matches(make_napari_viewer: Callable[[], "napari.Viewer"]) ->
         ]
     )
 
-    input_track_ids = np.array([1, 2, 3])
+    input_tracklet_ids = np.array([1, 2, 3])
     input_track_id_graph = {2: 1, 3: 1}  # track 2 connects to track 1, track 3 connects to track 1
 
     input_graph = RustWorkXGraph.from_array(
         input_positions,
-        track_ids=input_track_ids,
+        tracklet_ids=input_tracklet_ids,
         track_id_graph=input_track_id_graph,
     )
 
@@ -44,12 +44,12 @@ def test_visualize_matches(make_napari_viewer: Callable[[], "napari.Viewer"]) ->
         ]
     )
 
-    ref_track_ids = np.array([1, 1, 2])
+    ref_tracklet_ids = np.array([1, 1, 2])
     ref_track_id_graph = {1: 1}  # track 1 connects to track 1
 
     ref_graph = RustWorkXGraph.from_array(
         ref_positions,
-        track_ids=ref_track_ids,
+        tracklet_ids=ref_tracklet_ids,
         track_id_graph=ref_track_id_graph,
     )
 

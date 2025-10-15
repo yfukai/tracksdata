@@ -1408,7 +1408,7 @@ class SQLGraph(BaseGraph):
     ) -> None:
         self._update_table(self.Edge, edge_ids, DEFAULT_ATTR_KEYS.EDGE_ID, attrs)
 
-    def assign_track_ids(
+    def assign_tracklet_ids(
         self,
         output_key: str = DEFAULT_ATTR_KEYS.TRACK_ID,
         reset: bool = True,
@@ -1427,7 +1427,7 @@ class SQLGraph(BaseGraph):
         return (
             self.filter(node_ids=track_node_ids)
             .subgraph(node_attr_keys=node_attr_keys)
-            .assign_track_ids(
+            .assign_tracklet_ids(
                 output_key=output_key,
                 reset=reset,
                 track_id_offset=track_id_offset,

@@ -75,7 +75,7 @@ def _fast_dag_transverse(
         - first_to_track_id: Maps first node in each path to its track_id
     """
     paths = []
-    track_ids = []
+    tracklet_ids = []
     lengths = []
     last_to_track_id = {}
     first_to_track_id = {}
@@ -85,17 +85,17 @@ def _fast_dag_transverse(
     for start in starts:
         path = _fast_path_transverse(start, dag)
         paths.append(path)
-        track_ids.append(track_id)
+        tracklet_ids.append(track_id)
         lengths.append(len(path))
         last_to_track_id[path[-1]] = track_id
         first_to_track_id[path[0]] = track_id
         track_id += 1
 
     paths = [np.asarray(p) for p in paths]
-    track_ids = np.asarray(track_ids)
+    tracklet_ids = np.asarray(tracklet_ids)
     lengths = np.asarray(lengths)
 
-    return paths, track_ids, lengths, last_to_track_id, first_to_track_id
+    return paths, tracklet_ids, lengths, last_to_track_id, first_to_track_id
 
 
 @njit
@@ -255,7 +255,7 @@ def _track_id_edges_from_long_edges(
     return edges
 
 
-def _assign_track_ids(
+def _assign_tracklet_ids(
     graph: rx.PyDiGraph,
     track_id_offset: int,
 ) -> tuple[np.ndarray, np.ndarray, rx.PyDiGraph]:
@@ -274,7 +274,7 @@ def _assign_track_ids(
     -------
     tuple[np.ndarray, np.ndarray, rx.PyDiGraph]
         - node_ids: Sequence of node ids.
-        - track_ids: The respective track_id for each node.
+        - tracklet_ids: The respective track_id for each node.
         - tracks_graph: Graph indicating the parent -> child relationships.
     """
     if graph.num_nodes() == 0:
@@ -285,17 +285,17 @@ def _assign_track_ids(
     # was it better (faster) when using a numpy array for the digraph as in ultrack?
     linear_dag, starts, long_edges_df = _rx_graph_to_dict_dag(graph)
 
-    paths, track_ids, lengths, last_to_track_id, first_to_track_id = _fast_dag_transverse(
+    paths, tracklet_ids, lengths, last_to_track_id, first_to_track_id = _fast_dag_transverse(
         starts, linear_dag, track_id_offset
     )
 
-    n_tracks = len(track_ids)
+    n_tracks = len(tracklet_ids)
 
     tracks_graph = rx.PyDiGraph(node_count_hint=n_tracks, edge_count_hint=n_tracks)
 
-    node_ids = tracks_graph.add_nodes_from(track_ids)
+    node_ids = tracks_graph.add_nodes_from(tracklet_ids)
     track_id_to_rx_node_id = _numba_build_dict(
-        np.asarray(track_ids, dtype=np.int64),
+        np.asarray(tracklet_ids, dtype=np.int64),
         np.asarray(node_ids, dtype=np.int64),
     )
     if len(long_edges_df) > 0:
@@ -309,6 +309,6 @@ def _assign_track_ids(
         tracks_graph.add_edges_from_no_data(edges)
 
     paths = np.concatenate(paths)
-    nodes_track_ids = np.repeat(track_ids, lengths)
+    nodes_tracklet_ids = np.repeat(tracklet_ids, lengths)
 
-    return paths, nodes_track_ids, tracks_graph
+    return paths, nodes_tracklet_ids, tracks_graph
