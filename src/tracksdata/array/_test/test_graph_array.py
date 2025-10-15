@@ -35,7 +35,7 @@ def test_graph_array_view_init() -> None:
     # Add a attribute key
     graph.add_node_attr_key("label", 0)
 
-    array_view = GraphArrayView(graph=graph, full_shape=(10, 100, 100), attr_key="label", offset=0)
+    array_view = GraphArrayView(graph=graph, shape=(10, 100, 100), attr_key="label", offset=0)
 
     assert array_view.graph is graph
     assert array_view.shape == (10, 100, 100)
@@ -51,7 +51,7 @@ def test_graph_array_view_init_invalid_attr_key() -> None:
     graph = RustWorkXGraph()
 
     with pytest.raises(ValueError, match="Attribute key 'invalid_key' not found in graph"):
-        GraphArrayView(graph=graph, full_shape=(10, 100, 100), attr_key="invalid_key")
+        GraphArrayView(graph=graph, shape=(10, 100, 100), attr_key="invalid_key")
 
 
 def test_graph_array_view_getitem_empty_time() -> None:
@@ -59,7 +59,7 @@ def test_graph_array_view_getitem_empty_time() -> None:
     graph = RustWorkXGraph()
     graph.add_node_attr_key("label", 0)
 
-    array_view = GraphArrayView(graph=graph, full_shape=(10, 100, 100), attr_key="label")
+    array_view = GraphArrayView(graph=graph, shape=(10, 100, 100), attr_key="label")
 
     # Get data for time point 0 (no nodes)
     result = array_view[0]
@@ -97,7 +97,7 @@ def test_graph_array_view_getitem_with_nodes() -> None:
         }
     )
 
-    array_view = GraphArrayView(graph=graph, full_shape=(10, 100, 100), attr_key="label")
+    array_view = GraphArrayView(graph=graph, shape=(10, 100, 100), attr_key="label")
 
     # Get data for time point 0
     result = array_view[0]
@@ -162,7 +162,7 @@ def test_graph_array_view_getitem_multiple_nodes() -> None:
         }
     )
 
-    array_view = GraphArrayView(graph=graph, full_shape=(10, 100, 100), attr_key="label")
+    array_view = GraphArrayView(graph=graph, shape=(10, 100, 100), attr_key="label")
 
     # Get data for time point 0
     result = array_view[0]
@@ -204,7 +204,7 @@ def test_graph_array_view_getitem_boolean_dtype() -> None:
         }
     )
 
-    array_view = GraphArrayView(graph=graph, full_shape=(10, 100, 100), attr_key="is_active")
+    array_view = GraphArrayView(graph=graph, shape=(10, 100, 100), attr_key="is_active")
 
     # Get data for time point 0
     result = array_view[0]
@@ -242,7 +242,7 @@ def test_graph_array_view_dtype_inference() -> None:
         }
     )
 
-    array_view = GraphArrayView(graph=graph, full_shape=(10, 100, 100), attr_key="float_label")
+    array_view = GraphArrayView(graph=graph, shape=(10, 100, 100), attr_key="float_label")
 
     # Get data to trigger dtype inference
     _ = array_view[0]
@@ -266,7 +266,7 @@ def multi_node_graph_from_image(request) -> GraphArrayView:
     graph = RustWorkXGraph()
     nodes_operator = RegionPropsNodes(extra_properties=["label"])
     nodes_operator.add_nodes(graph, labels=label)
-    return GraphArrayView(graph=graph, full_shape=shape, attr_key="label"), label
+    return GraphArrayView(graph=graph, shape=shape, attr_key="label"), label
 
 
 def test_graph_array_view_equal(multi_node_graph_from_image) -> None:
@@ -344,7 +344,7 @@ def test_graph_array_set_options() -> None:
     with Options(gav_chunk_shape=(512, 512), gav_default_dtype=np.int16):
         empty_graph = RustWorkXGraph()
         empty_graph.add_node_attr_key("label", 0)
-        array_view = GraphArrayView(graph=empty_graph, full_shape=(10, 100, 100), attr_key="label")
+        array_view = GraphArrayView(graph=empty_graph, shape=(10, 100, 100), attr_key="label")
         assert array_view.chunk_shape == (512, 512)
         assert array_view.dtype == np.int16
 
@@ -355,9 +355,9 @@ def test_graph_array_view_with_strides_downsamples_data() -> None:
     graph.add_node_attr_key(DEFAULT_ATTR_KEYS.MASK, None)
     graph.add_node_attr_key(DEFAULT_ATTR_KEYS.BBOX, None)
 
-    full_shape = (3, 7, 8)
+    shape = (3, 7, 8)
     strides = (2, 3)
-    reference = np.zeros(full_shape, dtype=np.uint8)
+    reference = np.zeros(shape, dtype=np.uint8)
 
     nodes = [
         {
@@ -403,7 +403,7 @@ def test_graph_array_view_with_strides_downsamples_data() -> None:
 
     array_view = GraphArrayView(
         graph=graph,
-        full_shape=full_shape,
+        shape=shape,
         attr_key="label",
         strides=strides,
     )
@@ -424,9 +424,9 @@ def test_graph_array_view_with_strides_3d_data() -> None:
     graph.add_node_attr_key(DEFAULT_ATTR_KEYS.MASK, None)
     graph.add_node_attr_key(DEFAULT_ATTR_KEYS.BBOX, None)
 
-    full_shape = (2, 4, 6, 6)
+    shape = (2, 4, 6, 6)
     strides = (2, 3, 2)
-    reference = np.zeros(full_shape, dtype=np.uint8)
+    reference = np.zeros(shape, dtype=np.uint8)
 
     nodes = [
         {
@@ -478,7 +478,7 @@ def test_graph_array_view_with_strides_3d_data() -> None:
 
     array_view = GraphArrayView(
         graph=graph,
-        full_shape=full_shape,
+        shape=shape,
         attr_key="label",
         strides=strides,
     )

@@ -129,7 +129,7 @@ class GraphArrayView(BaseReadOnlyArray):
     def __init__(
         self,
         graph: BaseGraph,
-        full_shape: tuple[int, ...],
+        shape: tuple[int, ...],
         attr_key: str,
         *,
         dtype: np.dtype | None = None,
@@ -144,9 +144,9 @@ class GraphArrayView(BaseReadOnlyArray):
         self.graph = graph
         self._attr_key = attr_key
         self._offset = offset
-        self._strides = strides if strides is not None else tuple([1] * (len(full_shape) - 1))
+        self._strides = strides if strides is not None else tuple([1] * (len(shape) - 1))
         self._original_shape = tuple(
-            [full_shape[0]] + [(fs - 1) // st + 1 for fs, st in zip(full_shape[1:], self._strides, strict=True)]
+            [shape[0]] + [(fs - 1) // st + 1 for fs, st in zip(shape[1:], self._strides, strict=True)]
         )
 
         if dtype is None:
@@ -164,7 +164,7 @@ class GraphArrayView(BaseReadOnlyArray):
         self._dtype = dtype
 
         chunk_shape = chunk_shape or get_options().gav_chunk_shape
-        ndim = len(full_shape)
+        ndim = len(shape)
         if isinstance(chunk_shape, int):
             chunk_shape = (chunk_shape,) * (ndim - 1)
         elif len(chunk_shape) < ndim - 1:
