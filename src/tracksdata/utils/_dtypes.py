@@ -35,13 +35,15 @@ _POLARS_DTYPE_TO_NUMPY_DTYPE = {
 }
 
 
-def polars_dtype_to_numpy_dtype(polars_dtype: DataType) -> np.dtype:
+def polars_dtype_to_numpy_dtype(polars_dtype: DataType, allow_sequence=True) -> np.dtype:
     """Convert a polars dtype to a numpy dtype.
 
     Parameters
     ----------
     polars_dtype : DataType
         The polars dtype to convert.
+    allow_sequence : bool, optional
+        Whether to allow sequence types (List, Array). Default is True.
 
     Returns
     -------
@@ -49,6 +51,8 @@ def polars_dtype_to_numpy_dtype(polars_dtype: DataType) -> np.dtype:
         The numpy dtype.
     """
     while isinstance(polars_dtype, pl.Array | pl.List):
+        if not allow_sequence:
+            raise ValueError(f"Sequence types are not allowed: {polars_dtype}. Set allow_sequence=True to allow.")
         polars_dtype = polars_dtype.inner
 
     try:

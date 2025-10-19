@@ -146,7 +146,10 @@ class GraphArrayView(BaseReadOnlyArray):
             if df.is_empty():
                 dtype = get_options().gav_default_dtype
             else:
-                dtype = polars_dtype_to_numpy_dtype(df[self._attr_key].dtype)
+                try:
+                    dtype = polars_dtype_to_numpy_dtype(df[self._attr_key].dtype, allow_sequence=False)
+                except ValueError as e:
+                    raise ValueError(f"Attribute values for key '{self._attr_key}' must be scalar.") from e
                 # napari support for bool is limited
                 if np.issubdtype(dtype, bool):
                     dtype = np.uint8

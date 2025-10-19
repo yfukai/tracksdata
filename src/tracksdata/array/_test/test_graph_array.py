@@ -358,3 +358,21 @@ def test_graph_array_raise_error_on_absent_attr_key() -> None:
         GraphArrayView(graph=graph, shape=(10, 100, 100), attr_key="label")
     with pytest.raises(TypeError, match="missing 1 required positional argument: 'attr_key'"):
         GraphArrayView(graph=graph, shape=(10, 100, 100))  # type: ignore
+
+
+def test_graph_array_raise_error_on_non_scalar_attr_key() -> None:
+    """Test that GraphArrayView raises error if attr_key values are non-scalar."""
+    graph = RustWorkXGraph()
+    # Add a attribute key
+    graph.add_node_attr_key("label", [0, 1])  # Non-scalar default value
+    graph.add_node_attr_key(DEFAULT_ATTR_KEYS.MASK, None)
+    graph.add_node(
+        {
+            DEFAULT_ATTR_KEYS.T: 0,
+            "label": [1, 2],  # Non-scalar value
+            DEFAULT_ATTR_KEYS.MASK: Mask(np.array([[True]], dtype=bool), bbox=np.array([0, 0, 1, 1])),
+        }
+    )
+
+    with pytest.raises(ValueError, match="Attribute values for key 'label' must be scalar"):
+        GraphArrayView(graph=graph, shape=(10, 100, 100), attr_key="label")
