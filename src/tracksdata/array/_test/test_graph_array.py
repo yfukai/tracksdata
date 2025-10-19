@@ -347,3 +347,14 @@ def test_graph_array_set_options() -> None:
         array_view = GraphArrayView(graph=empty_graph, shape=(10, 100, 100), attr_key="label")
         assert array_view.chunk_shape == (512, 512)
         assert array_view.dtype == np.int16
+
+
+def test_graph_array_raise_error_on_absent_attr_key() -> None:
+    """Test that GraphArrayView raises error if attr_key is absent in the graph or not specified."""
+    graph = RustWorkXGraph()
+    # Do not add any attribute keys
+
+    with pytest.raises(ValueError, match="Attribute key 'label' not found in graph"):
+        GraphArrayView(graph=graph, shape=(10, 100, 100), attr_key="label")
+    with pytest.raises(TypeError, match="missing 1 required positional argument: 'attr_key'"):
+        GraphArrayView(graph=graph, shape=(10, 100, 100))  # type: ignore

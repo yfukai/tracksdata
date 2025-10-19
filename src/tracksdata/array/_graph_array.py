@@ -126,7 +126,7 @@ class GraphArrayView(BaseReadOnlyArray):
         self,
         graph: BaseGraph,
         shape: tuple[int, ...],
-        attr_key: str = DEFAULT_ATTR_KEYS.BBOX,
+        attr_key: str,
         offset: int | np.ndarray = 0,
         chunk_shape: tuple[int, ...] | int | None = None,
         buffer_cache_size: int | None = None,
