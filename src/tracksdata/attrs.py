@@ -105,7 +105,7 @@ class AttrComparison:
             raise ValueError(
                 f"Membership values can only be used with the 'is_in' method. Found '{_OPS_MATH_SYMBOLS[op]}'."
             )
-        if not is_membership_expr and op == _is_in_op:
+        elif not is_membership_expr and op == _is_in_op:
             raise ValueError(
                 f"Cannot use 'is_in' method with non-membership values. Found '{other}' of type {type(other)}."
             )
