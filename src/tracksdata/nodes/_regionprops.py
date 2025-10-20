@@ -124,7 +124,10 @@ class RegionPropsNodes(BaseNodesOperator):
             if attr_key not in graph.node_attr_keys:
                 graph.add_node_attr_key(attr_key, None)
 
-        # initialize the attribute keys
+        if "label" in self.attr_keys() and "label" not in graph.node_attr_keys:
+            graph.add_node_attr_key("label", 0)
+
+        # initialize the remaining attribute keys
         for attr_key in axis_names + self.attr_keys():
             if attr_key not in graph.node_attr_keys:
                 graph.add_node_attr_key(attr_key, -1.0)
