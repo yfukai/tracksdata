@@ -128,14 +128,14 @@ class AttrComparison:
         self.column = columns[0]
         self.op = op
 
+        # casting numpy scalars to python scalars
+        # numpy scalars are problematic for sqlalchemy
         if is_membership_expr:
             if isinstance(other, np.ndarray):
                 other = other.tolist()
             else:
                 other = list(other)
         elif isinstance(other, np.ndarray):
-            # casting numpy scalars to python scalars
-            # numpy scalars are problematic for sqlalchemy
             other = other.item()
         self.other = other
 
