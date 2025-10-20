@@ -21,7 +21,7 @@ NearestNeighborsSolver(-Attr("iou") * (-Attr("distance") / 30.0).exp())
 import functools
 import math
 import operator
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from typing import Any, Union, overload
 
 import numpy as np
@@ -60,6 +60,49 @@ _OPS_MATH_SYMBOLS: dict[Callable, str] = {
     operator.gt: ">",
     operator.ge: ">=",
 }
+
+
+def _normalize_membership_values(values: Any) -> tuple[Any, ...]:
+    """
+    Normalize membership values so they can be used across SQLAlchemy, Polars, and Python backends.
+    """
+    if isinstance(values, Attr | AttrComparison):
+        raise TypeError("Membership comparisons cannot be performed against Attr expressions.")
+
+    if isinstance(values, pl.Series):
+        values = values.to_list()
+    elif isinstance(values, np.ndarray):
+        if values.ndim == 0:
+            values = [values.item()]
+        else:
+            values = values.tolist()
+    elif isinstance(values, set | frozenset):
+        values = tuple(values)
+    elif isinstance(values, Iterable) and not isinstance(values, str | bytes):
+        values = tuple(values)
+    else:
+        raise TypeError("Membership comparisons expect an iterable of literal values.")
+
+    normalized: list[Any] = []
+    for value in values:
+        if isinstance(value, Attr | AttrComparison):
+            raise TypeError("Membership comparisons cannot include Attr expressions.")
+        if isinstance(value, np.generic):
+            normalized.append(value.item())
+        else:
+            normalized.append(value)
+    return tuple(normalized)
+
+
+def _in_op(lhs: Any, values: tuple[Any, ...]) -> Any:
+    """
+    Backend-aware membership operator that works for Polars expressions, SQLAlchemy columns, and Python scalars.
+    """
+    if isinstance(lhs, pl.Expr):
+        return lhs.is_in(values)
+    if hasattr(lhs, "in_"):
+        return lhs.in_(values)
+    return lhs in values
 
 
 class AttrComparison:
@@ -105,7 +148,9 @@ class AttrComparison:
         self.other = other
 
     def __repr__(self) -> str:
-        return f"{type(self.attr).__name__}({self.column}) {_OPS_MATH_SYMBOLS[self.op]} {self.other}"
+        return (
+            f"{type(self.attr).__name__}({self.column}) {_OPS_MATH_SYMBOLS.get(self.op, self.op.__name__)} {self.other}"
+        )
 
     def to_attr(self) -> "Attr":
         """
@@ -391,6 +436,23 @@ class Attr:
         Check if any column in the expression is multiplied by negative infinity.
         """
         return len(self._neg_inf_exprs) > 0
+
+    def is_in(self, values: Iterable[Scalar] | Sequence[Scalar] | np.ndarray | Series) -> "AttrComparison":
+        """
+        Create a membership comparison between the attribute and a collection of literals.
+
+        Parameters
+        ----------
+        values : Iterable[Scalar] | Sequence[Scalar] | np.ndarray | Series
+            Values the attribute should belong to.
+
+        Returns
+        -------
+        AttrComparison
+            A comparison suitable for filtering across all graph backends.
+        """
+        normalized_values = _normalize_membership_values(values)
+        return AttrComparison(self, _in_op, normalized_values)
 
     def __invert__(self) -> "Attr":
         return Attr(~self.expr)

@@ -207,6 +207,19 @@ def test_filter_nodes_by_attribute(graph_backend: BaseGraph) -> None:
     assert set(nodes) == {node1}
 
 
+def test_filter_nodes_by_membership(graph_backend: BaseGraph) -> None:
+    """Test filtering nodes using membership comparisons."""
+    node_a = graph_backend.add_node({"t": 0})
+    node_b = graph_backend.add_node({"t": 1})
+    node_c = graph_backend.add_node({"t": 2})
+
+    members = graph_backend.filter(NodeAttr("t").is_in([0, 2])).node_ids()
+    assert set(members) == {node_a, node_c}
+
+    np_members = graph_backend.filter(NodeAttr("t").is_in(np.array([1], dtype=np.int64))).node_ids()
+    assert set(np_members) == {node_b}
+
+
 def test_time_points(graph_backend: BaseGraph) -> None:
     """Test retrieving time points."""
     graph_backend.add_node({"t": 0})
