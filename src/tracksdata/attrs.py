@@ -89,7 +89,8 @@ def _is_membership_expr_input(x: object) -> TypeGuard[MembershipExprInput]:
 
 class AttrComparison:
     """
-    Class to store a comparison between an [Attr][tracksdata.attrs.Attr] and a value.
+    Class to store a comparison between an [Attr][tracksdata.attrs.Attr] and a value
+    (a sequence of values for `is_in`).
     It's mainly used for filtering.
     Complex expression are transformed back to [Attr][tracksdata.attrs.Attr] objects
     which can be used to evaluate the expression on a DataFrame.
@@ -100,7 +101,7 @@ class AttrComparison:
         The attribute to compare.
     op : Callable
         The operator to use for the comparison.
-    other : ExprInput | tuple[Scalar, ...]
+    other : ExprInput | MembershipExprInput
         The value to compare the attribute to.
     """
 
