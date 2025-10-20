@@ -32,6 +32,8 @@ def test_graph_array_view_init(graph_backend: BaseGraph) -> None:
     """Test GraphArrayView initialization."""
     # Add a attribute key
     graph_backend.add_node_attr_key("label", 0)
+    graph_backend.add_node_attr_key(DEFAULT_ATTR_KEYS.MASK, None)
+    graph_backend.add_node_attr_key(DEFAULT_ATTR_KEYS.BBOX, None)
 
     array_view = GraphArrayView(graph=graph_backend, shape=(10, 100, 100), attr_key="label", offset=0)
 
@@ -55,6 +57,8 @@ def test_graph_array_view_getitem_empty_time(graph_backend: BaseGraph) -> None:
     """Test __getitem__ with empty time point (no nodes)."""
 
     graph_backend.add_node_attr_key("label", 0)
+    graph_backend.add_node_attr_key(DEFAULT_ATTR_KEYS.MASK, None)
+    graph_backend.add_node_attr_key(DEFAULT_ATTR_KEYS.BBOX, None)
 
     array_view = GraphArrayView(graph=graph_backend, shape=(10, 100, 100), attr_key="label")
 
@@ -336,6 +340,8 @@ def test_graph_array_view_getitem_time_index_nested(multi_node_graph_from_image,
 def test_graph_array_set_options(graph_backend: BaseGraph) -> None:
     with Options(gav_chunk_shape=(512, 512), gav_default_dtype=np.int16):
         graph_backend.add_node_attr_key("label", 0)
+        graph_backend.add_node_attr_key(DEFAULT_ATTR_KEYS.MASK, None)
+        graph_backend.add_node_attr_key(DEFAULT_ATTR_KEYS.BBOX, None)
         array_view = GraphArrayView(graph=graph_backend, shape=(10, 100, 100), attr_key="label")
         assert array_view.chunk_shape == (512, 512)
         assert array_view.dtype == np.int16

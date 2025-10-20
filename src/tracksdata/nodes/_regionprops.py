@@ -116,7 +116,7 @@ class RegionPropsNodes(BaseNodesOperator):
         else:
             raise ValueError(f"`labels` must be 't + 2D' or 't + 3D', got '{labels.ndim}' dimensions.")
 
-    def _init_node_attrs(self, graph: BaseGraph, axis_names: list[str]) -> None:
+    def _init_node_attrs(self, graph: BaseGraph, axis_names: list[str], labels_dtype: np.dtype | None = None) -> None:
         """
         Initialize the node attributes for the graph.
         """
@@ -124,10 +124,18 @@ class RegionPropsNodes(BaseNodesOperator):
             if attr_key not in graph.node_attr_keys:
                 graph.add_node_attr_key(attr_key, None)
 
+        label_default = -1.0
+        if labels_dtype is not None and "label" in self.attr_keys() and np.issubdtype(labels_dtype, np.integer):
+            if np.issubdtype(labels_dtype, np.unsignedinteger):
+                label_default = np.array(0, dtype=labels_dtype).item()
+            else:
+                label_default = np.array(-1, dtype=labels_dtype).item()
+
         # initialize the attribute keys
         for attr_key in axis_names + self.attr_keys():
             if attr_key not in graph.node_attr_keys:
-                graph.add_node_attr_key(attr_key, -1.0)
+                default_value = label_default if attr_key == "label" else -1.0
+                graph.add_node_attr_key(attr_key, default_value)
 
     def attr_keys(self) -> list[str]:
         """
@@ -215,7 +223,7 @@ class RegionPropsNodes(BaseNodesOperator):
         ```
         """
         axis_names = self._axis_names(labels)
-        self._init_node_attrs(graph, axis_names)
+        self._init_node_attrs(graph, axis_names, labels_dtype=labels.dtype)
 
         if t is None:
             time_points = range(labels.shape[0])
