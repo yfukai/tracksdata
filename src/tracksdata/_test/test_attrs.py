@@ -639,7 +639,7 @@ def test_attr_is_in_creates_membership_expression() -> None:
 
 def test_attr_is_in_errors() -> None:
     with pytest.raises(
-        ValueError, match="Cannot use 'is_in' method with non-membership values. Found '1' of type <class 'int'>."
+        ValueError, match=r"Cannot use 'is_in' method with non-membership values. Found '1' of type <class 'int'>."
     ):
         Attr("col").is_in(1)
 
