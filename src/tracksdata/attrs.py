@@ -139,9 +139,7 @@ class AttrComparison:
         self.other = other
 
     def __repr__(self) -> str:
-        return (
-            f"{type(self.attr).__name__}({self.column}) {_OPS_MATH_SYMBOLS.get(self.op, self.op.__name__)} {self.other}"
-        )
+        return f"{type(self.attr).__name__}({self.column}) {_OPS_MATH_SYMBOLS[self.op]} {self.other}"
 
     def to_attr(self) -> "Attr":
         """
