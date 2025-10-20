@@ -43,6 +43,13 @@ __all__ = [
 ]
 
 
+def _is_in_op(lhs: Expr, values: MembershipExprInput) -> Any:
+    """
+    Wrapper around the Polars `is_in` method.
+    """
+    return lhs.is_in(values)
+
+
 _OPS_MATH_SYMBOLS: dict[Callable, str] = {
     operator.add: "+",
     operator.sub: "-",
@@ -60,27 +67,14 @@ _OPS_MATH_SYMBOLS: dict[Callable, str] = {
     operator.le: "<=",
     operator.gt: ">",
     operator.ge: ">=",
+    _is_in_op: "in",
 }
 
 
-def _in_op(lhs: Any, values: MembershipExprInput) -> Any:
-    """
-    Backend-aware membership operator that works for Polars expressions, SQLAlchemy columns, and Python scalars.
-    """
-    if isinstance(lhs, pl.Expr):
-        return lhs.is_in(values)
-    if hasattr(lhs, "in_"):
-        return lhs.in_(values)
-    return lhs in values
-
-
-_OPS_MATH_SYMBOLS[_in_op] = "in"
-
-
-def _is_membership_expr_input(x: object) -> TypeGuard[MembershipExprInput]:
+def _is_membership_expr_input(x: Any) -> TypeGuard[MembershipExprInput]:
     if isinstance(x, Attr | AttrComparison | pl.Expr):
         return False
-    if isinstance(x, str | bytes | bytearray | memoryview):
+    if isinstance(x, Scalar):
         return False
     if isinstance(x, np.ndarray):
         return getattr(x, "ndim", 1) >= 1
@@ -106,8 +100,15 @@ class AttrComparison:
     """
 
     def __init__(self, attr: "Attr", op: Callable, other: ExprInput | MembershipExprInput) -> None:
-        if _is_membership_expr_input(other) and op != _in_op:
-            raise ValueError("Membership values can only be used with the 'in' operator.")
+        is_membership_expr = _is_membership_expr_input(other)
+        if is_membership_expr and op != _is_in_op:
+            raise ValueError(
+                f"Membership values can only be used with the 'is_in' method. Found '{_OPS_MATH_SYMBOLS[op]}'."
+            )
+        if not is_membership_expr and op == _is_in_op:
+            raise ValueError(
+                f"Cannot use 'is_in' method with non-membership values. Found '{other}' of type {type(other)}."
+            )
 
         if attr.has_inf():
             raise ValueError("Comparison operators are not supported for expressions with infinity.")
@@ -127,7 +128,7 @@ class AttrComparison:
         self.column = columns[0]
         self.op = op
 
-        if _is_membership_expr_input(other):
+        if is_membership_expr:
             if isinstance(other, np.ndarray):
                 other = other.tolist()
             else:
@@ -440,7 +441,7 @@ class Attr:
         AttrComparison
             A comparison suitable for filtering across all graph backends.
         """
-        return AttrComparison(self, _in_op, values)
+        return AttrComparison(self, _is_in_op, values)
 
     def __invert__(self) -> "Attr":
         return Attr(~self.expr)

@@ -637,6 +637,13 @@ def test_attr_is_in_creates_membership_expression() -> None:
     assert evaluated.to_list() == [True, False, True, True]
 
 
+def test_attr_is_in_errors() -> None:
+    with pytest.raises(
+        ValueError, match="Cannot use 'is_in' method with non-membership values. Found '1' of type <class 'int'>."
+    ):
+        Attr("col").is_in(1)
+
+
 def test_attr_is_in_accepts_numpy_arrays() -> None:
     df = pl.DataFrame({"col": [5, 6, 7]})
     comp = Attr("col").is_in(np.array([6, 8], dtype=np.int64))
