@@ -47,6 +47,8 @@ def _is_in_op(lhs: Any, values: MembershipExprInput) -> Any:
     """
     Backend-aware membership operator that works for Polars expressions, SQLAlchemy columns, and Python scalars.
     """
+    if isinstance(lhs, pl.Expr):
+        return lhs.is_in(values)
     if hasattr(lhs, "in_"):
         return lhs.in_(values)
     return lhs in values
