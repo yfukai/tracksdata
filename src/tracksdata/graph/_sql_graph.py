@@ -1408,11 +1408,11 @@ class SQLGraph(BaseGraph):
     ) -> None:
         self._update_table(self.Edge, edge_ids, DEFAULT_ATTR_KEYS.EDGE_ID, attrs)
 
-    def assign_track_ids(
+    def assign_tracklet_ids(
         self,
-        output_key: str = DEFAULT_ATTR_KEYS.TRACK_ID,
+        output_key: str = DEFAULT_ATTR_KEYS.TRACKLET_ID,
         reset: bool = True,
-        track_id_offset: int | None = None,
+        tracklet_id_offset: int | None = None,
         node_ids: list[int] | None = None,
     ) -> rx.PyDiGraph:
         if node_ids is not None:
@@ -1427,10 +1427,10 @@ class SQLGraph(BaseGraph):
         return (
             self.filter(node_ids=track_node_ids)
             .subgraph(node_attr_keys=node_attr_keys)
-            .assign_track_ids(
+            .assign_tracklet_ids(
                 output_key=output_key,
                 reset=reset,
-                track_id_offset=track_id_offset,
+                tracklet_id_offset=tracklet_id_offset,
             )
         )
 
@@ -1490,8 +1490,8 @@ class SQLGraph(BaseGraph):
 
     def tracklet_graph(
         self,
-        track_id_key: str = DEFAULT_ATTR_KEYS.TRACK_ID,
-        ignore_track_id: int | None = None,
+        tracklet_id_key: str = DEFAULT_ATTR_KEYS.TRACKLET_ID,
+        ignore_tracklet_id: int | None = None,
     ) -> rx.PyDiGraph:
         """
         Create a compressed tracklet graph where each node is a tracklet
@@ -1503,9 +1503,9 @@ class SQLGraph(BaseGraph):
 
         Parameters
         ----------
-        track_id_key : str
+        tracklet_id_key : str
             The key of the track id attribute.
-        ignore_track_id : int | None
+        ignore_tracklet_id : int | None
             The track id to ignore. If None, all track ids are used.
 
         Returns
@@ -1514,11 +1514,11 @@ class SQLGraph(BaseGraph):
             A compressed tracklet graph.
         """
 
-        if track_id_key not in self.node_attr_keys:
-            raise ValueError(f"Track id key '{track_id_key}' not found in graph. Expected '{self.node_attr_keys}'")
+        if tracklet_id_key not in self.node_attr_keys:
+            raise ValueError(f"Track id key '{tracklet_id_key}' not found in graph. Expected '{self.node_attr_keys}'")
 
         with Session(self._engine) as session:
-            node_query = sa.select(getattr(self.Node, track_id_key)).distinct()
+            node_query = sa.select(getattr(self.Node, tracklet_id_key)).distinct()
 
             SourceNode = aliased(self.Node)
             TargetNode = aliased(self.Node)
@@ -1537,20 +1537,20 @@ class SQLGraph(BaseGraph):
                     TargetNode.node_id == self.Edge.target_id,
                 )
                 .filter(
-                    getattr(SourceNode, track_id_key) != getattr(TargetNode, track_id_key),
+                    getattr(SourceNode, tracklet_id_key) != getattr(TargetNode, tracklet_id_key),
                 )
             )
 
-            if ignore_track_id is not None:
-                node_query = node_query.filter(getattr(self.Node, track_id_key) != ignore_track_id)
+            if ignore_tracklet_id is not None:
+                node_query = node_query.filter(getattr(self.Node, tracklet_id_key) != ignore_tracklet_id)
                 edge_query = edge_query.filter(
-                    getattr(SourceNode, track_id_key) != ignore_track_id,
-                    getattr(TargetNode, track_id_key) != ignore_track_id,
+                    getattr(SourceNode, tracklet_id_key) != ignore_tracklet_id,
+                    getattr(TargetNode, tracklet_id_key) != ignore_tracklet_id,
                 )
 
             edge_query = edge_query.with_only_columns(
-                getattr(SourceNode, track_id_key).label("source_track_id"),
-                getattr(TargetNode, track_id_key).label("target_track_id"),
+                getattr(SourceNode, tracklet_id_key).label("source_tracklet_id"),
+                getattr(TargetNode, tracklet_id_key).label("target_tracklet_id"),
             )
 
             nodes_df = pl.read_database(
@@ -1564,13 +1564,13 @@ class SQLGraph(BaseGraph):
             )
 
         graph = rx.PyDiGraph()
-        tracklet_ids = nodes_df[track_id_key].to_list()
+        tracklet_ids = nodes_df[tracklet_id_key].to_list()
         tracklet_id_to_rx = dict(zip(tracklet_ids, graph.add_nodes_from(tracklet_ids), strict=False))
         graph.add_edges_from(
             zip(
-                edges_df["source_track_id"].map_elements(tracklet_id_to_rx.__getitem__, return_dtype=int).to_list(),
-                edges_df["target_track_id"].map_elements(tracklet_id_to_rx.__getitem__, return_dtype=int).to_list(),
-                zip(edges_df["source_track_id"].to_list(), edges_df["target_track_id"].to_list(), strict=False),
+                edges_df["source_tracklet_id"].map_elements(tracklet_id_to_rx.__getitem__, return_dtype=int).to_list(),
+                edges_df["target_tracklet_id"].map_elements(tracklet_id_to_rx.__getitem__, return_dtype=int).to_list(),
+                zip(edges_df["source_tracklet_id"].to_list(), edges_df["target_tracklet_id"].to_list(), strict=False),
                 strict=True,
             )
         )

@@ -644,7 +644,7 @@ class BaseGraph(abc.ABC):
         self,
         shape: tuple[int, ...],
         output_dir: str | Path,
-        track_id_key: str = DEFAULT_ATTR_KEYS.TRACK_ID,
+        tracklet_id_key: str = DEFAULT_ATTR_KEYS.TRACKLET_ID,
         overwrite: bool = False,
     ) -> None:
         """
@@ -656,7 +656,7 @@ class BaseGraph(abc.ABC):
             The shape of the label images (T, (Z), Y, X)
         output_dir : str | Path
             The directory to save the graph to.
-        track_id_key : str
+        tracklet_id_key : str
             The attribute key to use for the track IDs.
         overwrite : bool
             Whether to overwrite the output directory if it exists.
@@ -666,7 +666,7 @@ class BaseGraph(abc.ABC):
         ```python
         # ...
         solution_graph = solver.solve(graph)
-        solution_graph.assign_track_ids()
+        solution_graph.assign_tracklet_ids()
         solution_graph.to_ctc(shape=(10, 100, 100), output_dir="01_RES")
         ```
 
@@ -681,7 +681,7 @@ class BaseGraph(abc.ABC):
             graph=self,
             shape=shape,
             output_dir=output_dir,
-            track_id_key=track_id_key,
+            tracklet_id_key=tracklet_id_key,
             overwrite=overwrite,
         )
 
@@ -689,8 +689,8 @@ class BaseGraph(abc.ABC):
     def from_array(
         cls: type[T],
         positions: ArrayLike,
-        track_ids: ArrayLike | None = None,
-        track_id_graph: dict[int, int] | None = None,
+        tracklet_ids: ArrayLike | None = None,
+        tracklet_id_graph: dict[int, int] | None = None,
         **kwargs,
     ) -> T:
         """
@@ -701,9 +701,9 @@ class BaseGraph(abc.ABC):
         positions : np.ndarray
             (N, 4 or 3) dimensional array of positions.
             Defined by (T, (Z), Y, X) coordinates.
-        track_ids : np.ndarray | None
+        tracklet_ids : np.ndarray | None
             Track ids of the nodes if available.
-        track_id_graph : dict[int, int] | None
+        tracklet_id_graph : dict[int, int] | None
             Mapping of division as child track id (key) to parent track id (value) relationships.
         **kwargs : Any
             Additional arguments to pass to the graph constructor.
@@ -719,8 +719,8 @@ class BaseGraph(abc.ABC):
         from_array(
             positions=np.asarray(positions),
             graph=graph,
-            track_ids=track_ids,
-            track_id_graph=track_id_graph,
+            tracklet_ids=tracklet_ids,
+            tracklet_id_graph=tracklet_id_graph,
         )
         return graph
 
@@ -1093,11 +1093,11 @@ class BaseGraph(abc.ABC):
         return BBoxSpatialFilter(self, frame_attr_key=frame_attr_key, bbox_attr_key=bbox_attr_key)
 
     @abc.abstractmethod
-    def assign_track_ids(
+    def assign_tracklet_ids(
         self,
-        output_key: str = DEFAULT_ATTR_KEYS.TRACK_ID,
+        output_key: str = DEFAULT_ATTR_KEYS.TRACKLET_ID,
         reset: bool = True,
-        track_id_offset: int | None = None,
+        tracklet_id_offset: int | None = None,
         node_ids: list[int] | None = None,
     ) -> rx.PyDiGraph:
         """
@@ -1108,7 +1108,7 @@ class BaseGraph(abc.ABC):
             The key of the output track id attribute.
         reset : bool
             Whether to reset the track ids of the graph. If True, the track ids will be reset to -1.
-        track_id_offset : int | None
+        tracklet_id_offset : int | None
             The starting track id, useful when assigning track ids to a subgraph.
             If None, the track ids will start from 1 or from the maximum existing track id + 1
             if the output_key already exists and reset is False.
@@ -1171,8 +1171,8 @@ class BaseGraph(abc.ABC):
 
     def tracklet_graph(
         self,
-        track_id_key: str = DEFAULT_ATTR_KEYS.TRACK_ID,
-        ignore_track_id: int | None = None,
+        tracklet_id_key: str = DEFAULT_ATTR_KEYS.TRACKLET_ID,
+        ignore_tracklet_id: int | None = None,
     ) -> rx.PyDiGraph:
         """
         Create a compressed tracklet graph where each node is a tracklet
@@ -1184,9 +1184,9 @@ class BaseGraph(abc.ABC):
 
         Parameters
         ----------
-        track_id_key : str
+        tracklet_id_key : str
             The key of the track id attribute.
-        ignore_track_id : int | None
+        ignore_tracklet_id : int | None
             The track id to ignore. If None, all track ids are used.
 
         Returns
@@ -1201,21 +1201,21 @@ class BaseGraph(abc.ABC):
         """
         from tracksdata.functional._edges import join_node_attrs_to_edges
 
-        if track_id_key not in self.node_attr_keys:
-            raise ValueError(f"Track id key '{track_id_key}' not found in graph. Expected '{self.node_attr_keys}'")
+        if tracklet_id_key not in self.node_attr_keys:
+            raise ValueError(f"Track id key '{tracklet_id_key}' not found in graph. Expected '{self.node_attr_keys}'")
 
-        nodes_df = self.node_attrs(attr_keys=[DEFAULT_ATTR_KEYS.NODE_ID, track_id_key])
+        nodes_df = self.node_attrs(attr_keys=[DEFAULT_ATTR_KEYS.NODE_ID, tracklet_id_key])
         edges_df = self.edge_attrs(attr_keys=[])
 
-        if ignore_track_id is not None:
-            nodes_df = nodes_df.filter(pl.col(track_id_key) != ignore_track_id)
+        if ignore_tracklet_id is not None:
+            nodes_df = nodes_df.filter(pl.col(tracklet_id_key) != ignore_tracklet_id)
 
-        nodes_df = nodes_df.unique(subset=[track_id_key])
+        nodes_df = nodes_df.unique(subset=[tracklet_id_key])
 
         graph = rx.PyDiGraph()
         nodes_df = nodes_df.with_columns(
             pl.Series(
-                np.asarray(graph.add_nodes_from(nodes_df[track_id_key].to_list()), dtype=int),
+                np.asarray(graph.add_nodes_from(nodes_df[tracklet_id_key].to_list()), dtype=int),
             ).alias("rx_id"),
         )
 
@@ -1229,7 +1229,7 @@ class BaseGraph(abc.ABC):
             zip(
                 edges_df["source_rx_id"].to_list(),
                 edges_df["target_rx_id"].to_list(),
-                zip(edges_df["source_track_id"].to_list(), edges_df["target_track_id"].to_list(), strict=False),
+                zip(edges_df["source_tracklet_id"].to_list(), edges_df["target_tracklet_id"].to_list(), strict=False),
                 strict=True,
             )
         )
@@ -1312,7 +1312,7 @@ class BaseGraph(abc.ABC):
             The geff metadata to write to the graph.
             It automatically generates the metadata with:
             - axes: time (t) and spatial axes ((z), y, x)
-            - tracklet node property: track_id
+            - tracklet node property: tracklet_id
         zarr_format : Literal[2, 3]
             The zarr format to write the graph to.
             Defaults to 3.
@@ -1330,9 +1330,9 @@ class BaseGraph(abc.ABC):
             axes = [Axis(name=DEFAULT_ATTR_KEYS.T, type="time")]
             axes.extend([Axis(name=c, type="space") for c in ("z", "y", "x") if c in node_attrs.columns])
 
-            if DEFAULT_ATTR_KEYS.TRACK_ID in node_attrs.columns:
+            if DEFAULT_ATTR_KEYS.TRACKLET_ID in node_attrs.columns:
                 track_node_props = {
-                    "tracklet": DEFAULT_ATTR_KEYS.TRACK_ID,
+                    "tracklet": DEFAULT_ATTR_KEYS.TRACKLET_ID,
                 }
             else:
                 track_node_props = None

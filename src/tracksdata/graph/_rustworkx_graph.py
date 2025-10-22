@@ -9,7 +9,7 @@ import rustworkx as rx
 
 from tracksdata.attrs import AttrComparison, split_attr_comps
 from tracksdata.constants import DEFAULT_ATTR_KEYS
-from tracksdata.functional._rx import _assign_track_ids
+from tracksdata.functional._rx import _assign_tracklet_ids
 from tracksdata.graph._base_graph import BaseGraph
 from tracksdata.graph._mapped_graph_mixin import MappedGraphMixin
 from tracksdata.graph.filters._base_filter import BaseFilter, cache_method
@@ -1082,11 +1082,11 @@ class RustWorkXGraph(BaseGraph):
             for key, value in attrs.items():
                 edge_attr[key] = value[i]
 
-    def assign_track_ids(
+    def assign_tracklet_ids(
         self,
-        output_key: str = DEFAULT_ATTR_KEYS.TRACK_ID,
+        output_key: str = DEFAULT_ATTR_KEYS.TRACKLET_ID,
         reset: bool = True,
-        track_id_offset: int | None = None,
+        tracklet_id_offset: int | None = None,
         node_ids: list[int] | None = None,
     ) -> rx.PyDiGraph:
         if node_ids is not None:
@@ -1094,30 +1094,30 @@ class RustWorkXGraph(BaseGraph):
             return (
                 self.filter(node_ids=list(track_node_ids))
                 .subgraph(node_attr_keys=[output_key], edge_attr_keys=[])
-                .assign_track_ids(
+                .assign_tracklet_ids(
                     output_key=output_key,
                     reset=reset,
-                    track_id_offset=track_id_offset,
+                    tracklet_id_offset=tracklet_id_offset,
                 )
             )
         else:
             if output_key not in self.node_attr_keys:
                 self.add_node_attr_key(output_key, -1)
                 previous_id_df = None
-                if track_id_offset is None:
-                    track_id_offset = 1
+                if tracklet_id_offset is None:
+                    tracklet_id_offset = 1
             elif reset:
                 self.update_node_attrs(attrs={output_key: -1})
                 previous_id_df = None
-                if track_id_offset is None:
-                    track_id_offset = 1
+                if tracklet_id_offset is None:
+                    tracklet_id_offset = 1
             else:
                 previous_id_df = self.node_attrs(attr_keys=[DEFAULT_ATTR_KEYS.NODE_ID, output_key])
-                if track_id_offset is None:
-                    track_id_offset: int = max(previous_id_df[output_key].max(), 0) + 1
+                if tracklet_id_offset is None:
+                    tracklet_id_offset = max(previous_id_df[output_key].max(), 0) + 1
 
             try:
-                track_node_ids, track_ids, tracks_graph = _assign_track_ids(self.rx_graph, track_id_offset)
+                track_node_ids, tracklet_ids, tracks_graph = _assign_tracklet_ids(self.rx_graph, tracklet_id_offset)
             except RuntimeError as e:
                 raise RuntimeError(
                     "Are you sure this graph is a valid lineage graph?\n"
@@ -1131,7 +1131,7 @@ class RustWorkXGraph(BaseGraph):
 
             # mapping to already existing track IDs as much as possible
             if previous_id_df is not None:
-                new_id_df = pl.DataFrame({DEFAULT_ATTR_KEYS.NODE_ID: track_node_ids, output_key + "_new": track_ids})
+                new_id_df = pl.DataFrame({DEFAULT_ATTR_KEYS.NODE_ID: track_node_ids, output_key + "_new": tracklet_ids})
                 merged = new_id_df.join(
                     previous_id_df,
                     left_on=DEFAULT_ATTR_KEYS.NODE_ID,
@@ -1139,16 +1139,18 @@ class RustWorkXGraph(BaseGraph):
                     how="left",
                 ).filter(pl.col(output_key) != -1)
                 if merged.height > 0:
-                    track_id_map = merged.unique(output_key + "_new", keep="first").unique(output_key, keep="first")
-                    track_id_map = dict(zip(track_id_map[output_key + "_new"], track_id_map[output_key], strict=True))
+                    tracklet_id_map = merged.unique(output_key + "_new", keep="first").unique(output_key, keep="first")
+                    tracklet_id_map = dict(
+                        zip(tracklet_id_map[output_key + "_new"], tracklet_id_map[output_key], strict=True)
+                    )
                 else:
-                    track_id_map = {}
+                    tracklet_id_map = {}
                 # Ensure that the result is a list of integers (using numpy integer causes issues with SQLGraph)
                 # Later on, we will make it safe to use numpy integers everywhere for updating attributes.
-                track_ids = [int(track_id_map.get(tid, tid)) for tid in track_ids]  # type: ignore
+                tracklet_ids = [int(tracklet_id_map.get(tid, tid)) for tid in tracklet_ids]  # type: ignore
             self.update_node_attrs(
                 node_ids=track_node_ids,  # type: ignore
-                attrs={output_key: track_ids},
+                attrs={output_key: tracklet_ids},
             )
 
             return tracks_graph
