@@ -56,7 +56,7 @@ class DefaultAttrKeys:
     MASK = "mask"
     BBOX = "bbox"
     SOLUTION = "solution"
-    TRACK_ID = "track_id"
+    TRACKLET_ID = "tracklet_id"
 
     EDGE_ID = "edge_id"
     EDGE_DIST = "distance"

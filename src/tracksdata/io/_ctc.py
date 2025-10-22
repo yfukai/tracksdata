@@ -43,14 +43,14 @@ def compressed_tracks_table(graph: BaseGraph) -> np.ndarray:
         attr_keys=[
             DEFAULT_ATTR_KEYS.NODE_ID,
             DEFAULT_ATTR_KEYS.T,
-            DEFAULT_ATTR_KEYS.TRACK_ID,
+            DEFAULT_ATTR_KEYS.TRACKLET_ID,
         ]
     )
 
     tracks_data = []
     node_ids = []
 
-    for (track_id,), group in nodes_df.group_by(DEFAULT_ATTR_KEYS.TRACK_ID):
+    for (track_id,), group in nodes_df.group_by(DEFAULT_ATTR_KEYS.TRACKLET_ID):
         start = group[DEFAULT_ATTR_KEYS.T].min()
         end = group[DEFAULT_ATTR_KEYS.T].max()
         tracks_data.append([track_id, start, end, 0])
@@ -58,12 +58,12 @@ def compressed_tracks_table(graph: BaseGraph) -> np.ndarray:
 
     parents = graph.predecessors(
         node_ids,
-        attr_keys=[DEFAULT_ATTR_KEYS.TRACK_ID],
+        attr_keys=[DEFAULT_ATTR_KEYS.TRACKLET_ID],
     )
     for track_id, node_id in zip(tracks_data, node_ids, strict=True):
         df = parents[node_id]
         if len(df) > 0:
-            track_id[3] = df[DEFAULT_ATTR_KEYS.TRACK_ID].item()
+            track_id[3] = df[DEFAULT_ATTR_KEYS.TRACKLET_ID].item()
 
     if len(tracks_data) == 0:
         return np.empty((0, 4), dtype=int)
@@ -90,10 +90,10 @@ def _load_tracks_file(tracks_file: Path) -> dict[int, int]:
 
     Returns
     -------
-    track_id_graph : dict[int, int]
+    tracklet_id_graph : dict[int, int]
         A dictionary mapping track IDs to their parent track IDs.
     """
-    track_id_graph = {}
+    tracklet_id_graph = {}
 
     try:
         df = pl.read_csv(
@@ -125,9 +125,9 @@ def _load_tracks_file(tracks_file: Path) -> dict[int, int]:
         df["parent_track_id"],
         strict=True,
     ):
-        track_id_graph[track_id] = parent_track_id
+        tracklet_id_graph[track_id] = parent_track_id
 
-    return track_id_graph
+    return tracklet_id_graph
 
 
 def from_ctc(
@@ -183,13 +183,13 @@ def from_ctc(
         region_props_kwargs["extra_properties"].append("label")
 
     tracks_file_found = False
-    track_id_graph = {}
+    tracklet_id_graph = {}
 
     for tracks_file in ["man_track.txt", "res_track.txt"]:
         tracks_file_path = data_dir / tracks_file
         if tracks_file_path.exists():
             tracks_file_found = True
-            track_id_graph = _load_tracks_file(tracks_file_path)
+            tracklet_id_graph = _load_tracks_file(tracks_file_path)
             break
 
     if not tracks_file_found:
@@ -214,16 +214,16 @@ def from_ctc(
     _add_edges_from_tracklet_ids(
         graph,
         nodes_df,
-        track_id_graph,
+        tracklet_id_graph,
         "label",
     )
 
     # is duplicating an attribute that bad?
-    graph.add_node_attr_key(DEFAULT_ATTR_KEYS.TRACK_ID, -1)
+    graph.add_node_attr_key(DEFAULT_ATTR_KEYS.TRACKLET_ID, -1)
     graph.update_node_attrs(
         node_ids=nodes_df[DEFAULT_ATTR_KEYS.NODE_ID].to_list(),
         attrs={
-            DEFAULT_ATTR_KEYS.TRACK_ID: nodes_df["label"].to_list(),
+            DEFAULT_ATTR_KEYS.TRACKLET_ID: nodes_df["label"].to_list(),
         },
     )
 
@@ -232,7 +232,7 @@ def to_ctc(
     graph: BaseGraph,
     shape: tuple[int, ...],
     output_dir: str | Path,
-    track_id_key: str = DEFAULT_ATTR_KEYS.TRACK_ID,
+    tracklet_id_key: str = DEFAULT_ATTR_KEYS.TRACKLET_ID,
     overwrite: bool = False,
 ) -> None:
     """
@@ -246,7 +246,7 @@ def to_ctc(
         The shape of the label images (T, (Z), Y, X)
     output_dir : str | Path
         The directory to save the label images and the tracks graph to.
-    track_id_key : str
+    tracklet_id_key : str
         The attribute key to use for the track IDs.
     overwrite : bool
         Whether to overwrite the output directory if it exists.
@@ -267,7 +267,7 @@ def to_ctc(
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    view = GraphArrayView(graph, shape=shape, attr_key=track_id_key)
+    view = GraphArrayView(graph, shape=shape, attr_key=tracklet_id_key)
 
     n_digits = max(len(str(view.shape[0])), 3)
 

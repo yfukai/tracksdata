@@ -16,14 +16,14 @@ def test_napari_conversion() -> None:
     )
 
     tracklet_ids = np.asarray([1, 2, 3])
-    track_id_graph = {3: 1, 2: 1}
+    tracklet_id_graph = {3: 1, 2: 1}
 
     image_shape = (10, 22, 32)
 
     graph = RustWorkXGraph.from_array(
         positions,
         tracklet_ids=tracklet_ids,
-        track_id_graph=track_id_graph,
+        tracklet_id_graph=tracklet_id_graph,
     )
     graph.add_node_attr_key(DEFAULT_ATTR_KEYS.SOLUTION, True)
     graph.add_edge_attr_key(DEFAULT_ATTR_KEYS.SOLUTION, True)
@@ -49,7 +49,7 @@ def test_napari_conversion() -> None:
         mask_key=DEFAULT_ATTR_KEYS.MASK,
     )
 
-    assert dict_graph == track_id_graph
+    assert dict_graph == tracklet_id_graph
 
     assert tracks_df.shape == (3, 5)
 
