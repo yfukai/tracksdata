@@ -251,9 +251,9 @@ def compute_ctc_metrics_data(
     -------
     tuple[np.ndarray, np.ndarray, dict[str, list], dict[str, list], list[str]]
         - input_tracks:
-            (n, 4) array with reprensenting the (track_id, start_frame, end_frame, parent_track_id) of each track
+            (n, 4) array with reprensenting the (tracklet_id, start_frame, end_frame, parent_tracklet_id) of each track
         - reference_tracks:
-            (n, 4) array with reprensenting the (track_id, start_frame, end_frame, parent_track_id) of each track
+            (n, 4) array with reprensenting the (tracklet_id, start_frame, end_frame, parent_tracklet_id) of each track
         - matching_data: Frame-wise matching data, defined as a dict with the following keys:
             - labels_ref: A list of lists containing the labels of the reference masks.
             - labels_comp: A list of lists containing the labels of the computed masks.

@@ -24,10 +24,10 @@ def compressed_tracks_table(graph: BaseGraph) -> np.ndarray:
     Where
     - n is the number of tracks
     - 4 is the number of columns:
-        - track_id: the track ID
+        - tracklet_id: the track ID
         - start: the start frame
         - end: the end frame
-        - parent_track_id: the parent track ID
+        - parent_tracklet_id: the parent track ID
 
     Parameters
     ----------
@@ -50,20 +50,20 @@ def compressed_tracks_table(graph: BaseGraph) -> np.ndarray:
     tracks_data = []
     node_ids = []
 
-    for (track_id,), group in nodes_df.group_by(DEFAULT_ATTR_KEYS.TRACKLET_ID):
+    for (tracklet_id,), group in nodes_df.group_by(DEFAULT_ATTR_KEYS.TRACKLET_ID):
         start = group[DEFAULT_ATTR_KEYS.T].min()
         end = group[DEFAULT_ATTR_KEYS.T].max()
-        tracks_data.append([track_id, start, end, 0])
+        tracks_data.append([tracklet_id, start, end, 0])
         node_ids.append(group.filter(pl.col(DEFAULT_ATTR_KEYS.T) == start)[DEFAULT_ATTR_KEYS.NODE_ID].item())
 
     parents = graph.predecessors(
         node_ids,
         attr_keys=[DEFAULT_ATTR_KEYS.TRACKLET_ID],
     )
-    for track_id, node_id in zip(tracks_data, node_ids, strict=True):
+    for tracklet_id, node_id in zip(tracks_data, node_ids, strict=True):
         df = parents[node_id]
         if len(df) > 0:
-            track_id[3] = df[DEFAULT_ATTR_KEYS.TRACKLET_ID].item()
+            tracklet_id[3] = df[DEFAULT_ATTR_KEYS.TRACKLET_ID].item()
 
     if len(tracks_data) == 0:
         return np.empty((0, 4), dtype=int)
@@ -83,10 +83,10 @@ def _load_tracks_file(tracks_file: Path) -> dict[int, int]:
     tracks_file : Path
         The path to the CTC tracks .txt file.
         The unnamed columns are:
-        - track_id: the track ID
+        - tracklet_id: the track ID
         - start: the start frame
         - end: the end frame
-        - parent_track_id: the parent track ID
+        - parent_tracklet_id: the parent track ID
 
     Returns
     -------
@@ -113,19 +113,19 @@ def _load_tracks_file(tracks_file: Path) -> dict[int, int]:
 
     df = df.rename(
         {
-            "column_1": "track_id",
-            "column_4": "parent_track_id",
+            "column_1": "tracklet_id",
+            "column_4": "parent_tracklet_id",
         }
     )
 
-    df = df.filter(pl.col("parent_track_id") > 0)
+    df = df.filter(pl.col("parent_tracklet_id") > 0)
 
-    for track_id, parent_track_id in zip(
-        df["track_id"],
-        df["parent_track_id"],
+    for tracklet_id, parent_tracklet_id in zip(
+        df["tracklet_id"],
+        df["parent_tracklet_id"],
         strict=True,
     ):
-        tracklet_id_graph[track_id] = parent_track_id
+        tracklet_id_graph[tracklet_id] = parent_tracklet_id
 
     return tracklet_id_graph
 

@@ -1172,7 +1172,7 @@ class BaseGraph(abc.ABC):
     def tracklet_graph(
         self,
         tracklet_id_key: str = DEFAULT_ATTR_KEYS.TRACKLET_ID,
-        ignore_track_id: int | None = None,
+        ignore_tracklet_id: int | None = None,
     ) -> rx.PyDiGraph:
         """
         Create a compressed tracklet graph where each node is a tracklet
@@ -1186,7 +1186,7 @@ class BaseGraph(abc.ABC):
         ----------
         tracklet_id_key : str
             The key of the track id attribute.
-        ignore_track_id : int | None
+        ignore_tracklet_id : int | None
             The track id to ignore. If None, all track ids are used.
 
         Returns
@@ -1207,8 +1207,8 @@ class BaseGraph(abc.ABC):
         nodes_df = self.node_attrs(attr_keys=[DEFAULT_ATTR_KEYS.NODE_ID, tracklet_id_key])
         edges_df = self.edge_attrs(attr_keys=[])
 
-        if ignore_track_id is not None:
-            nodes_df = nodes_df.filter(pl.col(tracklet_id_key) != ignore_track_id)
+        if ignore_tracklet_id is not None:
+            nodes_df = nodes_df.filter(pl.col(tracklet_id_key) != ignore_tracklet_id)
 
         nodes_df = nodes_df.unique(subset=[tracklet_id_key])
 
@@ -1229,7 +1229,7 @@ class BaseGraph(abc.ABC):
             zip(
                 edges_df["source_rx_id"].to_list(),
                 edges_df["target_rx_id"].to_list(),
-                zip(edges_df["source_track_id"].to_list(), edges_df["target_track_id"].to_list(), strict=False),
+                zip(edges_df["source_tracklet_id"].to_list(), edges_df["target_tracklet_id"].to_list(), strict=False),
                 strict=True,
             )
         )
@@ -1312,7 +1312,7 @@ class BaseGraph(abc.ABC):
             The geff metadata to write to the graph.
             It automatically generates the metadata with:
             - axes: time (t) and spatial axes ((z), y, x)
-            - tracklet node property: track_id
+            - tracklet node property: tracklet_id
         zarr_format : Literal[2, 3]
             The zarr format to write the graph to.
             Defaults to 3.

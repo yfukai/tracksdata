@@ -1491,7 +1491,7 @@ class SQLGraph(BaseGraph):
     def tracklet_graph(
         self,
         tracklet_id_key: str = DEFAULT_ATTR_KEYS.TRACKLET_ID,
-        ignore_track_id: int | None = None,
+        ignore_tracklet_id: int | None = None,
     ) -> rx.PyDiGraph:
         """
         Create a compressed tracklet graph where each node is a tracklet
@@ -1505,7 +1505,7 @@ class SQLGraph(BaseGraph):
         ----------
         tracklet_id_key : str
             The key of the track id attribute.
-        ignore_track_id : int | None
+        ignore_tracklet_id : int | None
             The track id to ignore. If None, all track ids are used.
 
         Returns
@@ -1541,16 +1541,16 @@ class SQLGraph(BaseGraph):
                 )
             )
 
-            if ignore_track_id is not None:
-                node_query = node_query.filter(getattr(self.Node, tracklet_id_key) != ignore_track_id)
+            if ignore_tracklet_id is not None:
+                node_query = node_query.filter(getattr(self.Node, tracklet_id_key) != ignore_tracklet_id)
                 edge_query = edge_query.filter(
-                    getattr(SourceNode, tracklet_id_key) != ignore_track_id,
-                    getattr(TargetNode, tracklet_id_key) != ignore_track_id,
+                    getattr(SourceNode, tracklet_id_key) != ignore_tracklet_id,
+                    getattr(TargetNode, tracklet_id_key) != ignore_tracklet_id,
                 )
 
             edge_query = edge_query.with_only_columns(
-                getattr(SourceNode, tracklet_id_key).label("source_track_id"),
-                getattr(TargetNode, tracklet_id_key).label("target_track_id"),
+                getattr(SourceNode, tracklet_id_key).label("source_tracklet_id"),
+                getattr(TargetNode, tracklet_id_key).label("target_tracklet_id"),
             )
 
             nodes_df = pl.read_database(
@@ -1568,9 +1568,9 @@ class SQLGraph(BaseGraph):
         tracklet_id_to_rx = dict(zip(tracklet_ids, graph.add_nodes_from(tracklet_ids), strict=False))
         graph.add_edges_from(
             zip(
-                edges_df["source_track_id"].map_elements(tracklet_id_to_rx.__getitem__, return_dtype=int).to_list(),
-                edges_df["target_track_id"].map_elements(tracklet_id_to_rx.__getitem__, return_dtype=int).to_list(),
-                zip(edges_df["source_track_id"].to_list(), edges_df["target_track_id"].to_list(), strict=False),
+                edges_df["source_tracklet_id"].map_elements(tracklet_id_to_rx.__getitem__, return_dtype=int).to_list(),
+                edges_df["target_tracklet_id"].map_elements(tracklet_id_to_rx.__getitem__, return_dtype=int).to_list(),
+                zip(edges_df["source_tracklet_id"].to_list(), edges_df["target_tracklet_id"].to_list(), strict=False),
                 strict=True,
             )
         )

@@ -1444,12 +1444,12 @@ def _compare_tracklet_id_assignments(expected_node_sets, graph_backend: BaseGrap
         )
     )
     assigned = {}
-    for node_id, track_id in ids_map.items():
-        if track_id == -1:
+    for node_id, tracklet_id in ids_map.items():
+        if tracklet_id == -1:
             continue
-        if track_id not in assigned:
-            assigned[track_id] = []
-        assigned[track_id].append(node_id)
+        if tracklet_id not in assigned:
+            assigned[tracklet_id] = []
+        assigned[tracklet_id].append(node_id)
     assigned = {frozenset(group) for group in assigned.values()}
     expected = {frozenset(group) for group in expected_node_sets}
     assert assigned == expected
@@ -1492,7 +1492,7 @@ def test_assign_tracklet_ids_node_id_filter(graph_backend: BaseGraph):
     graph_backend.add_edge(B2, B3, {})
     graph_backend.add_edge(B4, B5, {})
 
-    # Ensure track_id attribute exists after nodes were added
+    # Ensure tracklet_id attribute exists after nodes were added
     if DEFAULT_ATTR_KEYS.TRACKLET_ID not in graph_backend.node_attr_keys:
         graph_backend.add_node_attr_key(DEFAULT_ATTR_KEYS.TRACKLET_ID, -1)
 
@@ -1546,7 +1546,7 @@ def test_assign_tracklet_ids_node_id_filter(graph_backend: BaseGraph):
 
 def test_tracklet_graph_basic(graph_backend: BaseGraph) -> None:
     """Test basic tracklet_graph functionality."""
-    # Add track_id attribute and nodes with track IDs
+    # Add tracklet_id attribute and nodes with track IDs
     graph_backend.add_node_attr_key(DEFAULT_ATTR_KEYS.TRACKLET_ID, -1)
 
     # Create nodes with different track IDs
@@ -1586,9 +1586,9 @@ def test_tracklet_graph_basic(graph_backend: BaseGraph) -> None:
     assert set(edges) == {(1, 2), (1, 3)}
 
 
-def test_tracklet_graph_with_ignore_track_id(graph_backend: BaseGraph) -> None:
-    """Test tracklet_graph with ignore_track_id parameter."""
-    # Add track_id attribute and nodes with track IDs
+def test_tracklet_graph_with_ignore_tracklet_id(graph_backend: BaseGraph) -> None:
+    """Test tracklet_graph with ignore_tracklet_id parameter."""
+    # Add tracklet_id attribute and nodes with track IDs
     graph_backend.add_node_attr_key(DEFAULT_ATTR_KEYS.TRACKLET_ID, -1)
     graph_backend.add_edge_attr_key("weight", 0.0)
 
@@ -1601,8 +1601,8 @@ def test_tracklet_graph_with_ignore_track_id(graph_backend: BaseGraph) -> None:
     graph_backend.add_edge(node1, node2, {"weight": 0.8})
     graph_backend.add_edge(node1, node3, {"weight": 0.9})
 
-    # Test that tracklet_graph method accepts ignore_track_id parameter
-    tracklet_graph = graph_backend.tracklet_graph(ignore_track_id=-1)
+    # Test that tracklet_graph method accepts ignore_tracklet_id parameter
+    tracklet_graph = graph_backend.tracklet_graph(ignore_tracklet_id=-1)
     assert tracklet_graph.num_nodes() == 2
     assert tracklet_graph.num_edges() == 1
 
@@ -1612,7 +1612,7 @@ def test_tracklet_graph_with_ignore_track_id(graph_backend: BaseGraph) -> None:
 
 def test_tracklet_graph_missing_tracklet_id_key(graph_backend: BaseGraph) -> None:
     """Test tracklet_graph raises error when tracklet_id_key doesn't exist."""
-    with pytest.raises(ValueError, match="Track id key 'track_id' not found in graph"):
+    with pytest.raises(ValueError, match="Track id key 'tracklet_id' not found in graph"):
         graph_backend.tracklet_graph()
 
 

@@ -26,12 +26,12 @@ def _add_edges_from_tracklet_ids(
     tracklet_id_key : str
         The column name of the track id in the dataframe.
     """
-    nodes_by_track_id = tracks_df.group_by(tracklet_id_key)
+    nodes_by_tracklet_id = tracks_df.group_by(tracklet_id_key)
 
     # reducing the nodes to the last node in each track
     # to find the divisions relationships between tracks
     if len(tracklet_id_graph) > 0:
-        last_nodes = nodes_by_track_id.map_groups(lambda group: group.sort(DEFAULT_ATTR_KEYS.T).tail(1))
+        last_nodes = nodes_by_tracklet_id.map_groups(lambda group: group.sort(DEFAULT_ATTR_KEYS.T).tail(1))
         tracklet_id_to_last_node = dict(
             zip(last_nodes[tracklet_id_key], last_nodes[DEFAULT_ATTR_KEYS.NODE_ID], strict=True)
         )
@@ -39,12 +39,12 @@ def _add_edges_from_tracklet_ids(
         tracklet_id_to_last_node = {}  # for completeness, it won't be used if this is true
 
     edges = []
-    for (track_id,), group in nodes_by_track_id:
+    for (tracklet_id,), group in nodes_by_tracklet_id:
         node_ids = group.sort(DEFAULT_ATTR_KEYS.T)[DEFAULT_ATTR_KEYS.NODE_ID].to_list()
 
         first_node = node_ids[0]
-        if track_id in tracklet_id_graph:
-            parent_node = tracklet_id_to_last_node[tracklet_id_graph[track_id]]
+        if tracklet_id in tracklet_id_graph:
+            parent_node = tracklet_id_to_last_node[tracklet_id_graph[tracklet_id]]
             edges.append(
                 {
                     DEFAULT_ATTR_KEYS.EDGE_SOURCE: parent_node,
