@@ -1092,6 +1092,25 @@ class BaseGraph(abc.ABC):
 
         return BBoxSpatialFilter(self, frame_attr_key=frame_attr_key, bbox_attr_key=bbox_attr_key)
 
+    @overload
+    def assign_tracklet_ids(
+        self,
+        output_key: str = DEFAULT_ATTR_KEYS.TRACKLET_ID,
+        reset: bool = True,
+        tracklet_id_offset: int | None = None,
+        node_ids: list[int] | None = None,
+        return_id_update: Literal[False] = False,
+    ) -> rx.PyDiGraph: ...
+    @overload
+    def assign_tracklet_ids(
+        self,
+        output_key: str = DEFAULT_ATTR_KEYS.TRACKLET_ID,
+        reset: bool = True,
+        tracklet_id_offset: int | None = None,
+        node_ids: list[int] | None = None,
+        return_id_update: Literal[True] = True,
+    ) -> tuple[rx.PyDiGraph, pl.DataFrame]: ...
+
     @abc.abstractmethod
     def assign_tracklet_ids(
         self,
@@ -1099,7 +1118,8 @@ class BaseGraph(abc.ABC):
         reset: bool = True,
         tracklet_id_offset: int | None = None,
         node_ids: list[int] | None = None,
-    ) -> rx.PyDiGraph:
+        return_id_update: bool = False,
+    ) -> rx.PyDiGraph | tuple[rx.PyDiGraph, pl.DataFrame]:
         """
         Compute and assign track ids to nodes.
         Parameters
@@ -1114,6 +1134,8 @@ class BaseGraph(abc.ABC):
             if the output_key already exists and reset is False.
         node_ids : list[int] | None
             The node ids to assign track ids to. If None, all nodes are used.
+        return_id_update : bool
+            Whether to return a DataFrame with the updated node ids and their previous and assigned track ids.
 
         Returns
         -------
