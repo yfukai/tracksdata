@@ -229,7 +229,7 @@ class Mask:
         ndim = self._mask.ndim
         other_ndim = other._mask.ndim
         if ndim != other_ndim:
-            raise ValueError(rf"Cannot compute union between masks of different dimensions: {ndim} and {other_ndim}.")
+            raise ValueError(f"Cannot compute union between masks of different dimensions: {ndim} and {other_ndim}.")
 
         self_start = self._bbox[:ndim]
         self_end = self._bbox[ndim:]

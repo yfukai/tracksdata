@@ -199,7 +199,7 @@ def test_mask_union_dimension_mismatch() -> None:
     mask_2d = Mask(np.ones((1, 2), dtype=bool), np.array([0, 0, 1, 2]))
     mask_3d = Mask(np.ones((1, 1, 2), dtype=bool), np.array([0, 0, 0, 1, 1, 2]))
 
-    with pytest.raises(ValueError, match="Cannot compute union between masks of different dimensions: 2 and 3."):
+    with pytest.raises(ValueError, match=r"Cannot compute union between masks of different dimensions: 2 and 3."):
         _ = mask_2d | mask_3d
 
 
