@@ -1396,7 +1396,7 @@ def test_spatial_filter_basic(graph_backend: BaseGraph) -> None:
     assert set(bb_filter[0:0, 0:2, 0:2, 0:2].node_ids()) == {node3}
 
 
-def _check_id_update_df_structure(id_update_df: pl.DataFrame, new_id_df: pl.DataFrame, old_exists=True) -> None:
+def _check_id_update_df_structure(id_update_df: pl.DataFrame, new_id_df: pl.DataFrame, old_exists: bool = True) -> None:
     assert isinstance(id_update_df, pl.DataFrame)
     assert DEFAULT_ATTR_KEYS.NODE_ID in id_update_df.columns
     if old_exists:
