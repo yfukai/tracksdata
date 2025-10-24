@@ -1142,6 +1142,10 @@ class BaseGraph(abc.ABC):
         rx.PyDiGraph
             A compressed graph (parent -> child) with track ids lineage relationships.
             If node_ids is provided, it will only include linages including those nodes.
+        pl.DataFrame
+            A DataFrame with the updated node ids and their previous and assigned track ids.
+            This has columns "node_id", f"{output_key}", and f"{output_key}_new".
+            Only returned if return_id_update is True.
         """
         raise NotImplementedError(f"{self.__class__.__name__} backend does not support track id assignment.")
 

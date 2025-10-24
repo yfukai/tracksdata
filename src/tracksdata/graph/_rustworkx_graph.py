@@ -1130,6 +1130,9 @@ class RustWorkXGraph(BaseGraph):
                     "Often used from `graph.subgraph(edge_attr_filter={'solution': True})`"
                 ) from e
 
+            # Converting to list of int for SQLGraph compatibility (See below)
+            tracklet_ids = tracklet_ids.tolist()
+
             # For the IndexedRXGraph, we need to map the track_node_ids to the external node ids
             if hasattr(self, "_map_to_external"):
                 track_node_ids = self._map_to_external(track_node_ids)  # type: ignore
@@ -1161,8 +1164,6 @@ class RustWorkXGraph(BaseGraph):
                         tracklet_ids = [int(tracklet_id_map.get(tid, tid)) for tid in tracklet_ids]  # type: ignore
                         # Update the value with the reused IDs
                         id_update_df = id_update_df.with_columns(pl.Series(output_key + "_new", tracklet_ids))
-                    else:
-                        tracklet_ids = [int(tid) for tid in tracklet_ids]  # type: ignore
 
             self.update_node_attrs(
                 node_ids=track_node_ids,  # type: ignore
