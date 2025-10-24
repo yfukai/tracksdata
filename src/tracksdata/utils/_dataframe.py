@@ -45,8 +45,12 @@ def unpickle_bytes_columns(df: pl.DataFrame) -> pl.DataFrame:
     binary_cols = [name for name, dtype in df.schema.items() if isinstance(dtype, pl.Binary)]
 
     for col in binary_cols:
-        decoded = [cloudpickle.loads(value) for value in df[col].to_list()]
-        df = df.with_columns(pl.Series(col, decoded))
+        for return_dtype in [pl.Object, pl.List(pl.Float64)]:
+            try:
+                df = df.with_columns(pl.col(col).map_elements(cloudpickle.loads, return_dtype=return_dtype).alias(col))
+                break
+            except pl.exceptions.SchemaError:
+                pass
     for col, dtype in zip(df.columns, df.dtypes, strict=True):
         if isinstance(dtype, pl.Object):
             try:
