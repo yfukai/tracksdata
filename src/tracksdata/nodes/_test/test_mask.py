@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 
 from tracksdata.nodes._mask import Mask
 
@@ -191,6 +192,15 @@ def test_mask_iou_identical() -> None:
 
     iou = mask1.iou(mask2)
     assert iou == 1.0
+
+
+def test_mask_union_dimension_mismatch() -> None:
+    """Mask union should raise when masks do not share the same dimensionality."""
+    mask_2d = Mask(np.ones((1, 2), dtype=bool), np.array([0, 0, 1, 2]))
+    mask_3d = Mask(np.ones((1, 1, 2), dtype=bool), np.array([0, 0, 0, 1, 1, 2]))
+
+    with pytest.raises(ValueError, match="Cannot compute union between masks of different dimensions: 2 and 3."):
+        _ = mask_2d | mask_3d
 
 
 def test_mask_union_overlapping() -> None:

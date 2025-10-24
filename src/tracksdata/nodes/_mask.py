@@ -227,6 +227,10 @@ class Mask:
             The union mask between the two masks.
         """
         ndim = self._mask.ndim
+        other_ndim = other._mask.ndim
+        if ndim != other_ndim:
+            raise ValueError(rf"Cannot compute union between masks of different dimensions: {ndim} and {other_ndim}.")
+
         self_start = self._bbox[:ndim]
         self_end = self._bbox[ndim:]
         other_start = other._bbox[:ndim]
