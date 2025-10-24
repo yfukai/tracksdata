@@ -11,6 +11,7 @@ from tracksdata.attrs import EdgeAttr, NodeAttr
 from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.graph import BaseGraph, IndexedRXGraph, RustWorkXGraph, SQLGraph
 from tracksdata.io._numpy_array import from_array
+from tracksdata.nodes import RegionPropsNodes
 from tracksdata.nodes._mask import Mask
 
 
@@ -1288,15 +1289,74 @@ def test_from_other_with_edges(
     assert source_in_degrees == new_in_degrees
 
     # Verify overlaps are transferred to new node IDs
-    source_overlaps = {
-        tuple(sorted(node_map[node] for node in overlap)) for overlap in graph_backend.overlaps()
-    }
+    source_overlaps = {tuple(sorted(node_map[node] for node in overlap)) for overlap in graph_backend.overlaps()}
     new_overlaps = {tuple(sorted(overlap)) for overlap in new_graph.overlaps()}
     assert new_overlaps == source_overlaps
 
 
-def test_form_other_regionprops_nodes(graph_backend: BaseGraph) -> None:
-    pass  # TODO: implement test for from_other with RegionProps nodes
+@pytest.mark.parametrize(
+    ("target_cls", "target_kwargs"),
+    [
+        pytest.param(RustWorkXGraph, {}, id="rustworkx"),
+        pytest.param(
+            SQLGraph,
+            {
+                "drivername": "sqlite",
+                "database": ":memory:",
+                "engine_kwargs": {"connect_args": {"check_same_thread": False}},
+            },
+            id="sql",
+        ),
+        pytest.param(IndexedRXGraph, {}, id="indexed"),
+    ],
+)
+def test_form_other_regionprops_nodes(
+    graph_backend: BaseGraph,
+    target_cls: type[BaseGraph],
+    target_kwargs: dict[str, Any],
+) -> None:
+    labels = np.zeros((2, 4, 4), dtype=np.int32)
+    labels[0, 0:2, 0:2] = 1
+    labels[0, 2:4, 2:4] = 2
+    labels[1, 1:3, 0:2] = 1
+    labels[1, 1:3, 2:4] = 2
+
+    operator = RegionPropsNodes(extra_properties=["area", "label", "centroid"])
+    operator.add_nodes(graph_backend, labels=labels)
+
+    assert graph_backend.num_nodes == 4
+
+    copied_graph = target_cls.from_other(graph_backend, **target_kwargs)
+
+    assert copied_graph.num_nodes == graph_backend.num_nodes
+    assert set(copied_graph.node_attr_keys) == set(graph_backend.node_attr_keys)
+
+
+#    def build_node_map(graph: BaseGraph) -> dict[tuple[int, tuple[int, ...]], dict[str, Any]]:
+#        nodes_df = graph.node_attrs()
+#        node_map: dict[tuple[int, tuple[int, ...]], dict[str, Any]] = {}
+#        for row in nodes_df.iter_rows(named=True):
+#            bbox = np.asarray(row[DEFAULT_ATTR_KEYS.BBOX], dtype=int)
+#            key = (row[DEFAULT_ATTR_KEYS.T], tuple(bbox.tolist()))
+#            node_map[key] = row
+#        return node_map
+#
+#    source_map = build_node_map(graph_backend)
+#    target_map = build_node_map(copied_graph)
+#    assert set(source_map) == set(target_map)
+#
+#    for key, source_row in source_map.items():
+#        target_row = target_map[key]
+#        assert target_row["area"] == pytest.approx(source_row["area"])
+#        assert target_row["y"] == pytest.approx(source_row["y"])
+#        assert target_row["x"] == pytest.approx(source_row["x"])
+#
+#        source_mask = source_row[DEFAULT_ATTR_KEYS.MASK]
+#        target_mask = target_row[DEFAULT_ATTR_KEYS.MASK]
+#        assert isinstance(source_mask, Mask)
+#        assert isinstance(target_mask, Mask)
+#        np.testing.assert_array_equal(source_mask.mask, target_mask.mask)
+#        np.testing.assert_array_equal(source_mask.bbox, target_mask.bbox)
 
 
 def test_compute_overlaps_basic(graph_backend: BaseGraph) -> None:
