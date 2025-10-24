@@ -1331,32 +1331,31 @@ def test_form_other_regionprops_nodes(
     assert copied_graph.num_nodes == graph_backend.num_nodes
     assert set(copied_graph.node_attr_keys) == set(graph_backend.node_attr_keys)
 
+    def build_node_map(graph: BaseGraph) -> dict[tuple[int, tuple[int, ...]], dict[str, Any]]:
+        nodes_df = graph.node_attrs()
+        node_map: dict[tuple[int, tuple[int, ...]], dict[str, Any]] = {}
+        for row in nodes_df.iter_rows(named=True):
+            bbox = np.asarray(row[DEFAULT_ATTR_KEYS.BBOX], dtype=int)
+            key = (row[DEFAULT_ATTR_KEYS.T], tuple(bbox.tolist()))
+            node_map[key] = row
+        return node_map
 
-#    def build_node_map(graph: BaseGraph) -> dict[tuple[int, tuple[int, ...]], dict[str, Any]]:
-#        nodes_df = graph.node_attrs()
-#        node_map: dict[tuple[int, tuple[int, ...]], dict[str, Any]] = {}
-#        for row in nodes_df.iter_rows(named=True):
-#            bbox = np.asarray(row[DEFAULT_ATTR_KEYS.BBOX], dtype=int)
-#            key = (row[DEFAULT_ATTR_KEYS.T], tuple(bbox.tolist()))
-#            node_map[key] = row
-#        return node_map
-#
-#    source_map = build_node_map(graph_backend)
-#    target_map = build_node_map(copied_graph)
-#    assert set(source_map) == set(target_map)
-#
-#    for key, source_row in source_map.items():
-#        target_row = target_map[key]
-#        assert target_row["area"] == pytest.approx(source_row["area"])
-#        assert target_row["y"] == pytest.approx(source_row["y"])
-#        assert target_row["x"] == pytest.approx(source_row["x"])
-#
-#        source_mask = source_row[DEFAULT_ATTR_KEYS.MASK]
-#        target_mask = target_row[DEFAULT_ATTR_KEYS.MASK]
-#        assert isinstance(source_mask, Mask)
-#        assert isinstance(target_mask, Mask)
-#        np.testing.assert_array_equal(source_mask.mask, target_mask.mask)
-#        np.testing.assert_array_equal(source_mask.bbox, target_mask.bbox)
+    source_map = build_node_map(graph_backend)
+    target_map = build_node_map(copied_graph)
+    assert set(source_map) == set(target_map)
+
+    for key, source_row in source_map.items():
+        target_row = target_map[key]
+        assert target_row["area"] == pytest.approx(source_row["area"])
+        assert target_row["y"] == pytest.approx(source_row["y"])
+        assert target_row["x"] == pytest.approx(source_row["x"])
+
+        source_mask = source_row[DEFAULT_ATTR_KEYS.MASK]
+        target_mask = target_row[DEFAULT_ATTR_KEYS.MASK]
+        assert isinstance(source_mask, Mask)
+        assert isinstance(target_mask, Mask)
+        np.testing.assert_array_equal(source_mask.mask, target_mask.mask)
+        np.testing.assert_array_equal(source_mask.bbox, target_mask.bbox)
 
 
 def test_compute_overlaps_basic(graph_backend: BaseGraph) -> None:
