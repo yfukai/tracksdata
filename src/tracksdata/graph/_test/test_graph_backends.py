@@ -1396,7 +1396,7 @@ def test_spatial_filter_basic(graph_backend: BaseGraph) -> None:
     assert set(bb_filter[0:0, 0:2, 0:2, 0:2].node_ids()) == {node3}
 
 
-def _check_id_update_df_structure(id_update_df: pl.DataFrame, new_id_df: pl.DataFrame, old_exists: bool = True) -> None:
+def _check_id_update_df(id_update_df: pl.DataFrame, new_id_df: pl.DataFrame, old_exists: bool = True) -> None:
     assert isinstance(id_update_df, pl.DataFrame)
     assert DEFAULT_ATTR_KEYS.NODE_ID in id_update_df.columns
     if old_exists:
@@ -1443,7 +1443,8 @@ def test_assign_tracklet_ids(graph_backend: BaseGraph, return_id_updates: bool) 
     assert isinstance(tracks_graph, rx.PyDiGraph)
     assert tracks_graph.num_nodes() == 3  # Three tracks
     if return_id_updates:
-        _check_id_update_df_structure(id_update_df, tracklet_ids, old_exists=False)
+        assert len(id_update_df) == 3
+        _check_id_update_df(id_update_df, tracklet_ids, old_exists=False)
 
     returned = graph_backend.assign_tracklet_ids(tracklet_id_offset=100, return_id_update=return_id_updates)
     if return_id_updates:
@@ -1458,7 +1459,8 @@ def test_assign_tracklet_ids(graph_backend: BaseGraph, return_id_updates: bool) 
     assert isinstance(tracks_graph, rx.PyDiGraph)
     assert tracks_graph.num_nodes() == 3  # Three tracks
     if return_id_updates:
-        _check_id_update_df_structure(id_update_df, tracklet_ids, old_exists=True)
+        assert len(id_update_df) == 3
+        _check_id_update_df(id_update_df, tracklet_ids, old_exists=True)
 
     filtered_graph = graph_backend.filter(node_ids=nodes[1:3]).subgraph()
     returned = filtered_graph.assign_tracklet_ids(tracklet_id_offset=200, return_id_update=return_id_updates)
@@ -1474,7 +1476,8 @@ def test_assign_tracklet_ids(graph_backend: BaseGraph, return_id_updates: bool) 
     assert isinstance(tracks_graph, rx.PyDiGraph)
     assert tracks_graph.num_nodes() == 2  # Two tracks
     if return_id_updates:
-        _check_id_update_df_structure(id_update_df, tracklet_ids, old_exists=True)
+        assert len(id_update_df) == 2
+        _check_id_update_df(id_update_df, tracklet_ids, old_exists=True)
 
 
 def _compare_tracklet_id_assignments(expected_node_sets, graph_backend: BaseGraph):
@@ -1561,7 +1564,8 @@ def test_assign_tracklet_ids_node_id_filter(graph_backend: BaseGraph, return_id_
         assert isinstance(tracks_graph, rx.PyDiGraph)
         if return_id_updates:
             ids_df = graph_backend.node_attrs(attr_keys=[DEFAULT_ATTR_KEYS.NODE_ID, DEFAULT_ATTR_KEYS.TRACKLET_ID])
-            _check_id_update_df_structure(id_update_df, ids_df, old_exists=True)
+            assert len(id_update_df) == sum(len(group) for group in expected)
+            _check_id_update_df(id_update_df, ids_df, old_exists=True)
 
     # Check that re-assigning track IDs without reset works as expected
     graph_backend.update_node_attrs(attrs={DEFAULT_ATTR_KEYS.TRACKLET_ID: -1})
@@ -1573,7 +1577,8 @@ def test_assign_tracklet_ids_node_id_filter(graph_backend: BaseGraph, return_id_
     ids_df = graph_backend.node_attrs(attr_keys=[DEFAULT_ATTR_KEYS.NODE_ID, DEFAULT_ATTR_KEYS.TRACKLET_ID])
     assert tracks_graph.num_nodes() == 4
     if return_id_updates:
-        _check_id_update_df_structure(id_update_df, ids_df, old_exists=True)
+        assert len(id_update_df) == 10
+        _check_id_update_df(id_update_df, ids_df, old_exists=True)
 
     returned = graph_backend.assign_tracklet_ids(
         node_ids=[A1, B4],
@@ -1587,7 +1592,8 @@ def test_assign_tracklet_ids_node_id_filter(graph_backend: BaseGraph, return_id_
     ids_df_reassign = graph_backend.node_attrs(attr_keys=[DEFAULT_ATTR_KEYS.NODE_ID, DEFAULT_ATTR_KEYS.TRACKLET_ID])
     assert tracks_graph_reassign.num_nodes() == 2
     if return_id_updates:
-        _check_id_update_df_structure(id_update_df_reassign, ids_df_reassign, old_exists=True)
+        assert len(id_update_df_reassign) == 6
+        _check_id_update_df(id_update_df_reassign, ids_df_reassign, old_exists=True)
     # Full reassignment should yield same result as previous partial reassignment
     # df must be sorted by node_id for direct comparison
     ids_df = ids_df.sort(DEFAULT_ATTR_KEYS.NODE_ID)
@@ -1601,7 +1607,8 @@ def test_assign_tracklet_ids_node_id_filter(graph_backend: BaseGraph, return_id_
     if return_id_updates:
         _, id_update_df_reset = returned
         ids_df_reset = graph_backend.node_attrs(attr_keys=[DEFAULT_ATTR_KEYS.NODE_ID, DEFAULT_ATTR_KEYS.TRACKLET_ID])
-        _check_id_update_df_structure(id_update_df_reset, ids_df_reset, old_exists=True)
+        assert len(id_update_df_reset) == 12
+        _check_id_update_df(id_update_df_reset, ids_df_reset, old_exists=True)
 
     A4 = graph_backend.add_node({DEFAULT_ATTR_KEYS.T: 1, DEFAULT_ATTR_KEYS.TRACKLET_ID: -1})
     graph_backend.remove_edge(A2, A3)
@@ -1622,7 +1629,8 @@ def test_assign_tracklet_ids_node_id_filter(graph_backend: BaseGraph, return_id_
     assert tracks_graph_reassign.num_nodes() == 8
     if return_id_updates:
         ids_df_reassign = graph_backend.node_attrs(attr_keys=[DEFAULT_ATTR_KEYS.NODE_ID, DEFAULT_ATTR_KEYS.TRACKLET_ID])
-        _check_id_update_df_structure(id_update_df_reassign, ids_df_reassign, old_exists=True)
+        assert len(id_update_df_reassign) == 13
+        _check_id_update_df(id_update_df_reassign, ids_df_reassign, old_exists=True)
 
     returned = graph_backend.assign_tracklet_ids(
         node_ids=[A1, A4, B4],
@@ -1636,7 +1644,8 @@ def test_assign_tracklet_ids_node_id_filter(graph_backend: BaseGraph, return_id_
     ids_df_reassign = graph_backend.node_attrs(attr_keys=[DEFAULT_ATTR_KEYS.NODE_ID, DEFAULT_ATTR_KEYS.TRACKLET_ID])
     assert tracks_graph_reassign.num_nodes() == 3
     if return_id_updates:
-        _check_id_update_df_structure(id_update_df_reassign, ids_df_reassign, old_exists=True)
+        assert len(id_update_df_reassign) == 5
+        _check_id_update_df(id_update_df_reassign, ids_df_reassign, old_exists=True)
 
 
 def test_tracklet_graph_basic(graph_backend: BaseGraph) -> None:
