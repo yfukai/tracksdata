@@ -21,6 +21,11 @@ def _infer_default_value(sample_value: Any) -> Any:
     """
     if isinstance(sample_value, bool | np.bool_):
         return False
+    dtype = getattr(sample_value, "dtype", None)
+    if dtype is not None and np.issubdtype(dtype, np.unsignedinteger):
+        return 0
+    if isinstance(sample_value, np.unsignedinteger):
+        return 0
     if isinstance(sample_value, int | np.integer):
         return -1
     if isinstance(sample_value, float | np.floating):
@@ -144,7 +149,6 @@ class RegionPropsNodes(BaseNodesOperator):
                 for key, value in node.items():
                     if key not in sample_values:
                         sample_values[key] = value
-        sample_values["label"] = 0  # dummy value for label attribute
 
         all_attr_keys = (
             set(axis_names)
@@ -155,6 +159,8 @@ class RegionPropsNodes(BaseNodesOperator):
         for attr_key in all_attr_keys:
             if attr_key not in graph.node_attr_keys:
                 default_value = _infer_default_value(sample_values.get(attr_key))
+                if attr_key == "label":
+                    default_value = 0
                 graph.add_node_attr_key(attr_key, default_value)
 
         # initialize the remaining attribute keys
