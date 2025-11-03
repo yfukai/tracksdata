@@ -93,6 +93,12 @@ class RegionPropsNodes(BaseNodesOperator):
     ):
         super().__init__()
         self._extra_properties = extra_properties or []
+        if "centroid" in self._extra_properties:
+            raise ValueError(
+                "`centroid` is not supported as an extra property. It's already included by default as (z), y, x."
+            )
+        if "bbox" in self._extra_properties:
+            raise ValueError("`bbox` is not supported as an extra property. It's already included by default.")
         self._spacing = spacing
 
     def _axis_names(self, labels: NDArray[np.integer]) -> list[str]:
