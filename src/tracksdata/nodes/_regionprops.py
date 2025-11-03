@@ -1,10 +1,10 @@
 from collections.abc import Callable
+from functools import partial
 from typing import Any
 
 import numpy as np
 from numpy.typing import NDArray
 from skimage.measure._regionprops import RegionProperties, regionprops
-from toolz import curry
 from typing_extensions import override
 
 from tracksdata.constants import DEFAULT_ATTR_KEYS
@@ -235,7 +235,7 @@ class RegionPropsNodes(BaseNodesOperator):
 
         node_ids = []
         for nodes_data in multiprocessing_apply(
-            func=curry(self._nodes_per_time, labels=labels, intensity_image=intensity_image),
+            func=partial(self._nodes_per_time, labels=labels, intensity_image=intensity_image),
             sequence=time_points,
             desc="Adding region properties nodes",
         ):
