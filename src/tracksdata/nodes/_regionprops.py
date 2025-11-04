@@ -15,24 +15,6 @@ from tracksdata.utils._logging import LOG
 from tracksdata.utils._multiprocessing import multiprocessing_apply
 
 
-def _infer_default_value(sample_value: Any) -> Any:
-    """
-    Infer a sensible default value based on a sample attribute value.
-    """
-    if isinstance(sample_value, bool | np.bool_):
-        return False
-    dtype = getattr(sample_value, "dtype", None)
-    if dtype is not None and np.issubdtype(dtype, np.unsignedinteger):
-        return 0
-    if isinstance(sample_value, np.unsignedinteger):
-        return 0
-    if isinstance(sample_value, int | np.integer):
-        return -1
-    if isinstance(sample_value, float | np.floating):
-        return -1.0
-    return None
-
-
 class RegionPropsNodes(BaseNodesOperator):
     """
     Operator that adds nodes to a graph using scikit-image's regionprops.
@@ -111,6 +93,12 @@ class RegionPropsNodes(BaseNodesOperator):
     ):
         super().__init__()
         self._extra_properties = extra_properties or []
+        if "centroid" in self._extra_properties:
+            raise ValueError(
+                "`centroid` is not supported as an extra property. It's already included by default as (z), y, x."
+            )
+        if "bbox" in self._extra_properties:
+            raise ValueError("`bbox` is not supported as an extra property. It's already included by default.")
         self._spacing = spacing
 
     def _axis_names(self, labels: NDArray[np.integer]) -> list[str]:
@@ -134,36 +122,23 @@ class RegionPropsNodes(BaseNodesOperator):
         else:
             raise ValueError(f"`labels` must be 't + 2D' or 't + 3D', got '{labels.ndim}' dimensions.")
 
-    def _init_node_attrs(
-        self,
-        graph: BaseGraph,
-        axis_names: list[str],
-        sample_nodes: list[dict[str, Any]] | None,
-    ) -> None:
+    def _init_node_attrs(self, graph: BaseGraph, axis_names: list[str], ndims: int) -> None:
         """
         Initialize the node attributes for the graph.
         """
-        sample_values: dict[str, Any] = {}
-        if sample_nodes:
-            for node in sample_nodes:
-                for key, value in node.items():
-                    if key not in sample_values:
-                        sample_values[key] = value
+        if DEFAULT_ATTR_KEYS.MASK not in graph.node_attr_keys:
+            graph.add_node_attr_key(DEFAULT_ATTR_KEYS.MASK, None)
 
-        all_attr_keys = (
-            set(axis_names)
-            | set(self.attr_keys())
-            | {DEFAULT_ATTR_KEYS.MASK, DEFAULT_ATTR_KEYS.BBOX, DEFAULT_ATTR_KEYS.T, "label"}
-        )
+        if DEFAULT_ATTR_KEYS.BBOX not in graph.node_attr_keys:
+            graph.add_node_attr_key(DEFAULT_ATTR_KEYS.BBOX, np.zeros(2 * (ndims - 1), dtype=int))
 
-        for attr_key in all_attr_keys:
-            if attr_key not in graph.node_attr_keys:
-                default_value = _infer_default_value(sample_values.get(attr_key))
-                if attr_key == "label":
-                    default_value = 0
-                graph.add_node_attr_key(attr_key, default_value)
+        if "label" in self.attr_keys() and "label" not in graph.node_attr_keys:
+            graph.add_node_attr_key("label", 0)
 
         # initialize the remaining attribute keys
+        for attr_key in axis_names + self.attr_keys():
+            if attr_key not in graph.node_attr_keys:
+                graph.add_node_attr_key(attr_key, -1.0)
 
     def attr_keys(self) -> list[str]:
         """
@@ -251,6 +226,7 @@ class RegionPropsNodes(BaseNodesOperator):
         ```
         """
         axis_names = self._axis_names(labels)
+        self._init_node_attrs(graph, axis_names, ndims=labels.ndim)
 
         if t is None:
             time_points = range(labels.shape[0])
@@ -258,21 +234,12 @@ class RegionPropsNodes(BaseNodesOperator):
             time_points = [t]
 
         node_ids = []
-        schema_initialized = False
         for nodes_data in multiprocessing_apply(
             func=partial(self._nodes_per_time, labels=labels, intensity_image=intensity_image),
             sequence=time_points,
             desc="Adding region properties nodes",
         ):
-            if not schema_initialized:
-                if len(nodes_data) == 0:
-                    continue
-                self._init_node_attrs(graph, axis_names, nodes_data)
-                schema_initialized = True
             node_ids.extend(graph.bulk_add_nodes(nodes_data))
-
-        if not schema_initialized:
-            self._init_node_attrs(graph, axis_names, None)
 
     def _nodes_per_time(
         self,
@@ -332,7 +299,6 @@ class RegionPropsNodes(BaseNodesOperator):
                 else:
                     attrs[prop] = getattr(obj, prop)
 
-            attrs["label"] = obj.label
             attrs[DEFAULT_ATTR_KEYS.MASK] = Mask(obj.image, obj.bbox)
             attrs[DEFAULT_ATTR_KEYS.BBOX] = np.asarray(obj.bbox, dtype=int)
             attrs[DEFAULT_ATTR_KEYS.T] = t

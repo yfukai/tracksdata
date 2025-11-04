@@ -5,25 +5,7 @@ from skimage.measure._regionprops import RegionProperties
 from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.graph import RustWorkXGraph
 from tracksdata.nodes import Mask, RegionPropsNodes
-from tracksdata.nodes._regionprops import _infer_default_value
 from tracksdata.options import get_options, options_context
-
-
-@pytest.mark.parametrize(
-    ("sample", "expected"),
-    [
-        (True, False),
-        (42, -1),
-        (3.14, -1.0),
-        (np.uint8(5), 0),
-        # (np.array([1], dtype=np.uint16), 0),
-        (np.int32(7), -1),
-        (np.float32(3.14), -1.0),
-        ("foo", None),
-    ],
-)
-def test_infer_default_value(sample: object, expected: object) -> None:
-    assert _infer_default_value(sample) == expected
 
 
 def test_regionprops_init_default() -> None:
