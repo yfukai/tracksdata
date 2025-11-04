@@ -637,7 +637,9 @@ class RustWorkXGraph(BaseGraph):
         neighbors_func: Callable[[rx.PyDiGraph, int], rx.NodeIndices],
         node_ids: list[int] | int,
         attr_keys: Sequence[str] | str | None = None,
-    ) -> dict[int, pl.DataFrame] | pl.DataFrame:
+        *,
+        return_attrs: bool = False,
+    ) -> dict[int, pl.DataFrame] | pl.DataFrame | dict[int, list[int]] | list[int]:
         """
         Get the predecessors or sucessors of a list of nodes.
         See more information below.
@@ -647,13 +649,26 @@ class RustWorkXGraph(BaseGraph):
             node_ids = [node_ids]
             single_node = True
 
+        rx_graph = self.rx_graph
+        if not return_attrs:
+            neighbors_ids: dict[int, list[int]] = {}
+            for node_id in node_ids:
+                neighbors_indices = neighbors_func(rx_graph, node_id)
+                neighbors_ids[node_id] = [int(idx) for idx in neighbors_indices]
+
+            if single_node:
+                return neighbors_ids.get(node_ids[0], [])
+
+            for node_id in node_ids:
+                neighbors_ids.setdefault(node_id, [])
+
+            return neighbors_ids
+
         if isinstance(attr_keys, str):
             attr_keys = [attr_keys]
 
-        rx_graph = self.rx_graph
         valid_schema = None
-
-        neighbors = {}
+        neighbors: dict[int, pl.DataFrame] = {}
         for node_id in node_ids:
             neighbors_indices = neighbors_func(rx_graph, node_id)
             neighbors_data: list[dict[str, Any]] = [rx_graph[i] for i in neighbors_indices]
@@ -675,7 +690,6 @@ class RustWorkXGraph(BaseGraph):
 
         if single_node:
             try:
-                # could not find sucessors for this node
                 return neighbors[node_ids[0]]
             except KeyError:
                 return pl.DataFrame()
@@ -693,7 +707,9 @@ class RustWorkXGraph(BaseGraph):
         self,
         node_ids: list[int] | int,
         attr_keys: Sequence[str] | str | None = None,
-    ) -> dict[int, pl.DataFrame] | pl.DataFrame:
+        *,
+        return_attrs: bool = False,
+    ) -> dict[int, pl.DataFrame] | pl.DataFrame | dict[int, list[int]] | list[int]:
         """
         Get the sucessors of a list of nodes.
 
@@ -702,25 +718,34 @@ class RustWorkXGraph(BaseGraph):
         node_ids : list[int] | int
             The IDs of the nodes to get the sucessors for.
         attr_keys : Sequence[str] | str | None
-            The attribute keys to get.
-            If None, all attributesare used.
+            The attribute keys to retrieve when ``return_attrs`` is True.
+            If None, all attributes are included.
+        return_attrs : bool, default False
+            Whether to return the attributes DataFrame. When False only successor
+            node IDs are returned.
 
         Returns
         -------
-        dict[int, pl.DataFrame] | pl.DataFrame
-            The sucessors of the nodes indexed by node ID if a list of nodes is provided.
+        dict[int, pl.DataFrame] | pl.DataFrame | dict[int, list[int]] | list[int]
+            When ``return_attrs`` is True, returns a DataFrame for a single node or a dictionary
+            mapping each node ID to a DataFrame of neighbor attributes. Otherwise returns a list
+            of neighbor node IDs for a single node or a dictionary mapping each node ID to its
+            neighbor ID list.
         """
         return self._get_neighbors(
             rx.PyDiGraph.successor_indices,
             node_ids,
             attr_keys,
+            return_attrs=return_attrs,
         )
 
     def predecessors(
         self,
         node_ids: list[int] | int,
         attr_keys: Sequence[str] | str | None = None,
-    ) -> dict[int, pl.DataFrame] | pl.DataFrame:
+        *,
+        return_attrs: bool = False,
+    ) -> dict[int, pl.DataFrame] | pl.DataFrame | dict[int, list[int]] | list[int]:
         """
         Get the predecessors of a list of nodes.
 
@@ -729,18 +754,25 @@ class RustWorkXGraph(BaseGraph):
         node_ids : list[int] | int
             The IDs of the nodes to get the predecessors for.
         attr_keys : Sequence[str] | str | None
-            The attribute keys to get.
-            If None, all attributesare used.
+            The attribute keys to retrieve when ``return_attrs`` is True.
+            If None, all attributes are included.
+        return_attrs : bool, default False
+            Whether to return the attributes DataFrame. When False only predecessor
+            node IDs are returned.
 
         Returns
         -------
-        dict[int, pl.DataFrame] | pl.DataFrame
-            The predecessors of the nodes indexed by node ID if a list of nodes is provided.
+        dict[int, pl.DataFrame] | pl.DataFrame | dict[int, list[int]] | list[int]
+            When ``return_attrs`` is True, returns a DataFrame for a single node or a dictionary
+            mapping each node ID to a DataFrame of neighbor attributes. Otherwise returns a list
+            of neighbor node IDs for a single node or a dictionary mapping each node ID to its
+            neighbor ID list.
         """
         return self._get_neighbors(
             rx.PyDiGraph.predecessor_indices,
             node_ids,
             attr_keys,
+            return_attrs=return_attrs,
         )
 
     def _filter_nodes_by_attrs(
@@ -1658,17 +1690,25 @@ class IndexedRXGraph(RustWorkXGraph, MappedGraphMixin):
         neighbors_func: Callable[[rx.PyDiGraph, int], rx.NodeIndices],
         node_ids: list[int] | int | None = None,
         attr_keys: Sequence[str] | str | None = None,
-    ) -> dict[int, pl.DataFrame] | pl.DataFrame:
+        *,
+        return_attrs: bool = False,
+    ) -> dict[int, pl.DataFrame] | pl.DataFrame | dict[int, list[int]] | list[int]:
         node_ids = self._get_local_ids() if node_ids is None else self._map_to_local(node_ids)
-        dfs = super()._get_neighbors(neighbors_func, node_ids, attr_keys)
-        if isinstance(dfs, pl.DataFrame):
-            dfs = self._map_df_to_external(dfs, [DEFAULT_ATTR_KEYS.NODE_ID])
-        else:
-            dfs = {
+        dfs = super()._get_neighbors(neighbors_func, node_ids, attr_keys, return_attrs=return_attrs)
+        if return_attrs:
+            if isinstance(dfs, pl.DataFrame):
+                return self._map_df_to_external(dfs, [DEFAULT_ATTR_KEYS.NODE_ID])
+            return {
                 self._map_to_external(node_id): self._map_df_to_external(df, [DEFAULT_ATTR_KEYS.NODE_ID])
                 for node_id, df in dfs.items()
             }
-        return dfs
+
+        if isinstance(dfs, list):
+            return self._map_to_external(dfs)
+
+        return {
+            self._map_to_external(node_id): self._map_to_external(neighbor_ids) for node_id, neighbor_ids in dfs.items()
+        }
 
     def update_node_attrs(
         self,

@@ -952,7 +952,9 @@ class SQLGraph(BaseGraph):
         neighbor_key: str,
         node_ids: list[int] | int,
         attr_keys: Sequence[str] | str | None = None,
-    ) -> dict[int, pl.DataFrame] | pl.DataFrame:
+        *,
+        return_attrs: bool = False,
+    ) -> dict[int, pl.DataFrame] | pl.DataFrame | dict[int, list[int]] | list[int]:
         """
         Get the predecessors or successors of nodes via database joins.
 
@@ -968,20 +970,48 @@ class SQLGraph(BaseGraph):
         node_ids : list[int] | int
             The IDs of the nodes to get neighbors for.
         attr_keys : Sequence[str] | str | None, optional
-            The attribute keys to retrieve for neighbor nodes. If None,
-            all attributes are retrieved.
+            The attribute keys to retrieve for neighbor nodes when ``return_attrs`` is True.
+            If None, all attributes are retrieved.
+        return_attrs : bool, default False
+            Whether to return the attributes DataFrame. When False only neighbor
+            node IDs are returned.
 
         Returns
         -------
-        dict[int, pl.DataFrame] | pl.DataFrame
-            If multiple node_ids are provided, returns a dictionary mapping
-            each node_id to a DataFrame of its neighbors. If a single node_id
-            is provided, returns the DataFrame directly.
+        dict[int, pl.DataFrame] | pl.DataFrame | dict[int, list[int]] | list[int]
+            When ``return_attrs`` is True, returns a DataFrame for a single node or a dictionary
+            mapping each node ID to a DataFrame of neighbor attributes. Otherwise returns a list
+            of neighbor node IDs for a single node or a dictionary mapping each node ID to its
+            neighbor ID list.
         """
         single_node = False
         if isinstance(node_ids, int):
             node_ids = [node_ids]
             single_node = True
+
+        if not return_attrs:
+            with Session(self._engine) as session:
+                query = session.query(getattr(self.Edge, node_key), getattr(self.Edge, neighbor_key)).filter(
+                    getattr(self.Edge, node_key).in_(node_ids)
+                )
+                neighbors_df = pl.read_database(
+                    query.statement,
+                    connection=session.connection(),
+                    schema_overrides=self._polars_schema_override(self.Edge),
+                )
+
+            if neighbors_df.is_empty():
+                neighbors_map: dict[int, list[int]] = {node_id: [] for node_id in node_ids}
+            else:
+                neighbors_map = {
+                    key_value[0]: group[neighbor_key].to_list() for key_value, group in neighbors_df.group_by(node_key)
+                }
+                for node_id in node_ids:
+                    neighbors_map.setdefault(node_id, [])
+
+            if single_node:
+                return neighbors_map[node_ids[0]]
+            return neighbors_map
 
         if isinstance(attr_keys, str):
             attr_keys = [attr_keys]
@@ -1019,7 +1049,9 @@ class SQLGraph(BaseGraph):
         self,
         node_ids: list[int] | int,
         attr_keys: Sequence[str] | str | None = None,
-    ) -> dict[int, pl.DataFrame] | pl.DataFrame:
+        *,
+        return_attrs: bool = False,
+    ) -> dict[int, pl.DataFrame] | pl.DataFrame | dict[int, list[int]] | list[int]:
         """
         Get the successor nodes of given nodes.
 
@@ -1032,21 +1064,25 @@ class SQLGraph(BaseGraph):
         node_ids : list[int] | int
             The IDs of the nodes to get successors for.
         attr_keys : Sequence[str] | str | None, optional
-            The attribute keys to retrieve for successor nodes. If None,
-            all attributes are retrieved.
+            The attribute keys to retrieve for successor nodes when ``return_attrs`` is True.
+            If None, all attributes are retrieved.
+        return_attrs : bool, default False
+            Whether to return the attributes DataFrame. When False only successor
+            node IDs are returned.
 
         Returns
         -------
-        dict[int, pl.DataFrame] | pl.DataFrame
-            If a list of node_ids is provided, returns a dictionary mapping
-            each node_id to a DataFrame of its successors. If a single node_id
-            is provided, returns the DataFrame directly.
+        dict[int, pl.DataFrame] | pl.DataFrame | dict[int, list[int]] | list[int]
+            When ``return_attrs`` is True, returns a DataFrame for a single node or a dictionary
+            mapping each node ID to a DataFrame of successor attributes. Otherwise returns a list
+            of successor node IDs for a single node or a dictionary mapping each node ID to its
+            successor ID list.
 
         Examples
         --------
         ```python
-        successors_df = graph.sucessors(node_id)
-        successors_dict = graph.sucessors([node1, node2, node3])
+        successors_df = graph.sucessors(node_id, return_attrs=True)
+        successors_dict = graph.sucessors([node1, node2, node3], return_attrs=True)
         ```
         """
         return self._get_neighbors(
@@ -1054,13 +1090,16 @@ class SQLGraph(BaseGraph):
             neighbor_key=DEFAULT_ATTR_KEYS.EDGE_TARGET,
             node_ids=node_ids,
             attr_keys=attr_keys,
+            return_attrs=return_attrs,
         )
 
     def predecessors(
         self,
         node_ids: list[int] | int,
         attr_keys: Sequence[str] | str | None = None,
-    ) -> dict[int, pl.DataFrame] | pl.DataFrame:
+        *,
+        return_attrs: bool = False,
+    ) -> dict[int, pl.DataFrame] | pl.DataFrame | dict[int, list[int]] | list[int]:
         """
         Get the predecessor nodes of given nodes.
 
@@ -1073,21 +1112,25 @@ class SQLGraph(BaseGraph):
         node_ids : list[int] | int
             The IDs of the nodes to get predecessors for.
         attr_keys : Sequence[str] | str | None, optional
-            The attribute keys to retrieve for predecessor nodes. If None,
-            all attributes are retrieved.
+            The attribute keys to retrieve for predecessor nodes when ``return_attrs`` is True.
+            If None, all attributes are retrieved.
+        return_attrs : bool, default False
+            Whether to return the attributes DataFrame. When False only predecessor
+            node IDs are returned.
 
         Returns
         -------
-        dict[int, pl.DataFrame] | pl.DataFrame
-            If a list of node_ids is provided, returns a dictionary mapping
-            each node_id to a DataFrame of its predecessors. If a single node_id
-            is provided, returns the DataFrame directly.
+        dict[int, pl.DataFrame] | pl.DataFrame | dict[int, list[int]] | list[int]
+            When ``return_attrs`` is True, returns a DataFrame for a single node or a dictionary
+            mapping each node ID to a DataFrame of predecessor attributes. Otherwise returns a list
+            of predecessor node IDs for a single node or a dictionary mapping each node ID to its
+            predecessor ID list.
 
         Examples
         --------
         ```python
-        predecessors_df = graph.predecessors(node_id)
-        predecessors_dict = graph.predecessors([node1, node2, node3])
+        predecessors_df = graph.predecessors(node_id, return_attrs=True)
+        predecessors_dict = graph.predecessors([node1, node2, node3], return_attrs=True)
         ```
         """
         return self._get_neighbors(
@@ -1095,6 +1138,7 @@ class SQLGraph(BaseGraph):
             neighbor_key=DEFAULT_ATTR_KEYS.EDGE_SOURCE,
             node_ids=node_ids,
             attr_keys=attr_keys,
+            return_attrs=return_attrs,
         )
 
     def node_ids(self) -> list[int]:

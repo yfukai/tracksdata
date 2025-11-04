@@ -373,12 +373,50 @@ class BaseGraph(abc.ABC):
         """
         return False
 
+    @overload
+    def successors(
+        self,
+        node_ids: int,
+        attr_keys: Sequence[str] | str | None = ...,
+        *,
+        return_attrs: Literal[True],
+    ) -> pl.DataFrame: ...
+
+    @overload
+    def successors(
+        self,
+        node_ids: list[int],
+        attr_keys: Sequence[str] | str | None = ...,
+        *,
+        return_attrs: Literal[True],
+    ) -> dict[int, pl.DataFrame]: ...
+
+    @overload
+    def successors(
+        self,
+        node_ids: int,
+        attr_keys: Sequence[str] | str | None = ...,
+        *,
+        return_attrs: Literal[False] = False,
+    ) -> list[int]: ...
+
+    @overload
+    def successors(
+        self,
+        node_ids: list[int],
+        attr_keys: Sequence[str] | str | None = ...,
+        *,
+        return_attrs: Literal[False] = False,
+    ) -> dict[int, list[int]]: ...
+
     @abc.abstractmethod
     def successors(
         self,
         node_ids: list[int] | int,
         attr_keys: Sequence[str] | str | None = None,
-    ) -> dict[int, pl.DataFrame] | pl.DataFrame:
+        *,
+        return_attrs: bool = False,
+    ) -> dict[int, pl.DataFrame] | pl.DataFrame | dict[int, list[int]] | list[int]:
         """
         Get the sucessors of a list of nodes.
 
@@ -387,21 +425,65 @@ class BaseGraph(abc.ABC):
         node_ids : list[int] | int
             The IDs of the nodes to get the sucessors for.
         attr_keys : Sequence[str] | str | None
-            The attribute keys to get.
-            If None, all attributesare used.
+            The attribute keys to retrieve when ``return_attrs`` is True.
+            If None, all attributes are included.
+        return_attrs : bool, default False
+            Whether to return node attributes in a `polars.DataFrame`. When False only
+            the successor node IDs are returned.
 
         Returns
         -------
-        dict[int, pl.DataFrame] | pl.DataFrame
-            The sucessors of the nodes indexed by node ID if a list of nodes is provided.
+        dict[int, pl.DataFrame] | pl.DataFrame | dict[int, list[int]] | list[int]
+            When ``return_attrs`` is True, returns a DataFrame for a single node or a dictionary
+            mapping each node ID to a DataFrame of neighbor attributes. Otherwise returns a list
+            of neighbor node IDs for a single node or a dictionary mapping each node ID to its
+            neighbor ID list.
         """
+
+    @overload
+    def predecessors(
+        self,
+        node_ids: int,
+        attr_keys: Sequence[str] | str | None = ...,
+        *,
+        return_attrs: Literal[True],
+    ) -> pl.DataFrame: ...
+
+    @overload
+    def predecessors(
+        self,
+        node_ids: list[int],
+        attr_keys: Sequence[str] | str | None = ...,
+        *,
+        return_attrs: Literal[True],
+    ) -> dict[int, pl.DataFrame]: ...
+
+    @overload
+    def predecessors(
+        self,
+        node_ids: int,
+        attr_keys: Sequence[str] | str | None = ...,
+        *,
+        return_attrs: Literal[False] = False,
+    ) -> list[int]: ...
+
+    @overload
+    def predecessors(
+        self,
+        node_ids: list[int],
+        attr_keys: Sequence[str] | str | None = ...,
+        *,
+        return_attrs: Literal[False] = False,
+    ) -> dict[int, list[int]]: ...
 
     @abc.abstractmethod
     def predecessors(
         self,
         node_ids: list[int] | int,
         attr_keys: Sequence[str] | str | None = None,
-    ) -> dict[int, pl.DataFrame] | pl.DataFrame:
+        *,
+        return_attrs: bool = False,
+    ) -> dict[int, pl.DataFrame] | pl.DataFrame | dict[int, list[int]] | list[int]:
         """
         Get the predecessors of a list of nodes.
 
@@ -410,13 +492,19 @@ class BaseGraph(abc.ABC):
         node_ids : list[int] | int
             The IDs of the nodes to get the predecessors for.
         attr_keys : Sequence[str] | str | None
-            The attribute keys to get.
-            If None, all attributesare used.
+            The attribute keys to retrieve when ``return_attrs`` is True.
+            If None, all attributes are included.
+        return_attrs : bool, default False
+            Whether to return node attributes in a `polars.DataFrame`. When False only
+            the predecessor node IDs are returned.
 
         Returns
         -------
-        dict[int, pl.DataFrame] | pl.DataFrame
-            The predecessors of the nodes indexed by node ID if a list of nodes is provided.
+        dict[int, pl.DataFrame] | pl.DataFrame | dict[int, list[int]] | list[int]
+            When ``return_attrs`` is True, returns a DataFrame for a single node or a dictionary
+            mapping each node ID to a DataFrame of neighbor attributes. Otherwise returns a list
+            of neighbor node IDs for a single node or a dictionary mapping each node ID to its
+            neighbor ID list.
         """
 
     def _validate_subgraph_args(
@@ -1153,11 +1241,11 @@ class BaseGraph(abc.ABC):
 
             # Successors: only nodes with exactly one successor
             succ_map = self.successors(node_ids=list(active_ids))
-            successors = [int(df[DEFAULT_ATTR_KEYS.NODE_ID].first()) for df in succ_map.values() if len(df) == 1]
+            successors = [int(nodes[0]) for nodes in succ_map.values() if len(nodes) == 1]
 
             # Predecessors: only nodes with exactly one predecessor and predecessor out_degree == 1
             pred_map = self.predecessors(node_ids=list(active_ids))
-            predecessors = [int(df[DEFAULT_ATTR_KEYS.NODE_ID].first()) for df in pred_map.values() if len(df) == 1]
+            predecessors = [int(nodes[0]) for nodes in pred_map.values() if len(nodes) == 1]
 
             if len(predecessors) > 0:
                 out_degrees = self.out_degree(predecessors)
