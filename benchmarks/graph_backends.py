@@ -82,7 +82,18 @@ def _run_benchmark(
 
 def _format_markdown_table(df: pl.DataFrame, output_file: Path | None = None) -> str:
     # Create time string column
-    df = df.with_columns(time_str=pl.format("{} ± {}", pl.col("time_avg").round(3), pl.col("time_std").round(3)))
+    df = df.with_columns(
+        # ensure non-null & non-NaN strings before formatting
+        time_str=pl.when(pl.all_horizontal(pl.col("time_avg").is_not_null(), pl.col("time_std").is_not_null()))
+        .then(
+            pl.format(
+                "{} ± {}",
+                pl.col("time_avg").round(3).fill_nan(None),
+                pl.col("time_std").round(3).fill_nan(None),
+            )
+        )
+        .otherwise(pl.lit(None, dtype=pl.Utf8)),
+    )
 
     # Pivot the table to get n_nodes as columns
     pivoted = df.pivot(values="time_str", index=["backend", "operation"], on="n_nodes", aggregate_function="first")
