@@ -1321,7 +1321,7 @@ def test_form_other_regionprops_nodes(
     labels[1, 1:3, 0:2] = 1
     labels[1, 1:3, 2:4] = 2
 
-    operator = RegionPropsNodes(extra_properties=["area", "label", "centroid"])
+    operator = RegionPropsNodes(extra_properties=["area"])
     operator.add_nodes(graph_backend, labels=labels)
 
     assert graph_backend.num_nodes == 4
