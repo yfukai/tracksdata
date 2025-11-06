@@ -1267,13 +1267,12 @@ class SQLGraph(BaseGraph):
         if sa_type == sa.Boolean:
             self._boolean_columns[table_class.__tablename__][key] = pl.Boolean
 
-        if sa_type == sa.PickleType:
+        if sa_type == sa.PickleType and default_value is not None:
             if isinstance(default_value, np.ndarray):
                 self._array_columns[table_class.__tablename__][key] = pl.Array(
                     numpy_char_code_to_dtype(default_value.dtype.char), default_value.shape
                 )
-            else:
-                raise NotImplementedError("Only numpy arrays are supported as array attribute types for now.")
+            # The following is required for all non-None PickleType columns
             default_value = blob_default(self._engine, cloudpickle.dumps(default_value))  # None
 
         sa_column = sa.Column(key, sa_type, default=default_value)
