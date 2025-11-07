@@ -405,13 +405,31 @@ def test_subgraph_with_node_ids_and_filters(graph_backend: BaseGraph) -> None:
     assert len(subgraph_edge_ids) == 0
 
 
-def test_add_node_attr_key(graph_backend: BaseGraph) -> None:
+@pytest.mark.parametrize(
+    "value",
+    [
+        pytest.param(42, id="int-42"),
+        pytest.param(3.14, id="float-3.14"),
+        pytest.param("test_string", id="str-test_string"),
+        pytest.param(np.array([1, 2, 3]), id="ndarray-1d"),
+        pytest.param(np.array([[1.0, 2.0], [3.0, 4.0]]), id="ndarray-2d"),
+        pytest.param(Mask(mask=np.array([[True, False], [False, True]]), bbox=(0, 0, 2, 2)), id="mask"),
+        pytest.param(True, id="bool-True"),
+        pytest.param(False, id="bool-False"),
+    ],
+)
+def test_add_node_attr_key(graph_backend: BaseGraph, value) -> None:
     """Test adding new node attribute keys."""
     node = graph_backend.add_node({"t": 0})
-    graph_backend.add_node_attr_key("new_attribute", 42)
+    graph_backend.add_node_attr_key("new_attribute", value)
 
     df = graph_backend.filter(node_ids=[node]).node_attrs(attr_keys=["new_attribute"])
-    assert df["new_attribute"].to_list() == [42]
+    assert len(df) == 1
+    new_attr_value = df["new_attribute"].to_list()[0]
+    if isinstance(value, np.ndarray):
+        np.testing.assert_array_equal(new_attr_value, value)
+    else:
+        assert new_attr_value == value
 
 
 def test_add_edge_attr_key(graph_backend: BaseGraph) -> None:
@@ -1321,7 +1339,7 @@ def test_form_other_regionprops_nodes(
     labels[1, 1:3, 0:2] = 1
     labels[1, 1:3, 2:4] = 2
 
-    operator = RegionPropsNodes(extra_properties=["area", "label", "centroid"])
+    operator = RegionPropsNodes(extra_properties=["area"])
     operator.add_nodes(graph_backend, labels=labels)
 
     assert graph_backend.num_nodes == 4
