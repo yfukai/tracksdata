@@ -16,7 +16,11 @@ from zarr.storage import StoreLike
 
 from tracksdata.attrs import AttrComparison, NodeAttr
 from tracksdata.constants import DEFAULT_ATTR_KEYS
-from tracksdata.utils._dtypes import column_to_numpy, polars_dtype_to_numpy_dtype
+from tracksdata.utils._dtypes import (
+    column_to_numpy,
+    infer_default_value,
+    polars_dtype_to_numpy_dtype,
+)
 from tracksdata.utils._logging import LOG
 from tracksdata.utils._multiprocessing import multiprocessing_apply
 
@@ -856,7 +860,8 @@ class BaseGraph(abc.ABC):
 
         for col in node_attrs.columns:
             if col != DEFAULT_ATTR_KEYS.T:
-                graph.add_node_attr_key(col, node_attrs[col].first())
+                first_value = node_attrs[col].first()
+                graph.add_node_attr_key(col, infer_default_value(first_value))
 
         if graph.supports_custom_indices:
             new_node_ids = graph.bulk_add_nodes(
