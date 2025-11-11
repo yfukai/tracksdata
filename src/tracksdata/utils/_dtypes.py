@@ -1,3 +1,5 @@
+from typing import Any
+
 import numpy as np
 import polars as pl
 from cloudpickle import dumps, loads
@@ -121,3 +123,21 @@ def column_to_numpy(series: pl.Series) -> np.ndarray:
         return np.asarray(series.to_list())
     else:
         return series.to_numpy()
+
+
+def infer_default_value(sample_value: Any) -> Any:
+    """
+    Infer a sensible default value based on a sample attribute value.
+    """
+    if isinstance(sample_value, bool | np.bool_):
+        return False
+    dtype = getattr(sample_value, "dtype", None)
+    if dtype is not None and np.issubdtype(dtype, np.unsignedinteger):
+        return 0
+    if isinstance(sample_value, np.unsignedinteger):
+        return 0
+    if isinstance(sample_value, int | np.integer):
+        return -1
+    if isinstance(sample_value, float | np.floating):
+        return -1.0
+    return None

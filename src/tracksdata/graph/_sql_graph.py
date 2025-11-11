@@ -1297,10 +1297,12 @@ class SQLGraph(BaseGraph):
         if sa_type == sa.Boolean:
             self._boolean_columns[table_class.__tablename__][key] = pl.Boolean
 
-        if sa_type == sa.PickleType and isinstance(default_value, np.ndarray):
-            self._array_columns[table_class.__tablename__][key] = pl.Array(
-                numpy_char_code_to_dtype(default_value.dtype.char), default_value.shape
-            )
+        if sa_type == sa.PickleType and default_value is not None:
+            if isinstance(default_value, np.ndarray):
+                self._array_columns[table_class.__tablename__][key] = pl.Array(
+                    numpy_char_code_to_dtype(default_value.dtype.char), default_value.shape
+                )
+            # The following is required for all non-None PickleType columns
             default_value = blob_default(self._engine, cloudpickle.dumps(default_value))  # None
 
         sa_column = sa.Column(key, sa_type, default=default_value)
@@ -1444,7 +1446,8 @@ class SQLGraph(BaseGraph):
         reset: bool = True,
         tracklet_id_offset: int | None = None,
         node_ids: list[int] | None = None,
-    ) -> rx.PyDiGraph:
+        return_id_update: bool = False,
+    ) -> rx.PyDiGraph | tuple[rx.PyDiGraph, pl.DataFrame]:
         if node_ids is not None:
             track_node_ids = list(set(self.tracklet_nodes(node_ids)))
         else:
@@ -1461,6 +1464,7 @@ class SQLGraph(BaseGraph):
                 output_key=output_key,
                 reset=reset,
                 tracklet_id_offset=tracklet_id_offset,
+                return_id_update=return_id_update,
             )
         )
 
