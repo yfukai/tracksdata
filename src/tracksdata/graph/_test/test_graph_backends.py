@@ -766,7 +766,7 @@ def test_sucessors_with_attr_keys(graph_backend: BaseGraph) -> None:
     graph_backend.add_edge(node0, node2, {"weight": 0.7})
 
     # Test with single attribute key as string
-    successors_ids = graph_backend.successors(node0, attr_keys="x")
+    successors_ids = graph_backend.successors(node0)
     assert isinstance(successors_ids, list)
 
     successors_df = graph_backend.successors(node0, attr_keys="x", return_attrs=True)
@@ -813,7 +813,7 @@ def test_predecessors_with_attr_keys(graph_backend: BaseGraph) -> None:
     graph_backend.add_edge(node1, node2, {"weight": 0.7})
 
     # Test with single attribute key as string
-    predecessors_ids = graph_backend.predecessors(node2, attr_keys="label")
+    predecessors_ids = graph_backend.predecessors(node2)
     assert isinstance(predecessors_ids, list)
 
     predecessors_df = graph_backend.predecessors(node2, attr_keys="label", return_attrs=True)
