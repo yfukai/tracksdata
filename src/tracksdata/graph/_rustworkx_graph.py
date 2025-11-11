@@ -651,57 +651,53 @@ class RustWorkXGraph(BaseGraph):
 
         rx_graph = self.rx_graph
         if not return_attrs:
+            if attr_keys is not None:
+                LOG.warning("attr_keys is ignored when return_attrs is False.")
             neighbors_ids: dict[int, list[int]] = {}
             for node_id in node_ids:
                 neighbors_indices = neighbors_func(rx_graph, node_id)
                 neighbors_ids[node_id] = [int(idx) for idx in neighbors_indices]
-
             if single_node:
                 return neighbors_ids.get(node_ids[0], [])
-
             for node_id in node_ids:
                 neighbors_ids.setdefault(node_id, [])
-
             return neighbors_ids
 
-        if isinstance(attr_keys, str):
-            attr_keys = [attr_keys]
+        else:
+            if isinstance(attr_keys, str):
+                attr_keys = [attr_keys]
+            valid_schema = None
+            neighbors: dict[int, pl.DataFrame] = {}
+            for node_id in node_ids:
+                neighbors_indices = neighbors_func(rx_graph, node_id)
+                neighbors_data: list[dict[str, Any]] = [rx_graph[i] for i in neighbors_indices]
 
-        valid_schema = None
-        neighbors: dict[int, pl.DataFrame] = {}
-        for node_id in node_ids:
-            neighbors_indices = neighbors_func(rx_graph, node_id)
-            neighbors_data: list[dict[str, Any]] = [rx_graph[i] for i in neighbors_indices]
+                if attr_keys is not None:
+                    neighbors_data = [
+                        {k: edge_data[k] for k in attr_keys if k != DEFAULT_ATTR_KEYS.NODE_ID}
+                        for edge_data in neighbors_data
+                    ]
 
-            if attr_keys is not None:
-                neighbors_data = [
-                    {k: edge_data[k] for k in attr_keys if k != DEFAULT_ATTR_KEYS.NODE_ID}
-                    for edge_data in neighbors_data
-                ]
+                if len(neighbors_data) > 0:
+                    df = pl.DataFrame(neighbors_data)
+                    if attr_keys is None or DEFAULT_ATTR_KEYS.NODE_ID in attr_keys:
+                        df = df.with_columns(
+                            pl.Series(DEFAULT_ATTR_KEYS.NODE_ID, np.asarray(neighbors_indices, dtype=int)),
+                        )
+                    neighbors[node_id] = df
+                    valid_schema = neighbors[node_id].schema
 
-            if len(neighbors_data) > 0:
-                df = pl.DataFrame(neighbors_data)
-                if attr_keys is None or DEFAULT_ATTR_KEYS.NODE_ID in attr_keys:
-                    df = df.with_columns(
-                        pl.Series(DEFAULT_ATTR_KEYS.NODE_ID, np.asarray(neighbors_indices, dtype=int)),
-                    )
-                neighbors[node_id] = df
-                valid_schema = neighbors[node_id].schema
+            if single_node:
+                return neighbors.get(node_ids[0], pl.DataFrame())
 
-        if single_node:
-            try:
-                return neighbors[node_ids[0]]
-            except KeyError:
-                return pl.DataFrame()
+            for node_id in node_ids:
+                if node_id not in neighbors:
+                    if valid_schema is None:
+                        neighbors[node_id] = pl.DataFrame()
+                    else:
+                        neighbors[node_id] = pl.DataFrame(schema=valid_schema)
 
-        for node_id in node_ids:
-            if node_id not in neighbors:
-                if valid_schema is None:
-                    neighbors[node_id] = pl.DataFrame()
-                else:
-                    neighbors[node_id] = pl.DataFrame(schema=valid_schema)
-
-        return neighbors
+            return neighbors
 
     def successors(
         self,
@@ -1694,21 +1690,23 @@ class IndexedRXGraph(RustWorkXGraph, MappedGraphMixin):
         return_attrs: bool = False,
     ) -> dict[int, pl.DataFrame] | pl.DataFrame | dict[int, list[int]] | list[int]:
         node_ids = self._get_local_ids() if node_ids is None else self._map_to_local(node_ids)
-        dfs = super()._get_neighbors(neighbors_func, node_ids, attr_keys, return_attrs=return_attrs)
-        if return_attrs:
-            if isinstance(dfs, pl.DataFrame):
-                return self._map_df_to_external(dfs, [DEFAULT_ATTR_KEYS.NODE_ID])
-            return {
-                self._map_to_external(node_id): self._map_df_to_external(df, [DEFAULT_ATTR_KEYS.NODE_ID])
-                for node_id, df in dfs.items()
-            }
-
-        if isinstance(dfs, list):
-            return self._map_to_external(dfs)
-
-        return {
-            self._map_to_external(node_id): self._map_to_external(neighbor_ids) for node_id, neighbor_ids in dfs.items()
-        }
+        neighbors = super()._get_neighbors(neighbors_func, node_ids, attr_keys, return_attrs=return_attrs)
+        if not return_attrs:
+            if isinstance(neighbors, list):
+                return self._map_to_external(neighbors)
+            else:
+                return {
+                    self._map_to_external(node_id): self._map_to_external(neighbor_ids)
+                    for node_id, neighbor_ids in neighbors.items()
+                }
+        else:
+            if isinstance(neighbors, pl.DataFrame):
+                return self._map_df_to_external(neighbors, [DEFAULT_ATTR_KEYS.NODE_ID])
+            else:
+                return {
+                    self._map_to_external(node_id): self._map_df_to_external(df, [DEFAULT_ATTR_KEYS.NODE_ID])
+                    for node_id, df in neighbors.items()
+                }
 
     def update_node_attrs(
         self,

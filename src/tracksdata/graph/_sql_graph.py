@@ -989,30 +989,6 @@ class SQLGraph(BaseGraph):
             node_ids = [node_ids]
             single_node = True
 
-        if not return_attrs:
-            with Session(self._engine) as session:
-                query = session.query(getattr(self.Edge, node_key), getattr(self.Edge, neighbor_key)).filter(
-                    getattr(self.Edge, node_key).in_(node_ids)
-                )
-                neighbors_df = pl.read_database(
-                    query.statement,
-                    connection=session.connection(),
-                    schema_overrides=self._polars_schema_override(self.Edge),
-                )
-
-            if neighbors_df.is_empty():
-                neighbors_map: dict[int, list[int]] = {node_id: [] for node_id in node_ids}
-            else:
-                neighbors_map = {
-                    key_value[0]: group[neighbor_key].to_list() for key_value, group in neighbors_df.group_by(node_key)
-                }
-                for node_id in node_ids:
-                    neighbors_map.setdefault(node_id, [])
-
-            if single_node:
-                return neighbors_map[node_ids[0]]
-            return neighbors_map
-
         if isinstance(attr_keys, str):
             attr_keys = [attr_keys]
 
@@ -1020,6 +996,12 @@ class SQLGraph(BaseGraph):
             if attr_keys is None:
                 # all columns
                 node_columns = [self.Node]
+            elif not return_attrs:
+                # only neighbor IDs
+                node_columns = [self.Node.node_id]
+                if attr_keys is not None:
+                    LOG.warning("attr_keys is ignored when return_attrs is False.")
+                    attr_keys = None
             else:
                 node_columns = [getattr(self.Node, key) for key in attr_keys]
 
@@ -1036,14 +1018,18 @@ class SQLGraph(BaseGraph):
             node_df = self._cast_array_columns(self.Node, node_df)
 
         if single_node:
-            return node_df
-
-        neighbors_dict = {node_id: group for (node_id,), group in node_df.group_by(node_key)}
-        for node_id in node_ids:
-            if node_id not in neighbors_dict:
-                neighbors_dict[node_id] = pl.DataFrame(schema=node_df.schema)
-
-        return neighbors_dict
+            if not return_attrs:
+                return node_df[DEFAULT_ATTR_KEYS.NODE_ID].to_list()
+            else:
+                return node_df
+        else:
+            neighbors_dict = {node_id: group for (node_id,), group in node_df.group_by(node_key)}
+            for node_id in node_ids:
+                neighbors_dict.setdefault(node_id, pl.DataFrame(schema=node_df.schema))
+            if not return_attrs:
+                return {node_id: df[DEFAULT_ATTR_KEYS.NODE_ID].to_list() for node_id, df in neighbors_dict.items()}
+            else:
+                return neighbors_dict
 
     def successors(
         self,
