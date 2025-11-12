@@ -47,11 +47,19 @@ jobs:
             --ram "7GB"
 
       - name: Run ASV continuous benchmarks
+        id: asv
         run: |
+          set -o pipefail
           asv continuous origin/main HEAD \
             --machine github-actions \
             --python 3.12 \
             --show-stderr | tee asv-output.log
+          tail -n 100 asv-output.log > asv-summary.txt
+          {
+            echo 'summary<<EOF'
+            cat asv-summary.txt
+            echo EOF
+          } >> "$GITHUB_OUTPUT"
 
       - name: Publish ASV HTML
         run: asv publish
@@ -63,7 +71,30 @@ jobs:
           path: .asv/html
           if-no-files-found: warn
 
+      - name: Find existing ASV comment
+        if: github.event_name == 'pull_request'
+        id: find-comment
+        uses: peter-evans/find-comment@v3
+        with:
+          issue-number: ${{ github.event.pull_request.number }}
+          comment-author: 'github-actions[bot]'
+          body-includes: '### ASV Continuous Results'
+
+      - name: Comment PR with ASV summary
+        if: github.event_name == 'pull_request'
+        uses: peter-evans/create-or-update-comment@v4
+        with:
+          issue-number: ${{ github.event.pull_request.number }}
+          comment-id: ${{ steps.find-comment.outputs.comment-id }}
+          body: |
+            ### ASV Continuous Results
+
+            ```
+            ${{ steps.asv.outputs.summary }}
+            ```
+          edit-mode: replace
+
       - name: Append benchmark summary
         run: |
           echo '### ASV Continuous Results' >> $GITHUB_STEP_SUMMARY
-          tail -n 100 asv-output.log >> $GITHUB_STEP_SUMMARY
+          cat asv-summary.txt >> $GITHUB_STEP_SUMMARY
