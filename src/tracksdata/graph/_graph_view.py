@@ -418,8 +418,7 @@ class GraphView(RustWorkXGraph, MappedGraphMixin):
         )
 
         out_data: dict[int, pl.DataFrame] | dict[int, list[int]] = {}
-        for local_id in local_node_ids:
-            external_id = self._map_to_external(local_id)
+        for local_id, external_id in zip(local_node_ids, node_ids, strict=True):
             if return_attrs:
                 df = neighbors_data[local_id]
                 mapped_df = self._map_df_to_external(
