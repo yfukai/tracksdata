@@ -188,6 +188,11 @@ class GraphArrayView(BaseReadOnlyArray):
         return tuple(s for s in shape if s is not None)
 
     @property
+    def size(self) -> int:
+        """Returns the total number of elements in the array."""
+        return int(np.prod(self.shape))
+
+    @property
     def ndim(self) -> int:
         """Returns the number of dimensions of the array."""
         return len(self.shape)
