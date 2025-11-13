@@ -650,26 +650,18 @@ class RustWorkXGraph(BaseGraph):
             single_node = True
 
         rx_graph = self.rx_graph
-        if not return_attrs:
-            if attr_keys is not None:
-                LOG.warning("attr_keys is ignored when return_attrs is False.")
-            neighbors_ids: dict[int, list[int]] = {}
-            for node_id in node_ids:
-                neighbors_indices = neighbors_func(rx_graph, node_id)
-                neighbors_ids[node_id] = [int(idx) for idx in neighbors_indices]
-            if single_node:
-                return neighbors_ids.get(node_ids[0], [])
-            for node_id in node_ids:
-                neighbors_ids.setdefault(node_id, [])
-            return neighbors_ids
+        if not return_attrs and attr_keys is not None:
+            LOG.warning("attr_keys is ignored when return_attrs is False.")
 
-        else:
-            if isinstance(attr_keys, str):
-                attr_keys = [attr_keys]
-            valid_schema = None
-            neighbors: dict[int, pl.DataFrame] = {}
-            for node_id in node_ids:
-                neighbors_indices = neighbors_func(rx_graph, node_id)
+        if isinstance(attr_keys, str):
+            attr_keys = [attr_keys]
+        valid_schema = None
+        neighbors: dict[int, list[int]] | dict[int, pl.DataFrame] = {}
+        for node_id in node_ids:
+            neighbors_indices = neighbors_func(rx_graph, node_id)
+            if not return_attrs:
+                neighbors[node_id] = [int(idx) for idx in neighbors_indices]
+            else:
                 neighbors_data: list[dict[str, Any]] = [rx_graph[i] for i in neighbors_indices]
 
                 if attr_keys is not None:
@@ -687,15 +679,18 @@ class RustWorkXGraph(BaseGraph):
                     neighbors[node_id] = df
                     valid_schema = neighbors[node_id].schema
 
-            if single_node:
-                return neighbors.get(node_ids[0], pl.DataFrame())
+        if not return_attrs:
+            default_value = []
+        elif valid_schema is None:
+            default_value = pl.DataFrame()
+        else:
+            default_value = pl.DataFrame(schema=valid_schema)
 
+        if single_node:
+            return neighbors.get(node_ids[0], default_value)
+        else:
             for node_id in node_ids:
-                if node_id not in neighbors:
-                    if valid_schema is None:
-                        neighbors[node_id] = pl.DataFrame()
-                    else:
-                        neighbors[node_id] = pl.DataFrame(schema=valid_schema)
+                neighbors.setdefault(node_id, default_value)
 
             return neighbors
 
