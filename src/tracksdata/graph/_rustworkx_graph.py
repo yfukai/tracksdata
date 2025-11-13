@@ -666,8 +666,8 @@ class RustWorkXGraph(BaseGraph):
 
                 if attr_keys is not None:
                     neighbors_data = [
-                        {k: edge_data[k] for k in attr_keys if k != DEFAULT_ATTR_KEYS.NODE_ID}
-                        for edge_data in neighbors_data
+                        {k: neigh_attr[k] for k in attr_keys if k != DEFAULT_ATTR_KEYS.NODE_ID}
+                        for neigh_attr in neighbors_data
                     ]
 
                 if len(neighbors_data) > 0:
