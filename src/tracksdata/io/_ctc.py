@@ -59,6 +59,7 @@ def compressed_tracks_table(graph: BaseGraph) -> np.ndarray:
     parents = graph.predecessors(
         node_ids,
         attr_keys=[DEFAULT_ATTR_KEYS.TRACKLET_ID],
+        return_attrs=True,
     )
     for tracklet_id, node_id in zip(tracks_data, node_ids, strict=True):
         df = parents[node_id]
