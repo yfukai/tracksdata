@@ -9,7 +9,6 @@ import rustworkx as rx
 
 from tracksdata.attrs import AttrComparison, split_attr_comps
 from tracksdata.constants import DEFAULT_ATTR_KEYS
-from tracksdata.functional._rx import _assign_tracklet_ids
 from tracksdata.graph._base_graph import BaseGraph
 from tracksdata.graph._mapped_graph_mixin import MappedGraphMixin
 from tracksdata.graph.filters._base_filter import BaseFilter, cache_method
@@ -321,12 +320,24 @@ class RustWorkXGraph(BaseGraph):
         self._overlaps: list[list[int, 2]] = []
 
         if rx_graph is None:
-            self._graph = rx.PyDiGraph()
+            self._graph = rx.PyDiGraph(attrs={})
             self._node_attr_keys.append(DEFAULT_ATTR_KEYS.NODE_ID)
             self._node_attr_keys.append(DEFAULT_ATTR_KEYS.T)
 
         else:
             self._graph = rx_graph
+
+            if self._graph.attrs is None:
+                self._graph.attrs = {}
+
+            elif not isinstance(self._graph.attrs, dict):
+                LOG.warning(
+                    "previous attribute %s will be added to key 'old_attrs' of `graph.metadata`",
+                    self._graph.attrs,
+                )
+                self._graph.attrs = {
+                    "old_attrs": self._graph.attrs,
+                }
 
             unique_node_attr_keys = set()
             unique_edge_attr_keys = set()
@@ -1090,6 +1101,9 @@ class RustWorkXGraph(BaseGraph):
         node_ids: list[int] | None = None,
         return_id_update: bool = False,
     ) -> rx.PyDiGraph | tuple[rx.PyDiGraph, pl.DataFrame]:
+        # local import to avoid circular import
+        from tracksdata.functional._rx import _assign_tracklet_ids
+
         if node_ids is not None:
             track_node_ids = set(self.tracklet_nodes(node_ids))
             return (
@@ -1303,6 +1317,16 @@ class RustWorkXGraph(BaseGraph):
         Return the edge id between two nodes.
         """
         return self.rx_graph.get_edge_data(source_id, target_id)[DEFAULT_ATTR_KEYS.EDGE_ID]
+
+    @property
+    def metadata(self) -> dict[str, Any]:
+        return self._graph.attrs
+
+    def update_metadata(self, **kwargs) -> None:
+        self._graph.attrs.update(kwargs)
+
+    def remove_metadata(self, key: str) -> None:
+        self._graph.attrs.pop(key, None)
 
 
 class IndexedRXGraph(RustWorkXGraph, MappedGraphMixin):

@@ -2089,6 +2089,11 @@ def test_geff_roundtrip(graph_backend: BaseGraph) -> None:
 
     graph_backend.add_edge_attr_key("weight", 0.0)
 
+    graph_backend.update_metadata(
+        shape=[1, 25, 25],
+        path="path/to/image.ome.zarr",
+    )
+
     node1 = graph_backend.add_node(
         {
             "t": 0,
@@ -2139,6 +2144,12 @@ def test_geff_roundtrip(graph_backend: BaseGraph) -> None:
 
     geff_graph, _ = IndexedRXGraph.from_geff(output_store)
 
+    assert "geff" in geff_graph.metadata
+
+    # geff metadata was not stored in original graph
+    geff_graph.metadata.pop("geff")
+    assert geff_graph.metadata == graph_backend.metadata
+
     assert geff_graph.num_nodes == 3
     assert geff_graph.num_edges == 2
 
@@ -2155,3 +2166,49 @@ def test_geff_roundtrip(graph_backend: BaseGraph) -> None:
         geff_graph.rx_graph,
     )
     # Ensure SQLGraph matches RX behavior as well
+
+
+def test_metadata_multiple_dtypes(graph_backend: BaseGraph) -> None:
+    """Test metadata with various datatypes."""
+    # Test basic types, None, nested structures, and numpy arrays
+    test_metadata = {
+        "string": "test_value",
+        "integer": 42,
+        "float": 3.14159,
+        "boolean": True,
+        "none_value": None,
+        "list_simple": [1, 2, 3],
+        "list_nested": [[1, 2], [3, 4], [5, 6]],
+        "dict_simple": {"a": 1, "b": 2},
+        "dict_nested": {"outer": {"inner": [1, 2, 3]}, "value": 42},
+        "mixed_list": [1, "two", 3.0, None, {"key": "value"}],
+        "numpy_list": [1.0, 2.0, 3.0],  # Will be serialized as JSON list
+    }
+
+    # Update metadata with all test values
+    graph_backend.update_metadata(**test_metadata)
+
+    # Retrieve and verify
+    retrieved = graph_backend.metadata
+
+    for key, expected_value in test_metadata.items():
+        assert key in retrieved, f"Key '{key}' not found in metadata"
+        assert retrieved[key] == expected_value, f"Value mismatch for '{key}': {retrieved[key]} != {expected_value}"
+
+    # Test updating existing keys
+    graph_backend.update_metadata(string="updated_value", new_key="new_value")
+    retrieved = graph_backend.metadata
+
+    assert retrieved["string"] == "updated_value"
+    assert retrieved["new_key"] == "new_value"
+    assert retrieved["integer"] == 42  # Other values unchanged
+
+    # Testing removing metadata
+    graph_backend.remove_metadata("string")
+    retrieved = graph_backend.metadata
+    assert "string" not in retrieved
+
+    graph_backend.remove_metadata("mixed_list")
+    retrieved = graph_backend.metadata
+    assert "string" not in retrieved
+    assert "mixed_list" not in retrieved

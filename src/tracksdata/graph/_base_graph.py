@@ -1305,9 +1305,12 @@ class BaseGraph(abc.ABC):
             LOG.warning("The graph is not a directed graph, converting to directed graph.")
             rx_graph = rx_graph.to_directed()
 
+        node_id_map = rx_graph.attrs["to_rx_id_map"]
+        rx_graph.attrs = {"geff": rx_graph.attrs, **rx_graph.attrs["extra"].pop("tracksdata", {})}
+
         indexed_graph = IndexedRXGraph(
             rx_graph=rx_graph,
-            node_id_map=rx_graph.attrs["to_rx_id_map"],
+            node_id_map=node_id_map,
             **kwargs,
         )
 
@@ -1381,12 +1384,18 @@ class BaseGraph(abc.ABC):
                 for k, v in edge_attrs.to_dict().items()
             }
 
+            td_metadata = self.metadata.copy()
+            td_metadata.pop("geff", None)  # avoid geff being written multiple times
+
             geff_metadata = geff.GeffMetadata(
                 directed=True,
                 axes=axes,
                 node_props_metadata=node_props_metadata,
                 edge_props_metadata=edge_props_metadata,
                 track_node_props=track_node_props,
+                extra={
+                    "tracksdata": td_metadata,
+                },
             )
 
         node_dict = {
@@ -1509,3 +1518,57 @@ class NodeInterface:
             .rows(named=True)[0]
         )
         return data
+
+    @property
+    @abc.abstractmethod
+    def metadata(self) -> dict[str, Any]:
+        """
+        Return the metadata of the graph.
+
+        Returns
+        -------
+        dict[str, Any]
+            The metadata of the graph as a dictionary.
+
+        Examples
+        --------
+        ```python
+        metadata = graph.metadata
+        print(metadata["shape"])
+        ```
+        """
+
+    @abc.abstractmethod
+    def update_metadata(self, **kwargs) -> None:
+        """
+        Set or update metadata for the graph.
+
+        Parameters
+        ----------
+        **kwargs : Any
+            The metadata items to set by key. Values will be stored as JSON.
+
+        Examples
+        --------
+        ```python
+        graph.update_metadata(shape=[1, 25, 25], path="path/to/image.ome.zarr")
+        graph.update_metadata(description="Tracking data from experiment 1")
+        ```
+        """
+
+    @abc.abstractmethod
+    def remove_metadata(self, key: str) -> None:
+        """
+        Remove a metadata key from the graph.
+
+        Parameters
+        ----------
+        key : str
+            The key of the metadata to remove.
+
+        Examples
+        --------
+        ```python
+        graph.remove_metadata("shape")
+        ```
+        """
