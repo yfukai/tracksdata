@@ -44,6 +44,7 @@ def test_graph_array_view_init(graph_backend: BaseGraph) -> None:
     assert array_view.dtype == get_options().gav_default_dtype
     assert array_view.ndim == 3
     assert len(array_view) == 10
+    assert array_view.size == 10 * 100 * 100
 
 
 def test_graph_array_view_init_invalid_attr_key(graph_backend: BaseGraph) -> None:

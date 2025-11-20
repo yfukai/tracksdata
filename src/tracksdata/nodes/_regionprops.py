@@ -1,10 +1,10 @@
 from collections.abc import Callable
+from functools import partial
 from typing import Any
 
 import numpy as np
 from numpy.typing import NDArray
 from skimage.measure._regionprops import RegionProperties, regionprops
-from toolz import curry
 from typing_extensions import override
 
 from tracksdata.constants import DEFAULT_ATTR_KEYS
@@ -93,6 +93,12 @@ class RegionPropsNodes(BaseNodesOperator):
     ):
         super().__init__()
         self._extra_properties = extra_properties or []
+        if "centroid" in self._extra_properties:
+            raise ValueError(
+                "`centroid` is not supported as an extra property. It's already included by default as (z), y, x."
+            )
+        if "bbox" in self._extra_properties:
+            raise ValueError("`bbox` is not supported as an extra property. It's already included by default.")
         self._spacing = spacing
 
     def _axis_names(self, labels: NDArray[np.integer]) -> list[str]:
@@ -222,6 +228,9 @@ class RegionPropsNodes(BaseNodesOperator):
         axis_names = self._axis_names(labels)
         self._init_node_attrs(graph, axis_names, ndims=labels.ndim)
 
+        if "shape" not in graph.metadata:
+            graph.update_metadata(shape=labels.shape)
+
         if t is None:
             time_points = range(labels.shape[0])
         else:
@@ -229,7 +238,7 @@ class RegionPropsNodes(BaseNodesOperator):
 
         node_ids = []
         for nodes_data in multiprocessing_apply(
-            func=curry(self._nodes_per_time, labels=labels, intensity_image=intensity_image),
+            func=partial(self._nodes_per_time, labels=labels, intensity_image=intensity_image),
             sequence=time_points,
             desc="Adding region properties nodes",
         ):

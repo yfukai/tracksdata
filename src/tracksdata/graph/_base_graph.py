@@ -12,11 +12,16 @@ import rustworkx as rx
 from geff.core_io import construct_var_len_props, write_arrays
 from geff_spec import Axis, GeffMetadata, PropMetadata
 from numpy.typing import ArrayLike
+from psygnal import Signal
 from zarr.storage import StoreLike
 
 from tracksdata.attrs import AttrComparison, NodeAttr
 from tracksdata.constants import DEFAULT_ATTR_KEYS
-from tracksdata.utils._dtypes import column_to_numpy, polars_dtype_to_numpy_dtype
+from tracksdata.utils._dtypes import (
+    column_to_numpy,
+    infer_default_value,
+    polars_dtype_to_numpy_dtype,
+)
 from tracksdata.utils._logging import LOG
 from tracksdata.utils._multiprocessing import multiprocessing_apply
 
@@ -35,6 +40,9 @@ class BaseGraph(abc.ABC):
     """
     Base class for a graph backend.
     """
+
+    node_added = Signal(int)
+    node_removed = Signal(int)
 
     @property
     def supports_custom_indices(self) -> bool:
@@ -373,12 +381,50 @@ class BaseGraph(abc.ABC):
         """
         return False
 
+    @overload
+    def successors(
+        self,
+        node_ids: int,
+        attr_keys: Sequence[str] | str | None = ...,
+        *,
+        return_attrs: Literal[True],
+    ) -> pl.DataFrame: ...
+
+    @overload
+    def successors(
+        self,
+        node_ids: list[int],
+        attr_keys: Sequence[str] | str | None = ...,
+        *,
+        return_attrs: Literal[True],
+    ) -> dict[int, pl.DataFrame]: ...
+
+    @overload
+    def successors(
+        self,
+        node_ids: int,
+        attr_keys: Sequence[str] | str | None = ...,
+        *,
+        return_attrs: Literal[False] = False,
+    ) -> list[int]: ...
+
+    @overload
+    def successors(
+        self,
+        node_ids: list[int],
+        attr_keys: Sequence[str] | str | None = ...,
+        *,
+        return_attrs: Literal[False] = False,
+    ) -> dict[int, list[int]]: ...
+
     @abc.abstractmethod
     def successors(
         self,
         node_ids: list[int] | int,
         attr_keys: Sequence[str] | str | None = None,
-    ) -> dict[int, pl.DataFrame] | pl.DataFrame:
+        *,
+        return_attrs: bool = False,
+    ) -> dict[int, pl.DataFrame] | pl.DataFrame | dict[int, list[int]] | list[int]:
         """
         Get the sucessors of a list of nodes.
 
@@ -387,21 +433,65 @@ class BaseGraph(abc.ABC):
         node_ids : list[int] | int
             The IDs of the nodes to get the sucessors for.
         attr_keys : Sequence[str] | str | None
-            The attribute keys to get.
-            If None, all attributesare used.
+            The attribute keys to retrieve when ``return_attrs`` is True.
+            If None, all attributes are included.
+        return_attrs : bool, default False
+            Whether to return node attributes in a `polars.DataFrame`. When False only
+            the successor node IDs are returned.
 
         Returns
         -------
-        dict[int, pl.DataFrame] | pl.DataFrame
-            The sucessors of the nodes indexed by node ID if a list of nodes is provided.
+        dict[int, pl.DataFrame] | pl.DataFrame | dict[int, list[int]] | list[int]
+            When ``return_attrs`` is True, returns a DataFrame for a single node or a dictionary
+            mapping each node ID to a DataFrame of neighbor attributes. Otherwise returns a list
+            of neighbor node IDs for a single node or a dictionary mapping each node ID to its
+            neighbor ID list.
         """
+
+    @overload
+    def predecessors(
+        self,
+        node_ids: int,
+        attr_keys: Sequence[str] | str | None = ...,
+        *,
+        return_attrs: Literal[True],
+    ) -> pl.DataFrame: ...
+
+    @overload
+    def predecessors(
+        self,
+        node_ids: list[int],
+        attr_keys: Sequence[str] | str | None = ...,
+        *,
+        return_attrs: Literal[True],
+    ) -> dict[int, pl.DataFrame]: ...
+
+    @overload
+    def predecessors(
+        self,
+        node_ids: int,
+        attr_keys: Sequence[str] | str | None = ...,
+        *,
+        return_attrs: Literal[False] = False,
+    ) -> list[int]: ...
+
+    @overload
+    def predecessors(
+        self,
+        node_ids: list[int],
+        attr_keys: Sequence[str] | str | None = ...,
+        *,
+        return_attrs: Literal[False] = False,
+    ) -> dict[int, list[int]]: ...
 
     @abc.abstractmethod
     def predecessors(
         self,
         node_ids: list[int] | int,
         attr_keys: Sequence[str] | str | None = None,
-    ) -> dict[int, pl.DataFrame] | pl.DataFrame:
+        *,
+        return_attrs: bool = False,
+    ) -> dict[int, pl.DataFrame] | pl.DataFrame | dict[int, list[int]] | list[int]:
         """
         Get the predecessors of a list of nodes.
 
@@ -410,13 +500,19 @@ class BaseGraph(abc.ABC):
         node_ids : list[int] | int
             The IDs of the nodes to get the predecessors for.
         attr_keys : Sequence[str] | str | None
-            The attribute keys to get.
-            If None, all attributesare used.
+            The attribute keys to retrieve when ``return_attrs`` is True.
+            If None, all attributes are included.
+        return_attrs : bool, default False
+            Whether to return node attributes in a `polars.DataFrame`. When False only
+            the predecessor node IDs are returned.
 
         Returns
         -------
-        dict[int, pl.DataFrame] | pl.DataFrame
-            The predecessors of the nodes indexed by node ID if a list of nodes is provided.
+        dict[int, pl.DataFrame] | pl.DataFrame | dict[int, list[int]] | list[int]
+            When ``return_attrs`` is True, returns a DataFrame for a single node or a dictionary
+            mapping each node ID to a DataFrame of neighbor attributes. Otherwise returns a list
+            of neighbor node IDs for a single node or a dictionary mapping each node ID to its
+            neighbor ID list.
         """
 
     def _validate_subgraph_args(
@@ -642,8 +738,9 @@ class BaseGraph(abc.ABC):
 
     def to_ctc(
         self,
-        shape: tuple[int, ...],
         output_dir: str | Path,
+        *,
+        shape: tuple[int, ...] | None = None,
         tracklet_id_key: str = DEFAULT_ATTR_KEYS.TRACKLET_ID,
         overwrite: bool = False,
     ) -> None:
@@ -652,10 +749,11 @@ class BaseGraph(abc.ABC):
 
         Parameters
         ----------
-        shape : tuple[int, ...]
-            The shape of the label images (T, (Z), Y, X)
         output_dir : str | Path
             The directory to save the graph to.
+        shape : tuple[int, ...]
+            The shape of the label images (T, (Z), Y, X).
+            If None, the shape is inferred from the graph metadata `shape` key.
         tracklet_id_key : str
             The attribute key to use for the track IDs.
         overwrite : bool
@@ -856,7 +954,8 @@ class BaseGraph(abc.ABC):
 
         for col in node_attrs.columns:
             if col != DEFAULT_ATTR_KEYS.T:
-                graph.add_node_attr_key(col, node_attrs[col].first())
+                first_value = node_attrs[col].first()
+                graph.add_node_attr_key(col, infer_default_value(first_value))
 
         if graph.supports_custom_indices:
             new_node_ids = graph.bulk_add_nodes(
@@ -1179,11 +1278,11 @@ class BaseGraph(abc.ABC):
 
             # Successors: only nodes with exactly one successor
             succ_map = self.successors(node_ids=list(active_ids))
-            successors = [int(df[DEFAULT_ATTR_KEYS.NODE_ID].first()) for df in succ_map.values() if len(df) == 1]
+            successors = [int(nodes[0]) for nodes in succ_map.values() if len(nodes) == 1]
 
             # Predecessors: only nodes with exactly one predecessor and predecessor out_degree == 1
             pred_map = self.predecessors(node_ids=list(active_ids))
-            predecessors = [int(df[DEFAULT_ATTR_KEYS.NODE_ID].first()) for df in pred_map.values() if len(df) == 1]
+            predecessors = [int(nodes[0]) for nodes in pred_map.values() if len(nodes) == 1]
 
             if len(predecessors) > 0:
                 out_degrees = self.out_degree(predecessors)
@@ -1300,9 +1399,12 @@ class BaseGraph(abc.ABC):
             LOG.warning("The graph is not a directed graph, converting to directed graph.")
             rx_graph = rx_graph.to_directed()
 
+        node_id_map = rx_graph.attrs["to_rx_id_map"]
+        rx_graph.attrs = {"geff": rx_graph.attrs, **rx_graph.attrs["extra"].pop("tracksdata", {})}
+
         indexed_graph = IndexedRXGraph(
             rx_graph=rx_graph,
-            node_id_map=rx_graph.attrs["to_rx_id_map"],
+            node_id_map=node_id_map,
             **kwargs,
         )
 
@@ -1376,12 +1478,18 @@ class BaseGraph(abc.ABC):
                 for k, v in edge_attrs.to_dict().items()
             }
 
+            td_metadata = self.metadata.copy()
+            td_metadata.pop("geff", None)  # avoid geff being written multiple times
+
             geff_metadata = geff.GeffMetadata(
                 directed=True,
                 axes=axes,
                 node_props_metadata=node_props_metadata,
                 edge_props_metadata=edge_props_metadata,
                 track_node_props=track_node_props,
+                extra={
+                    "tracksdata": td_metadata,
+                },
             )
 
         node_dict = {
@@ -1504,3 +1612,57 @@ class NodeInterface:
             .rows(named=True)[0]
         )
         return data
+
+    @property
+    @abc.abstractmethod
+    def metadata(self) -> dict[str, Any]:
+        """
+        Return the metadata of the graph.
+
+        Returns
+        -------
+        dict[str, Any]
+            The metadata of the graph as a dictionary.
+
+        Examples
+        --------
+        ```python
+        metadata = graph.metadata
+        print(metadata["shape"])
+        ```
+        """
+
+    @abc.abstractmethod
+    def update_metadata(self, **kwargs) -> None:
+        """
+        Set or update metadata for the graph.
+
+        Parameters
+        ----------
+        **kwargs : Any
+            The metadata items to set by key. Values will be stored as JSON.
+
+        Examples
+        --------
+        ```python
+        graph.update_metadata(shape=[1, 25, 25], path="path/to/image.ome.zarr")
+        graph.update_metadata(description="Tracking data from experiment 1")
+        ```
+        """
+
+    @abc.abstractmethod
+    def remove_metadata(self, key: str) -> None:
+        """
+        Remove a metadata key from the graph.
+
+        Parameters
+        ----------
+        key : str
+            The key of the metadata to remove.
+
+        Examples
+        --------
+        ```python
+        graph.remove_metadata("shape")
+        ```
+        """
