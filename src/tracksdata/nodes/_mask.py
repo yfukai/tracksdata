@@ -20,7 +20,7 @@ class _MaskRegionProperties:
     This is used since regionprops returns bbox coordinates relative to the mask.
     """
 
-    def __init__(self, props, bbox: NDArray[np.int64]):
+    def __init__(self, props: RegionProperties, bbox: NDArray[np.int64]):
         self._props = props
         self._bbox = tuple(bbox.tolist())
 
