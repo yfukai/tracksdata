@@ -404,7 +404,7 @@ class Mask:
         if len(props) != 1:
             raise ValueError("Expected a single region in mask to compute regionprops.")
 
-        return _MaskRegionProperties(props[0], self._bbox)
+        return MaskRegionProperties(props[0], self._bbox)
 
     @cached_property
     def size(self) -> int:
