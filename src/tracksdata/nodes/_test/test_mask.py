@@ -19,7 +19,7 @@ def test_mask_regionprops_bbox_aware() -> None:
     mask_array = np.array([[False, True], [True, False]], dtype=bool)
     bbox = np.array([5, 10, 7, 12])
 
-    props = Mask(mask_array, bbox).regionprops
+    props = Mask(mask_array, bbox).regionprops()
 
     np.testing.assert_array_equal(props.bbox, bbox)
     assert props.area == 2
@@ -37,7 +37,7 @@ def test_mask_regionprops_bbox_aware_3d() -> None:
     mask_array[1, 1, 0] = True
     bbox = np.array([3, 4, 5, 5, 6, 7])
 
-    props = Mask(mask_array, bbox).regionprops
+    props = Mask(mask_array, bbox).regionprops()
 
     np.testing.assert_array_equal(props.bbox, bbox)
     assert props.area == 2
@@ -54,7 +54,7 @@ def test_mask_regionprops_empty() -> None:
     bbox = np.array([0, 0, 2, 2])
 
     with pytest.raises(ValueError, match="single region"):
-        _ = Mask(mask_array, bbox).regionprops
+        _ = Mask(mask_array, bbox).regionprops()
 
 
 def test_mask_getstate_setstate() -> None:
