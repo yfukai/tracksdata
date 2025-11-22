@@ -13,7 +13,7 @@ from tracksdata.functional._iou import fast_intersection_with_bbox, fast_iou_wit
 from tracksdata.nodes._generic_nodes import GenericFuncNodeAttrs
 
 
-class _MaskRegionProperties:
+class MaskRegionProperties:
     """
     Lightweight wrapper around skimage's RegionProperties that adjusts
     bounding box coordinates to the absolute image frame.
