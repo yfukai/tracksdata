@@ -16,25 +16,6 @@ from tracksdata.functional._iou import fast_intersection_with_bbox, fast_iou_wit
 from tracksdata.nodes._generic_nodes import GenericFuncNodeAttrs
 
 
-class MaskRegionProperties:
-    """
-    Lightweight wrapper around skimage's RegionProperties that adjusts
-    bounding box coordinates to the absolute image frame.
-    This is used since regionprops returns bbox coordinates relative to the mask.
-    """
-
-    def __init__(self, props: "RegionProperties", bbox: NDArray[np.int64]):
-        self._props = props
-        self._bbox = tuple(bbox.tolist())
-
-    def __getattr__(self, name: str) -> Any:
-        return getattr(self._props, name)
-
-    @property
-    def bbox(self) -> tuple[int, ...]:
-        return self._bbox
-
-
 @lru_cache(maxsize=5)
 def _nd_sphere(
     radius: int,
@@ -389,12 +370,12 @@ class Mask:
         if image_shape is not None:
             self._crop_overhang(image_shape)
 
-    def regionprops(self):
+    def regionprops(self) -> "RegionProperties":
         """
         Compute scikit-image regionprops for this mask.
 
         The computation is aware of the mask bounding box, so coordinate-based
-        properties (e.g. centroid, coords, bbox) are returned in absolute
+        properties (e.g. centroid, coords) are returned in absolute
         image coordinates.
         """
         props = regionprops(
@@ -406,7 +387,7 @@ class Mask:
         if len(props) != 1:
             raise ValueError("Expected a single region in mask to compute regionprops.")
 
-        return MaskRegionProperties(props[0], self._bbox)
+        return props[0]
 
     @cached_property
     def size(self) -> int:

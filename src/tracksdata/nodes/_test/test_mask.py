@@ -21,7 +21,6 @@ def test_mask_regionprops_bbox_aware() -> None:
 
     props = Mask(mask_array, bbox).regionprops()
 
-    np.testing.assert_array_equal(props.bbox, bbox)
     assert props.area == 2
     np.testing.assert_allclose(props.centroid, np.array([5.5, 10.5]))
 
@@ -39,7 +38,6 @@ def test_mask_regionprops_bbox_aware_3d() -> None:
 
     props = Mask(mask_array, bbox).regionprops()
 
-    np.testing.assert_array_equal(props.bbox, bbox)
     assert props.area == 2
     np.testing.assert_allclose(props.centroid, np.array([3.5, 4.5, 5.5]))
 
