@@ -568,13 +568,8 @@ class SQLGraph(BaseGraph):
         have unique IDs.
         """
         with Session(self._engine) as session:
-            # NOTE: SQLAlchemy returns Row objects when iterating, so we select
-            # scalars to ensure the keys are the raw integer time values.
-            for t in session.scalars(sa.select(self.Node.t).distinct()):
-                max_id = session.scalar(sa.select(sa.func.max(self.Node.node_id)).where(self.Node.t == t))
-                if max_id is None:
-                    max_id = (t * self.node_id_time_multiplier) - 1
-                self._max_id_per_time[int(t)] = int(max_id)
+            stmt = sa.select(self.Node.t, sa.func.max(self.Node.node_id)).group_by(self.Node.t)
+            self._max_id_per_time = {int(time): int(max_id) for time, max_id in session.execute(stmt).all()}
 
     def filter(
         self,
