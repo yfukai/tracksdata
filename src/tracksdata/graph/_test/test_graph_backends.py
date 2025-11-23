@@ -1517,6 +1517,8 @@ def test_sql_graph_max_id_restored_per_timepoint(tmp_path: Path) -> None:
     db_path = tmp_path / "id_restore.db"
     graph = SQLGraph("sqlite", str(db_path))
 
+    _ = graph.add_node({DEFAULT_ATTR_KEYS.T: 1})
+    _ = graph.add_node({DEFAULT_ATTR_KEYS.T: 2})
     first_id = graph.add_node({DEFAULT_ATTR_KEYS.T: 1})
     graph._engine.dispose()
 
