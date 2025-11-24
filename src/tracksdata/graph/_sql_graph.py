@@ -568,8 +568,8 @@ class SQLGraph(BaseGraph):
         have unique IDs.
         """
         with Session(self._engine) as session:
-            for t in session.query(self.Node.t).distinct():
-                self._max_id_per_time[t] = int(session.query(sa.func.max(self.Node.node_id)).scalar())
+            stmt = sa.select(self.Node.t, sa.func.max(self.Node.node_id)).group_by(self.Node.t)
+            self._max_id_per_time = {int(time): int(max_id) for time, max_id in session.execute(stmt).all()}
 
     def filter(
         self,
