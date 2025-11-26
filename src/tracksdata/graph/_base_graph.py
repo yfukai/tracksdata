@@ -26,11 +26,15 @@ from tracksdata.utils._logging import LOG
 from tracksdata.utils._multiprocessing import multiprocessing_apply
 
 if TYPE_CHECKING:
+    from traccuracy import TrackingGraph
+
     from tracksdata.graph.filters._base_filter import BaseFilter
     from tracksdata.graph.filters._spatial_filter import (
         BBoxSpatialFilter,
         SpatialFilter,
     )
+else:
+    TrackingGraph = Any
 
 
 T = TypeVar("T", bound="BaseGraph")
@@ -1342,31 +1346,42 @@ class BaseGraph(abc.ABC):
         if ignore_tracklet_id is not None:
             nodes_df = nodes_df.filter(pl.col(tracklet_id_key) != ignore_tracklet_id)
 
-        nodes_df = nodes_df.unique(subset=[tracklet_id_key])
+        track_ids = nodes_df[tracklet_id_key].unique().to_list()
+        tracklet_graph = rx.PyDiGraph()
 
-        graph = rx.PyDiGraph()
-        nodes_df = nodes_df.with_columns(
-            pl.Series(
-                np.asarray(graph.add_nodes_from(nodes_df[tracklet_id_key].to_list()), dtype=int),
-            ).alias("rx_id"),
+        rx_ids = np.asarray(tracklet_graph.add_nodes_from(track_ids), dtype=int)
+        track_id_to_rx_id = dict(zip(track_ids, rx_ids, strict=True))
+
+        src_col = f"source_{tracklet_id_key}"
+        tgt_col = f"target_{tracklet_id_key}"
+
+        edges_df = (
+            join_node_attrs_to_edges(
+                nodes_df,
+                edges_df,
+                how="right",
+            )
+            .filter(pl.col(src_col) != pl.col(tgt_col))
+            .with_columns(
+                pl.col(src_col)
+                .map_elements(track_id_to_rx_id.__getitem__, return_dtype=pl.Int64)
+                .alias("source_rx_id"),
+                pl.col(tgt_col)
+                .map_elements(track_id_to_rx_id.__getitem__, return_dtype=pl.Int64)
+                .alias("target_rx_id"),
+            )
         )
 
-        edges_df = join_node_attrs_to_edges(
-            nodes_df,
-            edges_df,
-            how="right",
-        ).filter(~pl.col(DEFAULT_ATTR_KEYS.EDGE_ID).is_null())
-
-        graph.add_edges_from(
+        tracklet_graph.add_edges_from(
             zip(
                 edges_df["source_rx_id"].to_list(),
                 edges_df["target_rx_id"].to_list(),
-                zip(edges_df["source_tracklet_id"].to_list(), edges_df["target_tracklet_id"].to_list(), strict=False),
+                zip(edges_df[src_col].to_list(), edges_df[tgt_col].to_list(), strict=False),
                 strict=True,
             )
         )
 
-        return graph
+        return tracklet_graph
 
     @classmethod
     def from_geff(
@@ -1521,6 +1536,24 @@ class BaseGraph(abc.ABC):
             metadata=geff_metadata,
             zarr_format=zarr_format,
         )
+
+    def to_traccuracy_graph(self, array_view_kwargs: dict[str, Any] | None = None) -> "TrackingGraph":
+        """
+        Convert the graph to a `traccuracy.TrackingGraph`.
+
+        Parameters
+        ----------
+        array_view_kwargs : dict[str, Any] | None
+            Additional keyword arguments to pass to the `GraphArrayView` constructor used to create the segmentation.
+
+        Returns
+        -------
+        TrackingGraph
+            A traccuracy graph.
+        """
+        from tracksdata.metrics._traccuracy import to_traccuracy_graph
+
+        return to_traccuracy_graph(self, array_view_kwargs=array_view_kwargs)
 
     @abc.abstractmethod
     def has_edge(self, source_id: int, target_id: int) -> bool:

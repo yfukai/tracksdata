@@ -1846,18 +1846,20 @@ def test_tracklet_graph_basic(graph_backend: BaseGraph) -> None:
     graph_backend.add_node_attr_key(DEFAULT_ATTR_KEYS.TRACKLET_ID, -1)
 
     # Create nodes with different track IDs
-    node1 = graph_backend.add_node({"t": 0, DEFAULT_ATTR_KEYS.TRACKLET_ID: 1})
-    node2 = graph_backend.add_node({"t": 1, DEFAULT_ATTR_KEYS.TRACKLET_ID: 2})
-    node3 = graph_backend.add_node({"t": 1, DEFAULT_ATTR_KEYS.TRACKLET_ID: 3})
-    node4 = graph_backend.add_node({"t": 2, DEFAULT_ATTR_KEYS.TRACKLET_ID: 2})
-    node5 = graph_backend.add_node({"t": 2, DEFAULT_ATTR_KEYS.TRACKLET_ID: 3})
-    node6 = graph_backend.add_node({"t": 0, DEFAULT_ATTR_KEYS.TRACKLET_ID: 4})
-    node7 = graph_backend.add_node({"t": 1, DEFAULT_ATTR_KEYS.TRACKLET_ID: 4})
-    node8 = graph_backend.add_node({"t": 2, DEFAULT_ATTR_KEYS.TRACKLET_ID: 4})
+    node0 = graph_backend.add_node({"t": 0, DEFAULT_ATTR_KEYS.TRACKLET_ID: 1})
+    node1 = graph_backend.add_node({"t": 1, DEFAULT_ATTR_KEYS.TRACKLET_ID: 1})
+    node2 = graph_backend.add_node({"t": 2, DEFAULT_ATTR_KEYS.TRACKLET_ID: 2})
+    node3 = graph_backend.add_node({"t": 2, DEFAULT_ATTR_KEYS.TRACKLET_ID: 3})
+    node4 = graph_backend.add_node({"t": 3, DEFAULT_ATTR_KEYS.TRACKLET_ID: 2})
+    node5 = graph_backend.add_node({"t": 3, DEFAULT_ATTR_KEYS.TRACKLET_ID: 3})
+    node6 = graph_backend.add_node({"t": 1, DEFAULT_ATTR_KEYS.TRACKLET_ID: 4})
+    node7 = graph_backend.add_node({"t": 2, DEFAULT_ATTR_KEYS.TRACKLET_ID: 4})
+    node8 = graph_backend.add_node({"t": 3, DEFAULT_ATTR_KEYS.TRACKLET_ID: 4})
 
     graph_backend.add_edge_attr_key("weight", 0.0)
 
     # Add edges within tracks (will be filtered out)
+    graph_backend.add_edge(node0, node1, {"weight": 0.5})
     graph_backend.add_edge(node1, node2, {"weight": 0.8})
     graph_backend.add_edge(node1, node3, {"weight": 0.9})
     graph_backend.add_edge(node2, node4, {"weight": 0.5})
@@ -2153,7 +2155,7 @@ def test_geff_roundtrip(graph_backend: BaseGraph) -> None:
     graph_backend.add_node_attr_key("x", 0.0)
     graph_backend.add_node_attr_key("y", 0.0)
     graph_backend.add_node_attr_key("z", 0.0)
-    graph_backend.add_node_attr_key(DEFAULT_ATTR_KEYS.BBOX, None)
+    graph_backend.add_node_attr_key(DEFAULT_ATTR_KEYS.BBOX, np.array([0, 0, 1, 1], dtype=int))
     graph_backend.add_node_attr_key(DEFAULT_ATTR_KEYS.MASK, None)
     graph_backend.add_node_attr_key(DEFAULT_ATTR_KEYS.TRACKLET_ID, -1)
     graph_backend.add_node_attr_key("ndfeature", np.asarray([[1.0], [2.0], [3.0]]))
@@ -2321,3 +2323,83 @@ def test_pickle_roundtrip(graph_backend: BaseGraph) -> None:
 
     assert unpickled_graph.node_attr_keys == graph_backend.node_attr_keys
     assert unpickled_graph.edge_attr_keys == graph_backend.edge_attr_keys
+
+
+@pytest.mark.slow
+def test_sql_graph_huge_update() -> None:
+    # test is only executed if `--slow` is passed to pytest
+    graph = SQLGraph("sqlite", ":memory:")
+
+    n_nodes = 30_000_000
+    random_t = np.random.randint(0, 1000, n_nodes).tolist()
+    random_x = np.random.rand(n_nodes).tolist()
+    graph.bulk_add_nodes([{"t": t} for t in random_t])
+    graph.add_node_attr_key("x", -1.0)
+
+    # testing with varying values
+    graph.update_node_attrs(
+        attrs={"x": random_x},
+        node_ids=graph.node_ids(),
+    )
+
+    # testing with scalar values
+    graph.update_node_attrs(
+        attrs={"x": 1.0},
+        node_ids=graph.node_ids(),
+    )
+
+
+def test_to_traccuracy_graph(graph_backend: BaseGraph) -> None:
+    pytest.importorskip("traccuracy")
+    from traccuracy import run_metrics
+    from traccuracy.matchers import CTCMatcher
+    from traccuracy.metrics import CTCMetrics
+
+    # Create first graph (self) with masks
+    graph_backend.add_node_attr_key("x", 0.0)
+    graph_backend.add_node_attr_key("y", 0.0)
+    graph_backend.add_node_attr_key(DEFAULT_ATTR_KEYS.MASK, None)
+    graph_backend.add_node_attr_key(DEFAULT_ATTR_KEYS.BBOX, np.zeros(4, dtype=int))
+    graph_backend.update_metadata(
+        shape=[3, 25, 25],
+    )
+
+    # Create masks for first graph
+    mask1_data = np.array([[True, True], [True, True]], dtype=bool)
+    mask1 = Mask(mask1_data, bbox=np.array([0, 0, 2, 2]))
+
+    mask2_data = np.array([[True, False], [True, False]], dtype=bool)
+    mask2 = Mask(mask2_data, bbox=np.array([10, 10, 12, 12]))
+
+    mask3_data = np.array([[True, True, True, True, True]], dtype=bool)
+    mask3 = Mask(mask3_data, bbox=np.array([20, 20, 21, 25]))
+
+    # Add nodes to first graph
+    node1 = graph_backend.add_node(
+        {"t": 0, "x": 1.0, "y": 1.0, DEFAULT_ATTR_KEYS.MASK: mask1, DEFAULT_ATTR_KEYS.BBOX: mask1.bbox}
+    )
+    node2 = graph_backend.add_node(
+        {"t": 1, "x": 2.0, "y": 2.0, DEFAULT_ATTR_KEYS.MASK: mask2, DEFAULT_ATTR_KEYS.BBOX: mask2.bbox}
+    )
+    node3 = graph_backend.add_node(
+        {"t": 2, "x": 3.0, "y": 3.0, DEFAULT_ATTR_KEYS.MASK: mask3, DEFAULT_ATTR_KEYS.BBOX: mask3.bbox}
+    )
+
+    graph_backend.add_edge_attr_key("weight", 0.0)
+    graph_backend.add_edge(node1, node2, {"weight": 0.5})
+    graph_backend.add_edge(node2, node3, {"weight": 0.3})
+    graph_backend.add_edge(node1, node3, {"weight": 0.3})
+
+    traccuracy_graph = graph_backend.to_traccuracy_graph()
+
+    # trivial matching with itself
+    ctc_results, _ = run_metrics(
+        gt_data=traccuracy_graph,
+        pred_data=traccuracy_graph,
+        matcher=CTCMatcher(),
+        metrics=[CTCMetrics()],
+    )
+    ctc_results = ctc_results[0]["results"]
+
+    for name in ["TRA", "DET", "LNK"]:
+        assert ctc_results[name] == 1.0

@@ -59,7 +59,8 @@ test = [
   "pytest>=7.0",
   "pytest-cov",
   "pytest-html",
-  "py-ctcmetrics",
+  "py-ctcmetrics==1.2.2",
+  "traccuracy>=0.4.2",
   "pytest-qt",
   "napari",
   "pyqt5",
@@ -72,6 +73,7 @@ docs = [
   "mkdocstrings-python-xref",
   "mkdocs-mermaid2-plugin",
   "mike",
+  "traccuracy>=0.4.2",
 ]
 
 [project.urls]
