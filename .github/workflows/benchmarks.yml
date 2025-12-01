@@ -17,6 +17,15 @@ jobs:
       - name: Fetch main branch
         run: git fetch origin main
 
+      - name: Create local main branch for ASV
+        run: |
+          # Create local 'main' if it doesn't exist
+          if ! git show-ref --verify --quiet refs/heads/main; then
+            git branch main origin/main
+          fi
+          # Sanity check
+          git rev-parse main
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
