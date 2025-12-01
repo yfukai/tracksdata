@@ -17,7 +17,27 @@ permissions:
   id-token: write
 
 jobs:
+  python-versions:
+    runs-on: ubuntu-latest
+    outputs:
+      latest: ${{ steps.versions.outputs.latest }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - name: Load Python versions
+        id: versions
+        run: |
+          python - <<'PY'
+          import json, os
+          with open(".github/python-versions.json") as f:
+              data = json.load(f)
+          with open(os.environ["GITHUB_OUTPUT"], "a") as fh:
+              fh.write(f"latest={json.dumps(data['latest'])}\n")
+          PY
+
   build:
+    needs: python-versions
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -28,7 +48,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: ${{ needs.python-versions.outputs.latest }}
 
       # these libraries enable testing on Qt on linux
       - name: Set up Qt

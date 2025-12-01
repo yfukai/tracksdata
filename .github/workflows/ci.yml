@@ -7,7 +7,30 @@ on:
     branches: [ main ]
 
 jobs:
+  python-versions:
+    runs-on: ubuntu-latest
+    outputs:
+      latest: ${{ steps.versions.outputs.latest }}
+      test_matrix: ${{ steps.versions.outputs.test_matrix }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - name: Load Python versions
+        id: versions
+        run: |
+          python - <<'PY'
+          import json, os
+          with open(".github/python-versions.json") as f:
+              data = json.load(f)
+          out = os.environ["GITHUB_OUTPUT"]
+          with open(out, "a") as fh:
+              for key in ("latest", "test_matrix"):
+                  fh.write(f"{key}={json.dumps(data[key])}\n")
+          PY
+
   lint:
+    needs: python-versions
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
@@ -15,7 +38,7 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
-        python-version: "3.12"
+        python-version: ${{ needs.python-versions.outputs.latest }}
 
     # these libraries enable testing on Qt on linux
     - name: Set up Qt
@@ -37,11 +60,11 @@ jobs:
         uv run ruff format --check .
 
   test:
-    needs: lint
+    needs: [lint, python-versions]
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.10", "3.11", "3.12"]
+        python-version: ${{ fromJson(needs.python-versions.outputs.test_matrix) }}
 
     steps:
     - uses: actions/checkout@v4
@@ -70,7 +93,7 @@ jobs:
         run: uv run pytest --cov=tracksdata --cov-report=xml src/tracksdata
 
     - name: Upload coverage to Codecov
-      if: matrix.python-version == '3.12'
+      if: matrix.python-version == needs.python-versions.outputs.latest
       uses: codecov/codecov-action@v5
       with:
         token: ${{ secrets.CODECOV_TOKEN }}

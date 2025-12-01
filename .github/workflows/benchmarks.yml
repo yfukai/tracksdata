@@ -5,7 +5,27 @@ on:
     branches: [ main ]
 
 jobs:
+  python-versions:
+    runs-on: ubuntu-latest
+    outputs:
+      benchmarks: ${{ steps.versions.outputs.benchmarks }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - name: Load Python versions
+        id: versions
+        run: |
+          python - <<'PY'
+          import json, os
+          with open(".github/python-versions.json") as f:
+              data = json.load(f)
+          with open(os.environ["GITHUB_OUTPUT"], "a") as fh:
+              fh.write(f"benchmarks={json.dumps(data['benchmarks'])}\n")
+          PY
+
   benchmark:
+    needs: python-versions
     runs-on: ubuntu-latest
 
     steps:
@@ -21,7 +41,7 @@ jobs:
     - name: Install uv
       uses: astral-sh/setup-uv@v5
       with:
-        python-version: "3.12"
+        python-version: ${{ needs.python-versions.outputs.benchmarks }}
         enable-cache: true
 
     - name: Install dependencies
