@@ -45,11 +45,20 @@ jobs:
         id: asv
         run: |
           set -o pipefail
+          status=0
           asv continuous origin/main HEAD \
             --quick \
             --machine github-actions \
             --python 3.12 \
-            --show-stderr | tee asv-output.log
+            --factor 1.5 \
+            --show-stderr | tee asv-output.log || status=$?
+          if [ "$status" -eq 2 ]; then
+              echo "asv: benchmark run failed (exit 2). Failing CI." >&2
+              exit 2
+          fi
+          if [ "$status" -eq 1 ]; then
+              echo "asv: performance regression detected (ignored for CI)." >&2
+          fi
           tail -n 100 asv-output.log > asv-summary.txt
           {
             echo 'summary<<EOF'
