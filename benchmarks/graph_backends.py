@@ -12,8 +12,10 @@ from tracksdata.graph._base_graph import BaseGraph
 from tracksdata.nodes import RandomNodes
 from tracksdata.options import Options
 from tracksdata.solvers import NearestNeighborsSolver
+from tracksdata.utils._logging import LOG
 
 warnings.filterwarnings("ignore")
+LOG.setLevel("ERROR")
 
 N_TIME_POINTS = 50
 NODE_SIZES = (1_000, 10_000, 100_000)
@@ -101,25 +103,25 @@ class GraphBackendsBenchmark:
         return self.backend_cls()
 
     def time_graph_init(self, backend_name: str, n_nodes: int, n_workers: int) -> None:
-        with Options(n_workers=n_workers):
+        with Options(n_workers=n_workers, show_progress=False):
             self._fresh_graph()
 
     def time_random_nodes(self, backend_name: str, n_nodes: int, n_workers: int) -> None:
-        with Options(n_workers=n_workers):
+        with Options(n_workers=n_workers, show_progress=False):
             self.pipeline["random_nodes"](self.graphs["random_nodes"])
 
     def time_distance_edges(self, backend_name: str, n_nodes: int, n_workers: int) -> None:
-        with Options(n_workers=n_workers):
+        with Options(n_workers=n_workers, show_progress=False):
             self.pipeline["distance_edges"](self.graphs["distance_edges"])
 
     def time_nearest_neighbors_solver(self, backend_name: str, n_nodes: int, n_workers: int) -> None:
-        with Options(n_workers=n_workers):
+        with Options(n_workers=n_workers, show_progress=False):
             self.pipeline["nearest_neighbors_solver"](self.graphs["nearest_neighbors_solver"])
 
     def time_subgraph(self, backend_name: str, n_nodes: int, n_workers: int) -> None:
-        with Options(n_workers=n_workers):
+        with Options(n_workers=n_workers, show_progress=False):
             self.pipeline["subgraph"](self.graphs["subgraph"])
 
     def time_assign_tracks(self, backend_name: str, n_nodes: int, n_workers: int) -> None:
-        with Options(n_workers=n_workers):
+        with Options(n_workers=n_workers, show_progress=False):
             self.pipeline["assign_tracks"](self.graphs["assign_tracks"])
