@@ -89,15 +89,16 @@ class GraphBackendsBenchmark:
 
         self.graphs = {}
 
-        for target_name in self.pipeline:
-            graph = self._fresh_graph()
-            for name, func in self.pipeline.items():
-                if name == target_name:
-                    self.graphs[name] = graph
-                    break
-                res = func(graph)
-                if res is not None:
-                    graph = res
+        with Options(show_progress=False):
+            for target_name in self.pipeline:
+                graph = self._fresh_graph()
+                for name, func in self.pipeline.items():
+                    if name == target_name:
+                        self.graphs[name] = graph
+                        break
+                    res = func(graph)
+                    if res is not None:
+                        graph = res
 
     def _fresh_graph(self) -> BaseGraph:
         return self.backend_cls()
