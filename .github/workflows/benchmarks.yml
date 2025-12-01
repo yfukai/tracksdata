@@ -40,11 +40,6 @@ jobs:
           asv machine \
             --yes \
             --machine github-actions \
-            --os "Ubuntu 22.04" \
-            --arch "x86_64" \
-            --cpu "GitHub-hosted runner" \
-            --num_cpu "2" \
-            --ram "7GB"
 
       - name: Run ASV continuous benchmarks
         id: asv
