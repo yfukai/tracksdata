@@ -7,7 +7,7 @@
   "env_dir": ".asv/env",
   "results_dir": ".asv/results",
   "html_dir": ".asv/html",
-  "environment_type": "conda",
+  "environment_type": "virtualenv",
   "build_command": [],
   "pythons": [
     "3.12"
