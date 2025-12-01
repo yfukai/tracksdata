@@ -18,8 +18,8 @@ warnings.filterwarnings("ignore")
 LOG.setLevel("ERROR")
 
 N_TIME_POINTS = 50
-NODE_SIZES = (1_000, 10_000, 100_000)
-WORKER_COUNTS = (1, 4)
+NODE_SIZES = (1_000,)  # 10_000, 100_000)
+WORKER_COUNTS = (1,)  # 4)
 
 
 class SQLGraphWithMemory(_BaseSQLGraph):

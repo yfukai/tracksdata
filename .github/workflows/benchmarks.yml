@@ -67,7 +67,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Publish ASV HTML
-        run: asv publish
+        run: asv publish origin/main HEAD
 
       - name: Upload ASV report
         uses: actions/upload-artifact@v4
