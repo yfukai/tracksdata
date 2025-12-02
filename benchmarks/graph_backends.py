@@ -88,8 +88,7 @@ class GraphBackendsBenchmark:
         self.pipeline = _build_pipeline(N_TIME_POINTS, n_nodes_per_tp)
 
         self.graphs = {}
-
-        with Options(show_progress=False):
+        set_options(show_progress=False)
             for target_name in self.pipeline:
                 graph = self._fresh_graph()
                 for name, func in self.pipeline.items():
