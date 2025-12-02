@@ -10,12 +10,13 @@ from tracksdata.graph import IndexedRXGraph, RustWorkXGraph
 from tracksdata.graph import SQLGraph as _BaseSQLGraph
 from tracksdata.graph._base_graph import BaseGraph
 from tracksdata.nodes import RandomNodes
-from tracksdata.options import Options
+from tracksdata.options import Options, set_options
 from tracksdata.solvers import NearestNeighborsSolver
 from tracksdata.utils._logging import LOG
 
 warnings.filterwarnings("ignore")
 LOG.setLevel("ERROR")
+set_options(show_progress=False)
 
 N_TIME_POINTS = 50
 NODE_SIZES = (1_000, 10_000, 100_000)
@@ -88,40 +89,39 @@ class GraphBackendsBenchmark:
         self.pipeline = _build_pipeline(N_TIME_POINTS, n_nodes_per_tp)
 
         self.graphs = {}
-        set_options(show_progress=False)
-            for target_name in self.pipeline:
-                graph = self._fresh_graph()
-                for name, func in self.pipeline.items():
-                    if name == target_name:
-                        self.graphs[name] = graph
-                        break
-                    res = func(graph)
-                    if res is not None:
-                        graph = res
+        for target_name in self.pipeline:
+            graph = self._fresh_graph()
+            for name, func in self.pipeline.items():
+                if name == target_name:
+                    self.graphs[name] = graph
+                    break
+                res = func(graph)
+                if res is not None:
+                    graph = res
 
     def _fresh_graph(self) -> BaseGraph:
         return self.backend_cls()
 
     def time_graph_init(self, backend_name: str, n_nodes: int, n_workers: int) -> None:
-        with Options(n_workers=n_workers, show_progress=False):
+        with Options(n_workers=n_workers):
             self._fresh_graph()
 
     def time_random_nodes(self, backend_name: str, n_nodes: int, n_workers: int) -> None:
-        with Options(n_workers=n_workers, show_progress=False):
+        with Options(n_workers=n_workers):
             self.pipeline["random_nodes"](self.graphs["random_nodes"])
 
     def time_distance_edges(self, backend_name: str, n_nodes: int, n_workers: int) -> None:
-        with Options(n_workers=n_workers, show_progress=False):
+        with Options(n_workers=n_workers):
             self.pipeline["distance_edges"](self.graphs["distance_edges"])
 
     def time_nearest_neighbors_solver(self, backend_name: str, n_nodes: int, n_workers: int) -> None:
-        with Options(n_workers=n_workers, show_progress=False):
+        with Options(n_workers=n_workers):
             self.pipeline["nearest_neighbors_solver"](self.graphs["nearest_neighbors_solver"])
 
     def time_subgraph(self, backend_name: str, n_nodes: int, n_workers: int) -> None:
-        with Options(n_workers=n_workers, show_progress=False):
+        with Options(n_workers=n_workers):
             self.pipeline["subgraph"](self.graphs["subgraph"])
 
     def time_assign_tracks(self, backend_name: str, n_nodes: int, n_workers: int) -> None:
-        with Options(n_workers=n_workers, show_progress=False):
+        with Options(n_workers=n_workers):
             self.pipeline["assign_tracks"](self.graphs["assign_tracks"])
