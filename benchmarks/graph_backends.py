@@ -29,24 +29,18 @@ class SQLGraphWithMemory(td.graph.SQLGraph):
         super().__init__(drivername="sqlite", database=":memory:", overwrite=True)
 
     def time_points(self):
-        return super().time_points()
-
-
-del SQLGraphWithMemory.time_points  # to avoid ASV treating it as a benchmark
+        raise SkipNotImplemented("This is not a benchmark.")
 
 
 class SQLGraphDisk(td.graph.SQLGraph):
     def __init__(self):
         import datetime
 
-        path = f"/tmp/_benchmarks_tracksdata_db_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        path = f"/tmp/_benchmarks_tracksdata_db_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}+{id(self)}.db"
         super().__init__(drivername="sqlite", database=path, overwrite=True)
 
     def time_points(self):
-        return super().time_points()
-
-
-del SQLGraphDisk.time_points  # to avoid ASV treating it as a benchmark
+        raise SkipNotImplemented("This is not a benchmark.")
 
 
 BACKENDS = {
