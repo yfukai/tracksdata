@@ -24,23 +24,36 @@ WORKER_COUNTS = (1, 4)
 # So we define a function to return objects.
 
 
-def sql_graph_with_memory() -> td.graph.SQLGraph:
-    return td.graph.SQLGraph(drivername="sqlite", database=":memory:", overwrite=True)
+class SQLGraphWithMemory(td.graph.SQLGraph):
+    def __init__(self):
+        super().__init__(drivername="sqlite", database=":memory:", overwrite=True)
+
+    def time_points(self):
+        return super().time_points()
 
 
-def sql_graph_disk() -> td.graph.SQLGraph:
-    import datetime
+del SQLGraphWithMemory.time_points  # to avoid ASV treating it as a benchmark
 
-    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S.%f")
-    path = f"/tmp/_benchmarks_tracksdata_db_{timestamp}+{id(sql_graph_disk)}.sqlite"
-    return td.graph.SQLGraph(drivername="sqlite", database=path, overwrite=True)
+
+class SQLGraphDisk(td.graph.SQLGraph):
+    def __init__(self):
+        import datetime
+
+        path = f"/tmp/_benchmarks_tracksdata_db_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        super().__init__(drivername="sqlite", database=path, overwrite=True)
+
+    def time_points(self):
+        return super().time_points()
+
+
+del SQLGraphDisk.time_points  # to avoid ASV treating it as a benchmark
 
 
 BACKENDS = {
     "RustWorkXGraph": td.graph.RustWorkXGraph,
     "IndexedRXGraph": td.graph.IndexedRXGraph,
-    "SQLGraphWithMemory": sql_graph_with_memory,
-    "SQLGraphDisk": sql_graph_with_memory,
+    "SQLGraphWithMemory": SQLGraphWithMemory,
+    "SQLGraphDisk": SQLGraphDisk,
 }
 
 
