@@ -1,50 +1,62 @@
 from __future__ import annotations
 
 import warnings
-from collections.abc import Callable
 
+from asv_runner.benchmarks.mark import SkipNotImplemented
+
+import tracksdata as td  # Graph classes are not imported globally to avoid running "time_point" function at benchmark
 from tracksdata.attrs import EdgeAttr, NodeAttr
 from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.edges import DistanceEdges
-from tracksdata.graph import IndexedRXGraph, RustWorkXGraph
-from tracksdata.graph import SQLGraph as _BaseSQLGraph
-from tracksdata.graph._base_graph import BaseGraph
 from tracksdata.nodes import RandomNodes
-from tracksdata.options import Options, set_options
+from tracksdata.options import set_options
 from tracksdata.solvers import NearestNeighborsSolver
 from tracksdata.utils._logging import LOG
 
 warnings.filterwarnings("ignore")
 LOG.setLevel("ERROR")
-set_options(show_progress=False)
 
 N_TIME_POINTS = 50
-NODE_SIZES = (1_000, 10_000, 100_000)
+NODE_SIZES = (1_000, 100_000)
 WORKER_COUNTS = (1, 4)
 
-
-class SQLGraphWithMemory(_BaseSQLGraph):
-    def __init__(self) -> None:
-        super().__init__(drivername="sqlite", database=":memory:", overwrite=True)
+# With subclassing, the asv calls "time_point" function as a benchmark.
+# So we define a function to return objects.
 
 
-class SQLGraphDisk(_BaseSQLGraph):
-    def __init__(self) -> None:
-        import datetime
-
-        path = f"/tmp/_benchmarks_tracksdata_db_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}+{id(self)}.sqlite"
-        super().__init__(drivername="sqlite", database=path, overwrite=True)
+def sql_graph_with_memory() -> td.graph.SQLGraph:
+    return td.graph.SQLGraph(drivername="sqlite", database=":memory:", overwrite=True)
 
 
-BACKENDS: dict[str, type[BaseGraph]] = {
-    "RustWorkXGraph": RustWorkXGraph,
-    "IndexedRXGraph": IndexedRXGraph,
-    "SQLGraphWithMemory": SQLGraphWithMemory,
-    "SQLGraphDisk": SQLGraphDisk,
+def sql_graph_disk() -> td.graph.SQLGraph:
+    import datetime
+
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S.%f")
+    path = f"/tmp/_benchmarks_tracksdata_db_{timestamp}+{id(sql_graph_disk)}.sqlite"
+    return td.graph.SQLGraph(drivername="sqlite", database=path, overwrite=True)
+
+
+BACKENDS = {
+    "RustWorkXGraph": td.graph.RustWorkXGraph,
+    "IndexedRXGraph": td.graph.IndexedRXGraph,
+    "SQLGraphWithMemory": sql_graph_with_memory,
+    "SQLGraphDisk": sql_graph_with_memory,
 }
 
 
-def _build_pipeline(n_time_points: int, n_nodes_per_tp: int) -> dict[str, Callable[[BaseGraph], None | BaseGraph]]:
+def _get_subgraph(graph):
+    return graph.filter(
+        NodeAttr(DEFAULT_ATTR_KEYS.SOLUTION) == True,
+        EdgeAttr(DEFAULT_ATTR_KEYS.SOLUTION) == True,
+    ).subgraph()
+
+
+def _assign_tracks(graph):
+    graph.assign_tracklet_ids()
+    return None
+
+
+def _build_pipeline(n_time_points: int, n_nodes_per_tp: int) -> dict:
     lower = max(1, int(n_nodes_per_tp * 0.95))
     upper = max(lower, int(n_nodes_per_tp * 1.05))
     return {
@@ -59,12 +71,13 @@ def _build_pipeline(n_time_points: int, n_nodes_per_tp: int) -> dict[str, Callab
             max_children=2,
             return_solution=False,
         ).solve,
-        "subgraph": lambda graph: graph.filter(
-            NodeAttr(DEFAULT_ATTR_KEYS.SOLUTION) == True,
-            EdgeAttr(DEFAULT_ATTR_KEYS.SOLUTION) == True,
-        ).subgraph(),
-        "assign_tracks": lambda graph: graph.assign_tracklet_ids(),
+        "subgraph": _get_subgraph,
+        "assign_tracks": _assign_tracks,
     }
+
+
+def _fresh_graph(backend_name) -> td.graph.BaseGraph:
+    return BACKENDS[backend_name]()
 
 
 class GraphBackendsBenchmark:
@@ -75,53 +88,58 @@ class GraphBackendsBenchmark:
     param_names = ("backend", "n_nodes", "n_workers")
     params = (tuple(BACKENDS), NODE_SIZES, WORKER_COUNTS)
 
-    def setup(self, backend_name: str, n_nodes: int, n_workers: int) -> None:
-        if backend_name == "SQLGraphWithMemory" and n_workers > 1:
-            msg = "SQLGraphWithMemory does not support multiprocessing."
-            raise NotImplementedError(msg)
+    def setup_cache(self):
+        pipelines = {}
+        graphs = {}
+        for n_nodes in NODE_SIZES:
+            n_nodes_per_tp = max(1, n_nodes // N_TIME_POINTS)
+            pipeline = _build_pipeline(N_TIME_POINTS, n_nodes_per_tp)
+            pipelines[n_nodes] = pipeline
+            for target_name in pipeline.keys():
+                graph = _fresh_graph("RustWorkXGraph")
+                for name, func in pipeline.items():
+                    if name == target_name:
+                        graphs[(n_nodes, name)] = graph
+                        break
+                    res = func(graph)
+                    if res is not None:
+                        graph = res
+        return {"pipelines": pipelines, "graphs": graphs}
 
-        self.backend_name = backend_name
-        self.n_nodes = n_nodes
-        self.n_workers = n_workers
+    def setup(self, cache: dict, backend_name: str, n_nodes: int, n_workers: int) -> None:
+        if (backend_name, n_workers) == ("SQLGraphDisk", 4):
+            raise SkipNotImplemented("SQLGraphDisk does not support multiprocessing with multiple workers.")
+        pipelines = cache["pipelines"]
+        graphs = cache["graphs"]
+        self.input_graphs = {}
+        set_options(n_workers=n_workers, show_progress=False)
+        for name in pipelines[n_nodes]:
+            self.input_graphs[name] = BACKENDS[backend_name].from_other(graphs[(n_nodes, name)])
 
-        self.backend_cls = BACKENDS[backend_name]
-        n_nodes_per_tp = max(1, n_nodes // N_TIME_POINTS)
-        self.pipeline = _build_pipeline(N_TIME_POINTS, n_nodes_per_tp)
+    def time_graph_init(self, cache: dict, backend_name: str, n_nodes: int, n_workers: int) -> None:
+        _fresh_graph(backend_name)
 
-        self.graphs = {}
-        for target_name in self.pipeline:
-            graph = self._fresh_graph()
-            for name, func in self.pipeline.items():
-                if name == target_name:
-                    self.graphs[name] = graph
-                    break
-                res = func(graph)
-                if res is not None:
-                    graph = res
+    def time_random_nodes(self, cache: dict, backend_name: str, n_nodes: int, n_workers: int) -> None:
+        pipelines = cache["pipelines"]
+        input_graph = self.input_graphs["random_nodes"]
+        pipelines[n_nodes]["random_nodes"](input_graph)
 
-    def _fresh_graph(self) -> BaseGraph:
-        return self.backend_cls()
+    def time_distance_edges(self, cache: dict, backend_name: str, n_nodes: int, n_workers: int) -> None:
+        pipelines = cache["pipelines"]
+        input_graph = self.input_graphs["distance_edges"]
+        pipelines[n_nodes]["distance_edges"](input_graph)
 
-    def time_graph_init(self, backend_name: str, n_nodes: int, n_workers: int) -> None:
-        with Options(n_workers=n_workers):
-            self._fresh_graph()
+    def time_nearest_neighbors_solver(self, cache: dict, backend_name: str, n_nodes: int, n_workers: int) -> None:
+        pipelines = cache["pipelines"]
+        input_graph = self.input_graphs["nearest_neighbors_solver"]
+        pipelines[n_nodes]["nearest_neighbors_solver"](input_graph)
 
-    def time_random_nodes(self, backend_name: str, n_nodes: int, n_workers: int) -> None:
-        with Options(n_workers=n_workers):
-            self.pipeline["random_nodes"](self.graphs["random_nodes"])
+    def time_subgraph(self, cache: dict, backend_name: str, n_nodes: int, n_workers: int) -> None:
+        pipelines = cache["pipelines"]
+        input_graph = self.input_graphs["subgraph"]
+        pipelines[n_nodes]["subgraph"](input_graph)
 
-    def time_distance_edges(self, backend_name: str, n_nodes: int, n_workers: int) -> None:
-        with Options(n_workers=n_workers):
-            self.pipeline["distance_edges"](self.graphs["distance_edges"])
-
-    def time_nearest_neighbors_solver(self, backend_name: str, n_nodes: int, n_workers: int) -> None:
-        with Options(n_workers=n_workers):
-            self.pipeline["nearest_neighbors_solver"](self.graphs["nearest_neighbors_solver"])
-
-    def time_subgraph(self, backend_name: str, n_nodes: int, n_workers: int) -> None:
-        with Options(n_workers=n_workers):
-            self.pipeline["subgraph"](self.graphs["subgraph"])
-
-    def time_assign_tracks(self, backend_name: str, n_nodes: int, n_workers: int) -> None:
-        with Options(n_workers=n_workers):
-            self.pipeline["assign_tracks"](self.graphs["assign_tracks"])
+    def time_assign_tracks(self, cache: dict, backend_name: str, n_nodes: int, n_workers: int) -> None:
+        pipelines = cache["pipelines"]
+        input_graph = self.input_graphs["assign_tracks"]
+        pipelines[n_nodes]["assign_tracks"](input_graph)
