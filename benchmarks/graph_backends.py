@@ -120,8 +120,8 @@ class GraphBackendsBenchmark:
         return {"pipelines": pipelines, "graphs": graphs}
 
     def setup(self, cache: dict, backend_name: str, n_nodes: int, n_workers: int) -> None:
-        if (backend_name, n_workers) == ("SQLGraphDisk", 4):
-            raise SkipNotImplemented("SQLGraphDisk does not support multiprocessing with multiple workers.")
+        if n_workers > 1 and "SQLGraph" in backend_name:
+            raise SkipNotImplemented("SQLGraph does not support multiprocessing with multiple workers.")
         pipelines = cache["pipelines"]
         graphs = cache["graphs"]
         self.input_graphs = {}
