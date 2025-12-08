@@ -3,19 +3,23 @@ from itertools import pairwise
 import tracksdata as td
 
 if __name__ == "__main__":
-    from common import BACKENDS  # For local testing
+    from common import BACKENDS, IS_CI  # For local testing
 else:
-    from benchmarks.common import BACKENDS
+    from benchmarks.common import BACKENDS, IS_CI
 
-ALL_LINAGE_SIZES = (
-    1,
-    100,
-)
-NODE_SIZES = (
-    10,
-    100,
-    1_000,
-)
+if not IS_CI:
+    ALL_LINAGE_SIZES = (
+        1,
+        100,
+    )
+    NODE_SIZES = (
+        10,
+        100,
+        1_000,
+    )
+else:
+    ALL_LINAGE_SIZES = (100,)
+    NODE_SIZES = (1_000,)
 
 
 class TrackletNodesBenchmark:

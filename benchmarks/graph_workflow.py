@@ -1,12 +1,11 @@
 from __future__ import annotations
 
 import warnings
-from os import environ
 
 from asv_runner.benchmarks.mark import SkipNotImplemented
 
 import tracksdata as td  # Graph classes are not imported globally to avoid running "time_point" function at benchmark
-from benchmarks.common import BACKENDS
+from benchmarks.common import BACKENDS, IS_CI
 from tracksdata.attrs import EdgeAttr, NodeAttr
 from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.edges import DistanceEdges
@@ -18,7 +17,6 @@ from tracksdata.utils._logging import LOG
 warnings.filterwarnings("ignore")
 LOG.setLevel("ERROR")
 
-IS_CI = environ.get("CI", "false").lower() == "true"
 
 N_TIME_POINTS = 50
 

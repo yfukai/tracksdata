@@ -1,3 +1,5 @@
+from os import environ
+
 from asv_runner.benchmarks.mark import SkipNotImplemented
 
 import tracksdata as td
@@ -31,3 +33,5 @@ BACKENDS = {
     "SQLGraphWithMemory": SQLGraphWithMemory,
     "SQLGraphDisk": SQLGraphDisk,
 }
+
+IS_CI = environ.get("CI", "false").lower() == "true"
