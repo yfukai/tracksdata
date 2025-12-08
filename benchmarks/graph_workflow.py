@@ -6,6 +6,7 @@ from os import environ
 from asv_runner.benchmarks.mark import SkipNotImplemented
 
 import tracksdata as td  # Graph classes are not imported globally to avoid running "time_point" function at benchmark
+from benchmarks.common import BACKENDS
 from tracksdata.attrs import EdgeAttr, NodeAttr
 from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.edges import DistanceEdges
@@ -27,36 +28,6 @@ if not IS_CI:
 else:
     NODE_SIZES = (100_000,)
     WORKER_COUNTS = (1,)
-
-# With subclassing, the asv calls "time_point" function as a benchmark.
-# So we hook into it to skip that.
-
-
-class SQLGraphWithMemory(td.graph.SQLGraph):
-    def __init__(self):
-        super().__init__(drivername="sqlite", database=":memory:", overwrite=True)
-
-    def time_points(self):
-        raise SkipNotImplemented("This is not a benchmark.")
-
-
-class SQLGraphDisk(td.graph.SQLGraph):
-    def __init__(self):
-        import datetime
-
-        path = f"/tmp/_benchmarks_tracksdata_db_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}+{id(self)}.db"
-        super().__init__(drivername="sqlite", database=path, overwrite=True)
-
-    def time_points(self):
-        raise SkipNotImplemented("This is not a benchmark.")
-
-
-BACKENDS = {
-    "RustWorkXGraph": td.graph.RustWorkXGraph,
-    "IndexedRXGraph": td.graph.IndexedRXGraph,
-    "SQLGraphWithMemory": SQLGraphWithMemory,
-    "SQLGraphDisk": SQLGraphDisk,
-}
 
 
 def _get_subgraph(graph):
