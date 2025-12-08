@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import warnings
+from os import environ
 
 from asv_runner.benchmarks.mark import SkipNotImplemented
 
@@ -16,12 +17,19 @@ from tracksdata.utils._logging import LOG
 warnings.filterwarnings("ignore")
 LOG.setLevel("ERROR")
 
+IS_CI = environ.get("CI", "false").lower() == "true"
+
 N_TIME_POINTS = 50
-NODE_SIZES = (1_000, 100_000)
-WORKER_COUNTS = (1, 4)
+
+if not IS_CI:
+    NODE_SIZES = (1_000, 100_000)
+    WORKER_COUNTS = (1, 4)
+else:
+    NODE_SIZES = (100_000,)
+    WORKER_COUNTS = (1,)
 
 # With subclassing, the asv calls "time_point" function as a benchmark.
-# So we define a function to return objects.
+# So we hook into it to skip that.
 
 
 class SQLGraphWithMemory(td.graph.SQLGraph):
