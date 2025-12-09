@@ -1509,24 +1509,20 @@ class SQLGraph(BaseGraph):
         node_ids: list[int] | int | None,
         node_key: str,
     ) -> list[int] | int:
+        edge_key_col = getattr(self.Edge, node_key)
+
         if isinstance(node_ids, int):
+            stmt = sa.select(sa.func.count()).where(edge_key_col == node_ids)
             with Session(self._engine) as session:
-                query = (
-                    session.query(
-                        getattr(self.Edge, node_key),
-                    )
-                    .filter(getattr(self.Edge, node_key) == node_ids)
-                    .count()
-                )
-            return int(query)
+                return int(session.execute(stmt).scalar())
+
+        stmt = sa.select(edge_key_col, sa.func.count()).group_by(edge_key_col)
+        if node_ids is not None:
+            stmt = stmt.where(edge_key_col.in_(node_ids))
 
         with Session(self._engine) as session:
             # get the number of edges for each using group by and count
-            node_id_col = getattr(self.Edge, node_key)
-            query = session.query(node_id_col, sa.func.count(node_id_col)).group_by(node_id_col)
-            if node_ids is not None:
-                query = query.filter(node_id_col.in_(node_ids))
-            degree = dict(query.all())
+            degree = dict(session.execute(stmt).all())
 
         if node_ids is None:
             # this is necessary to make sure it's the same order as node_ids
