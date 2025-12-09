@@ -65,6 +65,10 @@ test = [
   "napari",
   "pyqt5",
 ]
+benchmarks = [
+  "asv",
+  "virtualenv",
+]
 docs = [
   "mkdocs",
   "mkdocs-api-autonav",

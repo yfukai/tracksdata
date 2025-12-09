@@ -60,7 +60,7 @@ jobs:
             --machine github-actions \
             --python 3.12 \
             --factor 1.5 \
-            --show-stderr | tee asv-output.log || status=$?
+            --show-stderr || status=$?
           if [ "$status" -eq 2 ]; then
               echo "asv: benchmark run failed (exit 2). Failing CI." >&2
               exit 2
@@ -68,25 +68,12 @@ jobs:
           if [ "$status" -eq 1 ]; then
               echo "asv: performance regression detected (ignored for CI)." >&2
           fi
-          tail -n 100 asv-output.log > asv-summary.txt
+          asv compare origin/main HEAD > asv-summary.txt
           {
             echo 'summary<<EOF'
             cat asv-summary.txt
             echo EOF
           } >> "$GITHUB_OUTPUT"
-
-      - name: Publish ASV HTML
-        run: asv publish origin/main..HEAD
-
-      - name: Upload ASV report
-        uses: actions/upload-artifact@v4
-        with:
-          name: asv-html
-          path: |
-            .asv/html
-            .asv/results
-          if-no-files-found: warn
-
 
       - name: Append benchmark summary
         run: |
