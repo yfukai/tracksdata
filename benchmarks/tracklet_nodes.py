@@ -49,7 +49,7 @@ if __name__ == "__main__":
     import cProfile
 
     tnb = TrackletNodesBenchmark()
-    tnb.setup("SQLGraphDisk", 1000, 100)
+    tnb.setup("SQLGraphDisk", 1000, 1000)
     with cProfile.Profile() as pr:
-        tnb.time_tracklet_nodes("SQLGraphDisk", 1000, 100)
+        tnb.time_tracklet_nodes("SQLGraphDisk", 1000, 1000)
     pr.dump_stats("result.pstat")
