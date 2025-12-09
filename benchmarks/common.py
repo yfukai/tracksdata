@@ -1,6 +1,6 @@
 from os import environ
 
-from asv_runner.benchmarks.mark import SkipNotImplemented
+from asv_runner.benchmarks.mark import skip_benchmark
 
 import tracksdata as td
 
@@ -12,8 +12,9 @@ class SQLGraphWithMemory(td.graph.SQLGraph):
     def __init__(self):
         super().__init__(drivername="sqlite", database=":memory:", overwrite=True)
 
+    @skip_benchmark
     def time_points(self):
-        raise SkipNotImplemented("This is not a benchmark.")
+        return super().time_points()
 
 
 class SQLGraphDisk(td.graph.SQLGraph):
@@ -23,8 +24,9 @@ class SQLGraphDisk(td.graph.SQLGraph):
         path = f"/tmp/_benchmarks_tracksdata_db_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}+{id(self)}.db"
         super().__init__(drivername="sqlite", database=path, overwrite=True)
 
+    @skip_benchmark
     def time_points(self):
-        raise SkipNotImplemented("This is not a benchmark.")
+        return super().time_points()
 
 
 BACKENDS = {
