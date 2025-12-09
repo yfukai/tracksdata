@@ -1015,15 +1015,15 @@ class SQLGraph(BaseGraph):
             attr_keys = [attr_keys]
 
         with Session(self._engine) as session:
-            if attr_keys is None:
-                # all columns
-                node_columns = [self.Node]
-            elif not return_attrs:
+            if not return_attrs:
                 # only neighbor IDs
                 node_columns = [self.Node.node_id]
                 if attr_keys is not None:
                     LOG.warning("attr_keys is ignored when return_attrs is False.")
                     attr_keys = None
+            elif attr_keys is None:
+                # all columns
+                node_columns = [self.Node]
             else:
                 node_columns = [getattr(self.Node, key) for key in attr_keys]
 
