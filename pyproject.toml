@@ -75,6 +75,10 @@ docs = [
   "mike",
   "traccuracy>=0.4.2",
 ]
+bench = [
+  "asv",
+  "virtualenv",
+]
 
 [project.urls]
 Documentation = "https://github.com/jookuma/tracksdata#readme"

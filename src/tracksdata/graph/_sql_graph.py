@@ -1504,6 +1504,72 @@ class SQLGraph(BaseGraph):
             )
         )
 
+    def tracklet_nodes(self, seeds: list[int] | None) -> list[int]:
+        """
+        Compute the non-branching tracklet closure around the provided seeds.
+
+        Uses a recursive CTE to walk forward through nodes with exactly one
+        successor and backward through predecessors that both are unique and
+        have a single successor, matching BaseGraph semantics while keeping the
+        traversal in SQL.
+        """
+        if not seeds:
+            return []
+
+        seed_ids = sorted({int(seed) for seed in seeds})
+        Edge = self.Edge
+
+        seed_selects = [sa.select(sa.literal(seed_id, type_=sa.BigInteger()).label("node_id")) for seed_id in seed_ids]
+        if len(seed_selects) == 1:
+            seed_union = seed_selects[0]
+        else:
+            seed_union = sa.union_all(*seed_selects)
+        seed_cte = seed_union.cte("seed_nodes")
+
+        out_deg_one = (
+            sa.select(Edge.source_id.label("source_id"))
+            .group_by(Edge.source_id)
+            .having(sa.func.count(Edge.edge_id) == 1)
+            .cte("out_deg_one")
+        )
+
+        in_deg_one = (
+            sa.select(Edge.target_id.label("target_id"))
+            .group_by(Edge.target_id)
+            .having(sa.func.count(Edge.edge_id) == 1)
+            .cte("in_deg_one")
+        )
+
+        forward_edges = (
+            sa.select(Edge.source_id.label("source_id"), Edge.target_id.label("target_id"))
+            .join(out_deg_one, Edge.source_id == out_deg_one.c.source_id)
+            .cte("forward_edges")
+        )
+
+        backward_edges = (
+            sa.select(Edge.source_id.label("source_id"), Edge.target_id.label("target_id"))
+            .join(out_deg_one, Edge.source_id == out_deg_one.c.source_id)
+            .join(in_deg_one, Edge.target_id == in_deg_one.c.target_id)
+            .cte("backward_edges")
+        )
+
+        tracklet_cte = sa.select(seed_cte.c.node_id).cte("tracklet_nodes", recursive=True)
+
+        forward_step = sa.select(forward_edges.c.target_id.label("node_id")).join(
+            tracklet_cte, forward_edges.c.source_id == tracklet_cte.c.node_id
+        )
+        backward_step = sa.select(backward_edges.c.source_id.label("node_id")).join(
+            tracklet_cte, backward_edges.c.target_id == tracklet_cte.c.node_id
+        )
+
+        tracklet_cte = tracklet_cte.union(forward_step, backward_step)
+
+        stmt = sa.select(sa.distinct(tracklet_cte.c.node_id))
+        with Session(self._engine) as session:
+            node_ids = session.execute(stmt).scalars().all()
+
+        return sorted(int(node_id) for node_id in node_ids)
+
     def _get_degree(
         self,
         node_ids: list[int] | int | None,
