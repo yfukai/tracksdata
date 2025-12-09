@@ -522,14 +522,14 @@ class SQLGraph(BaseGraph):
         class Edge(Base):
             __tablename__ = "Edge"
             edge_id = sa.Column(sa.Integer, primary_key=True, unique=True, autoincrement=True)
-            source_id = sa.Column(sa.BigInteger, sa.ForeignKey(f"{node_tb_name}.node_id"))
-            target_id = sa.Column(sa.BigInteger, sa.ForeignKey(f"{node_tb_name}.node_id"))
+            source_id = sa.Column(sa.BigInteger, sa.ForeignKey(f"{node_tb_name}.node_id"), index=True)
+            target_id = sa.Column(sa.BigInteger, sa.ForeignKey(f"{node_tb_name}.node_id"), index=True)
 
         class Overlap(Base):
             __tablename__ = "Overlap"
             overlap_id = sa.Column(sa.Integer, primary_key=True, unique=True, autoincrement=True)
-            source_id = sa.Column(sa.BigInteger, sa.ForeignKey(f"{node_tb_name}.node_id"))
-            target_id = sa.Column(sa.BigInteger, sa.ForeignKey(f"{node_tb_name}.node_id"))
+            source_id = sa.Column(sa.BigInteger, sa.ForeignKey(f"{node_tb_name}.node_id"), index=True)
+            target_id = sa.Column(sa.BigInteger, sa.ForeignKey(f"{node_tb_name}.node_id"), index=True)
 
         class Metadata(Base):
             __tablename__ = "Metadata"
@@ -1015,15 +1015,15 @@ class SQLGraph(BaseGraph):
             attr_keys = [attr_keys]
 
         with Session(self._engine) as session:
-            if attr_keys is None:
-                # all columns
-                node_columns = [self.Node]
-            elif not return_attrs:
+            if not return_attrs:
                 # only neighbor IDs
                 node_columns = [self.Node.node_id]
                 if attr_keys is not None:
                     LOG.warning("attr_keys is ignored when return_attrs is False.")
                     attr_keys = None
+            elif attr_keys is None:
+                # all columns
+                node_columns = [self.Node]
             else:
                 node_columns = [getattr(self.Node, key) for key in attr_keys]
 
@@ -1509,24 +1509,20 @@ class SQLGraph(BaseGraph):
         node_ids: list[int] | int | None,
         node_key: str,
     ) -> list[int] | int:
+        edge_key_col = getattr(self.Edge, node_key)
+
         if isinstance(node_ids, int):
+            stmt = sa.select(sa.func.count()).where(edge_key_col == node_ids)
             with Session(self._engine) as session:
-                query = (
-                    session.query(
-                        getattr(self.Edge, node_key),
-                    )
-                    .filter(getattr(self.Edge, node_key) == node_ids)
-                    .count()
-                )
-            return int(query)
+                return int(session.execute(stmt).scalar())
+
+        stmt = sa.select(edge_key_col, sa.func.count()).group_by(edge_key_col)
+        if node_ids is not None:
+            stmt = stmt.where(edge_key_col.in_(node_ids))
 
         with Session(self._engine) as session:
             # get the number of edges for each using group by and count
-            node_id_col = getattr(self.Edge, node_key)
-            query = session.query(node_id_col, sa.func.count(node_id_col)).group_by(node_id_col)
-            if node_ids is not None:
-                query = query.filter(node_id_col.in_(node_ids))
-            degree = dict(query.all())
+            degree = dict(session.execute(stmt).all())
 
         if node_ids is None:
             # this is necessary to make sure it's the same order as node_ids
