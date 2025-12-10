@@ -919,7 +919,7 @@ class RustWorkXGraph(BaseGraph):
             raise ValueError(f"Attribute key {key} already exists")
 
         self._edge_attr_keys.append(key)
-        for _, _, edge_attr in self.rx_graph.weighted_edge_list():
+        for edge_attr in self.rx_graph.edges():
             edge_attr[key] = default_value
 
     def remove_edge_attr_key(self, key: str) -> None:
