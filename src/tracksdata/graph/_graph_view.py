@@ -243,6 +243,18 @@ class GraphView(RustWorkXGraph, MappedGraphMixin):
             else:
                 self._out_of_sync = True
 
+    def remove_node_attr_key(self, key: str) -> None:
+        self._root.remove_node_attr_key(key)
+        if self._node_attr_keys is not None and key in self._node_attr_keys:
+            self._node_attr_keys.remove(key)
+
+        if not self._is_root_rx_graph:
+            if self.sync:
+                for node_id in self.rx_graph.node_indices():
+                    self.rx_graph[node_id].pop(key, None)
+            else:
+                self._out_of_sync = True
+
     def add_edge_attr_key(self, key: str, default_value: Any) -> None:
         self._root.add_edge_attr_key(key, default_value)
         if self._edge_attr_keys is not None:
@@ -252,6 +264,18 @@ class GraphView(RustWorkXGraph, MappedGraphMixin):
             if self.sync:
                 for _, _, edge_attr in self.rx_graph.weighted_edge_list():
                     edge_attr[key] = default_value
+            else:
+                self._out_of_sync = True
+
+    def remove_edge_attr_key(self, key: str) -> None:
+        self._root.remove_edge_attr_key(key)
+        if self._edge_attr_keys is not None and key in self._edge_attr_keys:
+            self._edge_attr_keys.remove(key)
+        # because attributes are passed by reference, we need don't need if both are rustworkx graphs
+        if not self._is_root_rx_graph:
+            if self.sync:
+                for _, _, edge_attr in self.rx_graph.weighted_edge_list():
+                    edge_attr.pop(key, None)
             else:
                 self._out_of_sync = True
 

@@ -433,6 +433,27 @@ def test_add_node_attr_key(graph_backend: BaseGraph, value) -> None:
         assert new_attr_value == value
 
 
+def test_remove_node_attr_key(graph_backend: BaseGraph) -> None:
+    """Test removing node attribute keys."""
+    graph_backend.add_node_attr_key("label", "init")
+    node_a = graph_backend.add_node({"t": 0, "label": "a"})
+    node_b = graph_backend.add_node({"t": 1, "label": "b"})
+
+    assert "label" in graph_backend.node_attr_keys
+
+    graph_backend.remove_node_attr_key("label")
+    assert "label" not in graph_backend.node_attr_keys
+
+    df = graph_backend.filter(node_ids=[node_a, node_b]).node_attrs()
+    assert "label" not in df.columns
+
+    with pytest.raises(ValueError):
+        graph_backend.remove_node_attr_key("label")
+
+    with pytest.raises(ValueError):
+        graph_backend.remove_node_attr_key(DEFAULT_ATTR_KEYS.T)
+
+
 def test_add_edge_attr_key(graph_backend: BaseGraph) -> None:
     """Test adding new edge attribute keys."""
     node1 = graph_backend.add_node({"t": 0})
@@ -443,6 +464,26 @@ def test_add_edge_attr_key(graph_backend: BaseGraph) -> None:
 
     df = graph_backend.edge_attrs(attr_keys=["new_attribute"])
     assert df["new_attribute"].to_list() == [42]
+
+
+def test_remove_edge_attr_key(graph_backend: BaseGraph) -> None:
+    """Test removing edge attribute keys."""
+    node1 = graph_backend.add_node({"t": 0})
+    node2 = graph_backend.add_node({"t": 1})
+
+    graph_backend.add_edge_attr_key("weight", 0.5)
+    graph_backend.add_edge(node1, node2, attrs={"weight": 1.2})
+
+    assert "weight" in graph_backend.edge_attr_keys
+
+    graph_backend.remove_edge_attr_key("weight")
+    assert "weight" not in graph_backend.edge_attr_keys
+
+    df = graph_backend.edge_attrs()
+    assert "weight" not in df.columns
+
+    with pytest.raises(ValueError):
+        graph_backend.remove_edge_attr_key("weight")
 
 
 def test_update_node_attrs(graph_backend: BaseGraph) -> None:

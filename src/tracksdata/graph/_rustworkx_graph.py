@@ -889,6 +889,20 @@ class RustWorkXGraph(BaseGraph):
         for node_id in rx_graph.node_indices():
             rx_graph[node_id][key] = default_value
 
+    def remove_node_attr_key(self, key: str) -> None:
+        """
+        Remove an existing node attribute key from the graph.
+        """
+        if key not in self.node_attr_keys:
+            raise ValueError(f"Node attribute key {key} does not exist")
+
+        if key in (DEFAULT_ATTR_KEYS.NODE_ID, DEFAULT_ATTR_KEYS.T):
+            raise ValueError(f"Cannot remove required node attribute key {key}")
+
+        self._node_attr_keys.remove(key)
+        for node_id in self.rx_graph.node_indices():
+            self.rx_graph[node_id].pop(key, None)
+
     def add_edge_attr_key(self, key: str, default_value: Any) -> None:
         """
         Add a new attribute key to the graph.
@@ -907,6 +921,17 @@ class RustWorkXGraph(BaseGraph):
         self._edge_attr_keys.append(key)
         for _, _, edge_attr in self.rx_graph.weighted_edge_list():
             edge_attr[key] = default_value
+
+    def remove_edge_attr_key(self, key: str) -> None:
+        """
+        Remove an existing edge attribute key from the graph.
+        """
+        if key not in self.edge_attr_keys:
+            raise ValueError(f"Edge attribute key {key} does not exist")
+
+        self._edge_attr_keys.remove(key)
+        for _, _, edge_attr in self.rx_graph.weighted_edge_list():
+            edge_attr.pop(key, None)
 
     def _node_attrs_from_node_ids(
         self,
