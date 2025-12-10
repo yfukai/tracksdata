@@ -930,7 +930,7 @@ class RustWorkXGraph(BaseGraph):
             raise ValueError(f"Edge attribute key {key} does not exist")
 
         self._edge_attr_keys.remove(key)
-        for _, _, edge_attr in self.rx_graph.weighted_edge_list():
+        for edge_attr in self.rx_graph.edges():
             edge_attr.pop(key, None)
 
     def _node_attrs_from_node_ids(
