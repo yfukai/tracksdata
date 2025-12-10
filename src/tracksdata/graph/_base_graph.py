@@ -401,7 +401,7 @@ class BaseGraph(abc.ABC):
     @overload
     def successors(
         self,
-        node_ids: list[int],
+        node_ids: list[int] | None,
         attr_keys: Sequence[str] | str | None = ...,
         *,
         return_attrs: Literal[True],
@@ -419,7 +419,7 @@ class BaseGraph(abc.ABC):
     @overload
     def successors(
         self,
-        node_ids: list[int],
+        node_ids: list[int] | None,
         attr_keys: Sequence[str] | str | None = ...,
         *,
         return_attrs: Literal[False] = False,
@@ -428,7 +428,7 @@ class BaseGraph(abc.ABC):
     @abc.abstractmethod
     def successors(
         self,
-        node_ids: list[int] | int,
+        node_ids: list[int] | int | None,
         attr_keys: Sequence[str] | str | None = None,
         *,
         return_attrs: bool = False,
@@ -438,8 +438,9 @@ class BaseGraph(abc.ABC):
 
         Parameters
         ----------
-        node_ids : list[int] | int
+        node_ids : list[int] | int | None
             The IDs of the nodes to get the sucessors for.
+            If None, all nodes are used.
         attr_keys : Sequence[str] | str | None
             The attribute keys to retrieve when ``return_attrs`` is True.
             If None, all attributes are included.
@@ -468,7 +469,7 @@ class BaseGraph(abc.ABC):
     @overload
     def predecessors(
         self,
-        node_ids: list[int],
+        node_ids: list[int] | None,
         attr_keys: Sequence[str] | str | None = ...,
         *,
         return_attrs: Literal[True],
@@ -486,7 +487,7 @@ class BaseGraph(abc.ABC):
     @overload
     def predecessors(
         self,
-        node_ids: list[int],
+        node_ids: list[int] | None,
         attr_keys: Sequence[str] | str | None = ...,
         *,
         return_attrs: Literal[False] = False,
@@ -495,7 +496,7 @@ class BaseGraph(abc.ABC):
     @abc.abstractmethod
     def predecessors(
         self,
-        node_ids: list[int] | int,
+        node_ids: list[int] | int | None,
         attr_keys: Sequence[str] | str | None = None,
         *,
         return_attrs: bool = False,
@@ -505,8 +506,8 @@ class BaseGraph(abc.ABC):
 
         Parameters
         ----------
-        node_ids : list[int] | int
-            The IDs of the nodes to get the predecessors for.
+        node_ids : list[int] | int | None
+            The IDs of the nodes to get the predecessors for. If None, all nodes are used.
         attr_keys : Sequence[str] | str | None
             The attribute keys to retrieve when ``return_attrs`` is True.
             If None, all attributes are included.

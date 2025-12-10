@@ -973,7 +973,7 @@ class SQLGraph(BaseGraph):
         self,
         node_key: str,
         neighbor_key: str,
-        node_ids: list[int] | int,
+        node_ids: list[int] | int | None,
         attr_keys: Sequence[str] | str | None = None,
         *,
         return_attrs: bool = False,
@@ -990,8 +990,9 @@ class SQLGraph(BaseGraph):
             The edge attribute key for the query node (e.g., "source_id").
         neighbor_key : str
             The edge attribute key for the neighbor node (e.g., "target_id").
-        node_ids : list[int] | int
+        node_ids : list[int] | int | None
             The IDs of the nodes to get neighbors for.
+            If None, all nodes are used.
         attr_keys : Sequence[str] | str | None, optional
             The attribute keys to retrieve for neighbor nodes when ``return_attrs`` is True.
             If None, all attributes are retrieved.
@@ -1008,9 +1009,16 @@ class SQLGraph(BaseGraph):
             neighbor ID list.
         """
         single_node = False
+        filter_node_ids: list[int] | None
         if isinstance(node_ids, int):
             node_ids = [node_ids]
+            filter_node_ids = node_ids
             single_node = True
+        elif node_ids is None:
+            node_ids = self.node_ids()
+            filter_node_ids = None
+        else:
+            filter_node_ids = node_ids
 
         if isinstance(attr_keys, str):
             attr_keys = [attr_keys]
@@ -1030,7 +1038,8 @@ class SQLGraph(BaseGraph):
 
             query = session.query(getattr(self.Edge, node_key), *node_columns)
             query = query.join(self.Edge, getattr(self.Edge, neighbor_key) == self.Node.node_id)
-            query = query.filter(getattr(self.Edge, node_key).in_(node_ids))
+            if filter_node_ids is not None:
+                query = query.filter(getattr(self.Edge, node_key).in_(filter_node_ids))
 
             node_df = pl.read_database(
                 query.statement,
@@ -1056,7 +1065,7 @@ class SQLGraph(BaseGraph):
 
     def successors(
         self,
-        node_ids: list[int] | int,
+        node_ids: list[int] | int | None,
         attr_keys: Sequence[str] | str | None = None,
         *,
         return_attrs: bool = False,
@@ -1070,8 +1079,9 @@ class SQLGraph(BaseGraph):
 
         Parameters
         ----------
-        node_ids : list[int] | int
+        node_ids : list[int] | int | None
             The IDs of the nodes to get successors for.
+            If None, all nodes are used.
         attr_keys : Sequence[str] | str | None, optional
             The attribute keys to retrieve for successor nodes when ``return_attrs`` is True.
             If None, all attributes are retrieved.
@@ -1104,7 +1114,7 @@ class SQLGraph(BaseGraph):
 
     def predecessors(
         self,
-        node_ids: list[int] | int,
+        node_ids: list[int] | int | None,
         attr_keys: Sequence[str] | str | None = None,
         *,
         return_attrs: bool = False,
@@ -1118,8 +1128,9 @@ class SQLGraph(BaseGraph):
 
         Parameters
         ----------
-        node_ids : list[int] | int
+        node_ids : list[int] | int | None
             The IDs of the nodes to get predecessors for.
+            If None, all nodes are used.
         attr_keys : Sequence[str] | str | None, optional
             The attribute keys to retrieve for predecessor nodes when ``return_attrs`` is True.
             If None, all attributes are retrieved.
