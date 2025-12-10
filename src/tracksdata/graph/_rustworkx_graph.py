@@ -656,7 +656,7 @@ class RustWorkXGraph(BaseGraph):
     def _get_neighbors(
         self,
         neighbors_func: Callable[[rx.PyDiGraph, int], rx.NodeIndices],
-        node_ids: list[int] | int,
+        node_ids: list[int] | int | None,
         attr_keys: Sequence[str] | str | None = None,
         *,
         return_attrs: bool = False,
@@ -666,11 +666,13 @@ class RustWorkXGraph(BaseGraph):
         See more information below.
         """
         single_node = False
-        if isinstance(node_ids, int):
+        rx_graph = self.rx_graph
+        if node_ids is None:
+            node_ids = list(rx_graph.node_indices())
+        elif isinstance(node_ids, int):
             node_ids = [node_ids]
             single_node = True
 
-        rx_graph = self.rx_graph
         if not return_attrs and attr_keys is not None:
             LOG.warning("attr_keys is ignored when return_attrs is False.")
 
@@ -717,7 +719,7 @@ class RustWorkXGraph(BaseGraph):
 
     def successors(
         self,
-        node_ids: list[int] | int,
+        node_ids: list[int] | int | None,
         attr_keys: Sequence[str] | str | None = None,
         *,
         return_attrs: bool = False,
@@ -727,8 +729,9 @@ class RustWorkXGraph(BaseGraph):
 
         Parameters
         ----------
-        node_ids : list[int] | int
+        node_ids : list[int] | int | None
             The IDs of the nodes to get the sucessors for.
+            If None, all nodes are used.
         attr_keys : Sequence[str] | str | None
             The attribute keys to retrieve when ``return_attrs`` is True.
             If None, all attributes are included.
@@ -753,7 +756,7 @@ class RustWorkXGraph(BaseGraph):
 
     def predecessors(
         self,
-        node_ids: list[int] | int,
+        node_ids: list[int] | int | None,
         attr_keys: Sequence[str] | str | None = None,
         *,
         return_attrs: bool = False,
@@ -763,8 +766,9 @@ class RustWorkXGraph(BaseGraph):
 
         Parameters
         ----------
-        node_ids : list[int] | int
+        node_ids : list[int] | int | None
             The IDs of the nodes to get the predecessors for.
+            If None, all nodes are used.
         attr_keys : Sequence[str] | str | None
             The attribute keys to retrieve when ``return_attrs`` is True.
             If None, all attributes are included.
