@@ -17,6 +17,7 @@ from zarr.storage import StoreLike
 
 from tracksdata.attrs import AttrComparison, NodeAttr
 from tracksdata.constants import DEFAULT_ATTR_KEYS
+from tracksdata.utils._cache import cache_method
 from tracksdata.utils._dtypes import (
     column_to_numpy,
     infer_default_value,
@@ -43,6 +44,9 @@ class BaseGraph(abc.ABC):
 
     node_added = Signal(int)
     node_removed = Signal(int)
+
+    def __init__(self) -> None:
+        self._cache = {}
 
     @property
     def supports_custom_indices(self) -> bool:
@@ -1082,12 +1086,23 @@ class BaseGraph(abc.ABC):
 
         return summary
 
-    def spatial_filter(self, attr_keys: list[str] | None = None, clear_cache: bool = False) -> "SpatialFilter":
+    def clear_cache(self) -> None:
+        """
+        Clear the cache of the graph.
+
+        NOTE: in the future we might want to allow clearing the cache by function name.
+        """
+        self._cache.clear()
+
+    @cache_method
+    def spatial_filter(self, attr_keys: list[str] | None = None) -> "SpatialFilter":
         """
         Create a spatial filter for efficient spatial queries of graph nodes.
 
         This method creates a spatial index of graph nodes based on their spatial coordinates,
         enabling efficient querying of nodes within spatial regions of interest (ROI).
+
+        IMPORTANT: Spatial filters are cached by default, but can be cleared with `graph.clear_cache()`.
 
         Parameters
         ----------
@@ -1098,9 +1113,6 @@ class BaseGraph(abc.ABC):
             - 2D: ["y", "x"]
             - 3D: ["z", "y", "x"] or ["t", "y", "x"]
             - 4D: ["t", "z", "y", "x"]
-        clear_cache : bool
-            Whether to clear the spatial filter cache before creating a new filter.
-            Default is False.
 
         Returns
         -------
@@ -1134,26 +1146,21 @@ class BaseGraph(abc.ABC):
         """
         from tracksdata.graph.filters._spatial_filter import SpatialFilter
 
-        cache_key = None if attr_keys is None else tuple(attr_keys)
-        if not hasattr(self, "_spatial_filter_cache") or clear_cache:
-            self._spatial_filter_cache: dict[tuple[str, ...] | None, SpatialFilter] = {}
+        return SpatialFilter(self, attr_keys=attr_keys)
 
-        if cache_key not in self._spatial_filter_cache:
-            self._spatial_filter_cache[cache_key] = SpatialFilter(self, attr_keys=attr_keys)
-
-        return self._spatial_filter_cache[cache_key]
-
+    @cache_method
     def bbox_spatial_filter(
         self,
         frame_attr_key: str | None = DEFAULT_ATTR_KEYS.T,
         bbox_attr_key: str = DEFAULT_ATTR_KEYS.BBOX,
-        clear_cache: bool = False,
     ) -> "BBoxSpatialFilter":
         """
         Create a spatial filter for efficient spatial queries of graph nodes using bounding boxes.
 
         This method creates a spatial index of graph nodes based on their bounding box coordinates,
         enabling efficient querying of nodes intersecting with spatial regions of interest (ROI).
+
+        IMPORTANT: Bounding box spatial filters are cached by default, but can be cleared with `graph.clear_cache()`.
 
         Parameters
         ----------
@@ -1167,9 +1174,6 @@ class BaseGraph(abc.ABC):
             The bounding box coordinates should be in the format:
             [min_x, min_y, min_z, ..., max_x, max_y, max_z, ...]
             where each dimension has a min and max value.
-        clear_cache : bool
-            Whether to clear the spatial filter cache before creating a new filter.
-            Default is False.
 
         Returns
         -------
@@ -1203,15 +1207,7 @@ class BaseGraph(abc.ABC):
         """
         from tracksdata.graph.filters._spatial_filter import BBoxSpatialFilter
 
-        cache_key = (frame_attr_key, bbox_attr_key)
-        if not hasattr(self, "_bbox_spatial_filter_cache") or clear_cache:
-            self._bbox_spatial_filter_cache: dict[tuple[str | None, str], BBoxSpatialFilter] = {}
-
-        if cache_key not in self._bbox_spatial_filter_cache:
-            self._bbox_spatial_filter_cache[cache_key] = BBoxSpatialFilter(
-                self, frame_attr_key=frame_attr_key, bbox_attr_key=bbox_attr_key
-            )
-        return self._bbox_spatial_filter_cache[cache_key]
+        return BBoxSpatialFilter(self, frame_attr_key=frame_attr_key, bbox_attr_key=bbox_attr_key)
 
     @overload
     def assign_tracklet_ids(
