@@ -2011,7 +2011,7 @@ def test_sqlgraph_edge_attr_index_creation(graph_backend: BaseGraph) -> None:
 
     inspector = sa.inspect(graph_backend._engine)
     indexes = inspector.get_indexes(graph_backend.Edge.__tablename__)
-    assert len(indexes) == 1
+    assert len(indexes) == 3  # including source_id and target_id indexes
     assert any(idx["name"] == index_name and idx.get("unique") for idx in indexes)
 
 
