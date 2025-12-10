@@ -900,8 +900,8 @@ class RustWorkXGraph(BaseGraph):
             raise ValueError(f"Cannot remove required node attribute key {key}")
 
         self._node_attr_keys.remove(key)
-        for node_id in self.rx_graph.node_indices():
-            self.rx_graph[node_id].pop(key, None)
+        for node_attr in self.rx_graph.nodes():
+            node_attr.pop(key, None)
 
     def add_edge_attr_key(self, key: str, default_value: Any) -> None:
         """
