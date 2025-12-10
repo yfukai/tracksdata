@@ -1998,6 +1998,7 @@ def test_sqlgraph_node_attr_index_creation(graph_backend: BaseGraph) -> None:
 
     inspector = sa.inspect(graph_backend._engine)
     indexes = inspector.get_indexes(graph_backend.Node.__tablename__)
+    assert len(indexes) == 1
     assert any(idx["name"] == index_name and idx["column_names"] == ["t", "label"] for idx in indexes)
 
 
@@ -2010,6 +2011,7 @@ def test_sqlgraph_edge_attr_index_creation(graph_backend: BaseGraph) -> None:
 
     inspector = sa.inspect(graph_backend._engine)
     indexes = inspector.get_indexes(graph_backend.Edge.__tablename__)
+    assert len(indexes) == 1
     assert any(idx["name"] == index_name and idx.get("unique") for idx in indexes)
 
 
