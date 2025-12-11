@@ -16,7 +16,8 @@ from sqlalchemy.sql.type_api import TypeEngine
 from tracksdata.attrs import AttrComparison, split_attr_comps
 from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.graph._base_graph import BaseGraph
-from tracksdata.graph.filters._base_filter import BaseFilter, cache_method
+from tracksdata.graph.filters._base_filter import BaseFilter
+from tracksdata.utils._cache import cache_method
 from tracksdata.utils._dataframe import unpack_array_attrs, unpickle_bytes_columns
 from tracksdata.utils._logging import LOG
 from tracksdata.utils._signal import is_signal_on
@@ -293,12 +294,12 @@ class SQLFilter(BaseFilter):
         if node_attr_keys is not None:
             node_attr_keys = [DEFAULT_ATTR_KEYS.T, *node_attr_keys]
         else:
-            node_attr_keys = [DEFAULT_ATTR_KEYS.T, *self._graph.node_attr_keys]
+            node_attr_keys = [DEFAULT_ATTR_KEYS.T, *self._graph.node_attr_keys()]
 
         node_attr_keys = list(dict.fromkeys(node_attr_keys))
 
         if edge_attr_keys is None:
-            edge_attr_keys = self._graph.edge_attr_keys.copy()
+            edge_attr_keys = self._graph.edge_attr_keys().copy()
 
         node_query = self._query_from_attr_keys(
             query=self._node_query,
@@ -474,7 +475,6 @@ class SQLGraph(BaseGraph):
         self._max_id_per_time = {}
         self._update_max_id_per_time()
 
-    @property
     def supports_custom_indices(self) -> bool:
         return True
 
@@ -522,14 +522,14 @@ class SQLGraph(BaseGraph):
         class Edge(Base):
             __tablename__ = "Edge"
             edge_id = sa.Column(sa.Integer, primary_key=True, unique=True, autoincrement=True)
-            source_id = sa.Column(sa.BigInteger, sa.ForeignKey(f"{node_tb_name}.node_id"))
-            target_id = sa.Column(sa.BigInteger, sa.ForeignKey(f"{node_tb_name}.node_id"))
+            source_id = sa.Column(sa.BigInteger, sa.ForeignKey(f"{node_tb_name}.node_id"), index=True)
+            target_id = sa.Column(sa.BigInteger, sa.ForeignKey(f"{node_tb_name}.node_id"), index=True)
 
         class Overlap(Base):
             __tablename__ = "Overlap"
             overlap_id = sa.Column(sa.Integer, primary_key=True, unique=True, autoincrement=True)
-            source_id = sa.Column(sa.BigInteger, sa.ForeignKey(f"{node_tb_name}.node_id"))
-            target_id = sa.Column(sa.BigInteger, sa.ForeignKey(f"{node_tb_name}.node_id"))
+            source_id = sa.Column(sa.BigInteger, sa.ForeignKey(f"{node_tb_name}.node_id"), index=True)
+            target_id = sa.Column(sa.BigInteger, sa.ForeignKey(f"{node_tb_name}.node_id"), index=True)
 
         class Metadata(Base):
             __tablename__ = "Metadata"
@@ -635,7 +635,7 @@ class SQLGraph(BaseGraph):
         ```
         """
         if validate_keys:
-            self._validate_attributes(attrs, self.node_attr_keys, "node")
+            self._validate_attributes(attrs, self.node_attr_keys(), "node")
 
             if "t" not in attrs:
                 raise ValueError(f"Node attributes must have a 't' key. Got {attrs.keys()}")
@@ -813,7 +813,7 @@ class SQLGraph(BaseGraph):
         ```
         """
         if validate_keys:
-            self._validate_attributes(attrs, self.edge_attr_keys, "edge")
+            self._validate_attributes(attrs, self.edge_attr_keys(), "edge")
 
         if hasattr(source_id, "item"):
             source_id = source_id.item()
@@ -972,7 +972,7 @@ class SQLGraph(BaseGraph):
         self,
         node_key: str,
         neighbor_key: str,
-        node_ids: list[int] | int,
+        node_ids: list[int] | int | None,
         attr_keys: Sequence[str] | str | None = None,
         *,
         return_attrs: bool = False,
@@ -989,8 +989,9 @@ class SQLGraph(BaseGraph):
             The edge attribute key for the query node (e.g., "source_id").
         neighbor_key : str
             The edge attribute key for the neighbor node (e.g., "target_id").
-        node_ids : list[int] | int
+        node_ids : list[int] | int | None
             The IDs of the nodes to get neighbors for.
+            If None, all nodes are used.
         attr_keys : Sequence[str] | str | None, optional
             The attribute keys to retrieve for neighbor nodes when ``return_attrs`` is True.
             If None, all attributes are retrieved.
@@ -1007,29 +1008,37 @@ class SQLGraph(BaseGraph):
             neighbor ID list.
         """
         single_node = False
+        filter_node_ids: list[int] | None
         if isinstance(node_ids, int):
             node_ids = [node_ids]
+            filter_node_ids = node_ids
             single_node = True
+        elif node_ids is None:
+            node_ids = self.node_ids()
+            filter_node_ids = None
+        else:
+            filter_node_ids = node_ids
 
         if isinstance(attr_keys, str):
             attr_keys = [attr_keys]
 
         with Session(self._engine) as session:
-            if attr_keys is None:
-                # all columns
-                node_columns = [self.Node]
-            elif not return_attrs:
+            if not return_attrs:
                 # only neighbor IDs
                 node_columns = [self.Node.node_id]
                 if attr_keys is not None:
                     LOG.warning("attr_keys is ignored when return_attrs is False.")
                     attr_keys = None
+            elif attr_keys is None:
+                # all columns
+                node_columns = [self.Node]
             else:
                 node_columns = [getattr(self.Node, key) for key in attr_keys]
 
             query = session.query(getattr(self.Edge, node_key), *node_columns)
             query = query.join(self.Edge, getattr(self.Edge, neighbor_key) == self.Node.node_id)
-            query = query.filter(getattr(self.Edge, node_key).in_(node_ids))
+            if filter_node_ids is not None:
+                query = query.filter(getattr(self.Edge, node_key).in_(filter_node_ids))
 
             node_df = pl.read_database(
                 query.statement,
@@ -1055,7 +1064,7 @@ class SQLGraph(BaseGraph):
 
     def successors(
         self,
-        node_ids: list[int] | int,
+        node_ids: list[int] | int | None,
         attr_keys: Sequence[str] | str | None = None,
         *,
         return_attrs: bool = False,
@@ -1069,8 +1078,9 @@ class SQLGraph(BaseGraph):
 
         Parameters
         ----------
-        node_ids : list[int] | int
+        node_ids : list[int] | int | None
             The IDs of the nodes to get successors for.
+            If None, all nodes are used.
         attr_keys : Sequence[str] | str | None, optional
             The attribute keys to retrieve for successor nodes when ``return_attrs`` is True.
             If None, all attributes are retrieved.
@@ -1103,7 +1113,7 @@ class SQLGraph(BaseGraph):
 
     def predecessors(
         self,
-        node_ids: list[int] | int,
+        node_ids: list[int] | int | None,
         attr_keys: Sequence[str] | str | None = None,
         *,
         return_attrs: bool = False,
@@ -1117,8 +1127,9 @@ class SQLGraph(BaseGraph):
 
         Parameters
         ----------
-        node_ids : list[int] | int
+        node_ids : list[int] | int | None
             The IDs of the nodes to get predecessors for.
+            If None, all nodes are used.
         attr_keys : Sequence[str] | str | None, optional
             The attribute keys to retrieve for predecessor nodes when ``return_attrs`` is True.
             If None, all attributes are retrieved.
@@ -1270,12 +1281,10 @@ class SQLGraph(BaseGraph):
 
         return edges_df
 
-    @property
     def node_attr_keys(self) -> list[str]:
         keys = list(self.Node.__table__.columns.keys())
         return keys
 
-    @property
     def edge_attr_keys(self) -> list[str]:
         keys = list(self.Edge.__table__.columns.keys())
         for k in [DEFAULT_ATTR_KEYS.EDGE_ID, DEFAULT_ATTR_KEYS.EDGE_SOURCE, DEFAULT_ATTR_KEYS.EDGE_TARGET]:
@@ -1367,7 +1376,7 @@ class SQLGraph(BaseGraph):
         self._define_schema(overwrite=False)
 
     def add_node_attr_key(self, key: str, default_value: Any) -> None:
-        if key in self.node_attr_keys:
+        if key in self.node_attr_keys():
             raise ValueError(f"Node attribute key {key} already exists")
 
         self._add_new_column(self.Node, key, default_value)
@@ -1384,7 +1393,7 @@ class SQLGraph(BaseGraph):
         self._drop_column(self.Node, key)
 
     def add_edge_attr_key(self, key: str, default_value: Any) -> None:
-        if key in self.edge_attr_keys:
+        if key in self.edge_attr_keys():
             raise ValueError(f"Edge attribute key {key} already exists")
 
         self._add_new_column(self.Edge, key, default_value)
@@ -1397,12 +1406,10 @@ class SQLGraph(BaseGraph):
         self._array_columns[self.Edge.__tablename__].pop(key, None)
         self._drop_column(self.Edge, key)
 
-    @property
     def num_edges(self) -> int:
         with Session(self._engine) as session:
             return int(session.query(self.Edge).count())
 
-    @property
     def num_nodes(self) -> int:
         with Session(self._engine) as session:
             return int(session.query(self.Node).count())
@@ -1518,7 +1525,7 @@ class SQLGraph(BaseGraph):
             track_node_ids = list(set(self.tracklet_nodes(node_ids)))
         else:
             track_node_ids = None
-        if output_key in self.node_attr_keys:
+        if output_key in self.node_attr_keys():
             node_attr_keys = [output_key]
         else:
             node_attr_keys = []
@@ -1539,24 +1546,20 @@ class SQLGraph(BaseGraph):
         node_ids: list[int] | int | None,
         node_key: str,
     ) -> list[int] | int:
+        edge_key_col = getattr(self.Edge, node_key)
+
         if isinstance(node_ids, int):
+            stmt = sa.select(sa.func.count()).where(edge_key_col == node_ids)
             with Session(self._engine) as session:
-                query = (
-                    session.query(
-                        getattr(self.Edge, node_key),
-                    )
-                    .filter(getattr(self.Edge, node_key) == node_ids)
-                    .count()
-                )
-            return int(query)
+                return int(session.execute(stmt).scalar())
+
+        stmt = sa.select(edge_key_col, sa.func.count()).group_by(edge_key_col)
+        if node_ids is not None:
+            stmt = stmt.where(edge_key_col.in_(node_ids))
 
         with Session(self._engine) as session:
             # get the number of edges for each using group by and count
-            node_id_col = getattr(self.Edge, node_key)
-            query = session.query(node_id_col, sa.func.count(node_id_col)).group_by(node_id_col)
-            if node_ids is not None:
-                query = query.filter(node_id_col.in_(node_ids))
-            degree = dict(query.all())
+            degree = dict(session.execute(stmt).all())
 
         if node_ids is None:
             # this is necessary to make sure it's the same order as node_ids
@@ -1614,8 +1617,8 @@ class SQLGraph(BaseGraph):
             A compressed tracklet graph.
         """
 
-        if tracklet_id_key not in self.node_attr_keys:
-            raise ValueError(f"Track id key '{tracklet_id_key}' not found in graph. Expected '{self.node_attr_keys}'")
+        if tracklet_id_key not in self.node_attr_keys():
+            raise ValueError(f"Track id key '{tracklet_id_key}' not found in graph. Expected '{self.node_attr_keys()}'")
 
         with Session(self._engine) as session:
             node_query = sa.select(getattr(self.Node, tracklet_id_key)).distinct()
@@ -1730,7 +1733,6 @@ class SQLGraph(BaseGraph):
                     raise ValueError(f"Edge {edge_id} does not exist in the graph.")
             session.commit()
 
-    @property
     def metadata(self) -> dict[str, Any]:
         with Session(self._engine) as session:
             result = session.query(self.Metadata).all()
