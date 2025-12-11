@@ -439,10 +439,10 @@ def test_remove_node_attr_key(graph_backend: BaseGraph) -> None:
     node_a = graph_backend.add_node({"t": 0, "label": "a"})
     node_b = graph_backend.add_node({"t": 1, "label": "b"})
 
-    assert "label" in graph_backend.node_attr_keys
+    assert "label" in graph_backend.node_attr_keys()
 
     graph_backend.remove_node_attr_key("label")
-    assert "label" not in graph_backend.node_attr_keys
+    assert "label" not in graph_backend.node_attr_keys()
 
     df = graph_backend.filter(node_ids=[node_a, node_b]).node_attrs()
     assert "label" not in df.columns
@@ -474,10 +474,10 @@ def test_remove_edge_attr_key(graph_backend: BaseGraph) -> None:
     graph_backend.add_edge_attr_key("weight", 0.5)
     graph_backend.add_edge(node1, node2, attrs={"weight": 1.2})
 
-    assert "weight" in graph_backend.edge_attr_keys
+    assert "weight" in graph_backend.edge_attr_keys()
 
     graph_backend.remove_edge_attr_key("weight")
-    assert "weight" not in graph_backend.edge_attr_keys
+    assert "weight" not in graph_backend.edge_attr_keys()
 
     df = graph_backend.edge_attrs()
     assert "weight" not in df.columns
