@@ -644,10 +644,32 @@ class BaseGraph(abc.ABC):
         """
 
     @abc.abstractmethod
+    def remove_node_attr_key(self, key: str) -> None:
+        """
+        Remove an existing node attribute key from the graph.
+
+        Parameters
+        ----------
+        key : str
+            The attribute key to remove.
+        """
+
+    @abc.abstractmethod
     def add_edge_attr_key(self, key: str, default_value: Any) -> None:
         """
         Add a new attribute key to the graph.
         All existing edges will have the default value for the new attribute key.
+        """
+
+    @abc.abstractmethod
+    def remove_edge_attr_key(self, key: str) -> None:
+        """
+        Remove an existing edge attribute key from the graph.
+
+        Parameters
+        ----------
+        key : str
+            The attribute key to remove.
         """
 
     @abc.abstractmethod

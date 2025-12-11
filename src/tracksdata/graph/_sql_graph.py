@@ -1364,17 +1364,47 @@ class SQLGraph(BaseGraph):
         setattr(table_class, key, sa_column)
         table_class.__table__.append_column(sa_column)
 
+    def _drop_column(self, table_class: type[DeclarativeBase], key: str) -> None:
+        drop_column_stmt = sa.DDL(f"ALTER TABLE {table_class.__table__} DROP COLUMN {key}")
+        LOG.info("drop %s column statement:\n'%s'", table_class.__table__, drop_column_stmt)
+
+        with Session(self._engine) as session:
+            session.execute(drop_column_stmt)
+            session.commit()
+
+        # refresh ORM schema to reflect database changes
+        self._define_schema(overwrite=False)
+
     def add_node_attr_key(self, key: str, default_value: Any) -> None:
         if key in self.node_attr_keys():
             raise ValueError(f"Node attribute key {key} already exists")
 
         self._add_new_column(self.Node, key, default_value)
 
+    def remove_node_attr_key(self, key: str) -> None:
+        if key not in self.node_attr_keys():
+            raise ValueError(f"Node attribute key {key} does not exist")
+
+        if key in (DEFAULT_ATTR_KEYS.NODE_ID, DEFAULT_ATTR_KEYS.T):
+            raise ValueError(f"Cannot remove required node attribute key {key}")
+
+        self._boolean_columns[self.Node.__tablename__].pop(key, None)
+        self._array_columns[self.Node.__tablename__].pop(key, None)
+        self._drop_column(self.Node, key)
+
     def add_edge_attr_key(self, key: str, default_value: Any) -> None:
         if key in self.edge_attr_keys():
             raise ValueError(f"Edge attribute key {key} already exists")
 
         self._add_new_column(self.Edge, key, default_value)
+
+    def remove_edge_attr_key(self, key: str) -> None:
+        if key not in self.edge_attr_keys():
+            raise ValueError(f"Edge attribute key {key} does not exist")
+
+        self._boolean_columns[self.Edge.__tablename__].pop(key, None)
+        self._array_columns[self.Edge.__tablename__].pop(key, None)
+        self._drop_column(self.Edge, key)
 
     def num_edges(self) -> int:
         with Session(self._engine) as session:
