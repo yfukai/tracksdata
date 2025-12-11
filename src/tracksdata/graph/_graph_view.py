@@ -271,7 +271,7 @@ class GraphView(RustWorkXGraph, MappedGraphMixin):
         # because attributes are passed by reference, we need don't need if both are rustworkx graphs
         if not self._is_root_rx_graph:
             if self.sync:
-                for _, _, edge_attr in self.rx_graph.weighted_edge_list():
+                for edge_attr in self.rx_graph.edges():
                     edge_attr.pop(key, None)
             else:
                 self._out_of_sync = True

@@ -1382,7 +1382,7 @@ class SQLGraph(BaseGraph):
         self._add_new_column(self.Node, key, default_value)
 
     def remove_node_attr_key(self, key: str) -> None:
-        if key not in self.node_attr_keys:
+        if key not in self.node_attr_keys():
             raise ValueError(f"Node attribute key {key} does not exist")
 
         if key in (DEFAULT_ATTR_KEYS.NODE_ID, DEFAULT_ATTR_KEYS.T):
@@ -1399,7 +1399,7 @@ class SQLGraph(BaseGraph):
         self._add_new_column(self.Edge, key, default_value)
 
     def remove_edge_attr_key(self, key: str) -> None:
-        if key not in self.edge_attr_keys:
+        if key not in self.edge_attr_keys():
             raise ValueError(f"Edge attribute key {key} does not exist")
 
         self._boolean_columns[self.Edge.__tablename__].pop(key, None)

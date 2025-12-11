@@ -896,7 +896,7 @@ class RustWorkXGraph(BaseGraph):
         """
         Remove an existing node attribute key from the graph.
         """
-        if key not in self.node_attr_keys:
+        if key not in self.node_attr_keys():
             raise ValueError(f"Node attribute key {key} does not exist")
 
         if key in (DEFAULT_ATTR_KEYS.NODE_ID, DEFAULT_ATTR_KEYS.T):
@@ -929,7 +929,7 @@ class RustWorkXGraph(BaseGraph):
         """
         Remove an existing edge attribute key from the graph.
         """
-        if key not in self.edge_attr_keys:
+        if key not in self.edge_attr_keys():
             raise ValueError(f"Edge attribute key {key} does not exist")
 
         self._edge_attr_keys.remove(key)
