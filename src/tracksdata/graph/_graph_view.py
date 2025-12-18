@@ -704,6 +704,18 @@ class GraphView(RustWorkXGraph, MappedGraphMixin):
         node_map = {k: self._map_to_external(v) for k, v in node_map.items()}
         return rx_graph, node_map
 
+    def has_node(self, node_id: int) -> bool:
+        """
+        Check if the graph has a node.
+        """
+        try:
+            local_node_id = self._map_to_local(node_id)
+        except KeyError:
+            LOG.warning(f"`node_id` {node_id} not found in index map.")
+            return False
+
+        return super().has_node(local_node_id)
+
     def has_edge(self, source_id: int, target_id: int) -> bool:
         """
         Check if the graph has an edge between two nodes.

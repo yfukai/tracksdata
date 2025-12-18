@@ -73,6 +73,13 @@ def test_add_node(graph_backend: BaseGraph) -> None:
     assert graph_backend.node_attrs(attr_keys=["y", "t", "x"]).columns == ["y", "t", "x"]
 
 
+def test_has_node(graph_backend: BaseGraph) -> None:
+    """Test has_node across backends."""
+    node_id = graph_backend.add_node({"t": 0})
+    assert graph_backend.has_node(node_id)
+    assert not graph_backend.has_node(node_id + 1)
+
+
 def test_add_edge(graph_backend: BaseGraph) -> None:
     """Test adding edges with attributes."""
     # Add node attribute key

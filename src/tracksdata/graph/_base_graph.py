@@ -1568,6 +1568,12 @@ class BaseGraph(abc.ABC):
         return to_traccuracy_graph(self, array_view_kwargs=array_view_kwargs)
 
     @abc.abstractmethod
+    def has_node(self, node_id: int) -> bool:
+        """
+        Check if the graph has a node.
+        """
+
+    @abc.abstractmethod
     def has_edge(self, source_id: int, target_id: int) -> bool:
         """
         Check if the graph has an edge between two nodes.

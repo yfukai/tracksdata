@@ -1141,6 +1141,42 @@ def test_graph_view_remove_edge(graph_backend: BaseGraph) -> None:
 
 
 @parametrize_subgraph_tests
+def test_has_node(graph_backend: BaseGraph, use_subgraph: bool) -> None:
+    """Test has_node functionality on both original graphs and subgraphs."""
+
+    @contextmanager
+    def _ignore_index_map_warnings():
+        def flt(r) -> bool:
+            return not re.search(r"not found in index map", r.getMessage())
+
+        LOG.addFilter(flt)
+        try:
+            yield
+        finally:
+            LOG.removeFilter(flt)
+
+    graph_with_data = create_test_graph(graph_backend, use_subgraph)
+
+    for node_id in graph_with_data._test_nodes:  # type: ignore
+        assert graph_with_data.has_node(node_id)
+
+    with _ignore_index_map_warnings():
+        assert not graph_with_data.has_node(10)
+
+    if isinstance(graph_with_data, GraphView):
+        parent = graph_with_data._root
+        parent_nodes = parent.node_ids()
+        graph_nodes = graph_with_data.node_ids()
+
+        for node_id in parent_nodes:
+            if node_id not in graph_nodes:
+                with _ignore_index_map_warnings():
+                    assert not graph_with_data.has_node(node_id)
+            else:
+                assert graph_with_data.has_node(node_id)
+
+
+@parametrize_subgraph_tests
 def test_has_edge(graph_backend: BaseGraph, use_subgraph: bool) -> None:
     """Test has_edge functionality on both original graphs and subgraphs."""
 

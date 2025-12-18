@@ -1344,6 +1344,14 @@ class RustWorkXGraph(BaseGraph):
         rx_graph, node_map = self.rx_graph.subgraph_with_nodemap(node_ids)
         return rx_graph, node_map
 
+    def has_node(self, node_id: int) -> bool:
+        """
+        Check if the graph has a node.
+        """
+        if hasattr(self.rx_graph, "has_node"):
+            return self.rx_graph.has_node(node_id)
+        return node_id in self.rx_graph.node_indices()
+
     def has_edge(self, source_id: int, target_id: int) -> bool:
         """
         Check if the graph has an edge between two nodes.
@@ -1834,6 +1842,18 @@ class IndexedRXGraph(RustWorkXGraph, MappedGraphMixin):
             include_targets=include_targets,
             include_sources=include_sources,
         )
+
+    def has_node(self, node_id: int) -> bool:
+        """
+        Check if the graph has a node.
+        """
+        try:
+            local_node_id = self._map_to_local(node_id)
+        except KeyError:
+            LOG.warning(f"`node_id` {node_id} not found in index map.")
+            return False
+
+        return super().has_node(local_node_id)
 
     def has_edge(self, source_id: int, target_id: int) -> bool:
         """

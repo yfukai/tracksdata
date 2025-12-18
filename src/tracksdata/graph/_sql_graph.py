@@ -1655,6 +1655,13 @@ class SQLGraph(BaseGraph):
 
         return graph
 
+    def has_node(self, node_id: int) -> bool:
+        """
+        Check if the graph has a node.
+        """
+        with Session(self._engine) as session:
+            return session.query(self.Node).filter(self.Node.node_id == node_id).count() > 0
+
     def has_edge(self, source_id: int, target_id: int) -> bool:
         """
         Check if the graph has an edge between two nodes.
