@@ -1294,7 +1294,6 @@ class SQLGraph(BaseGraph):
             keys.remove(k)
         return keys
 
-    
     def _resolve_attr_keys(
         self,
         table_class: type[DeclarativeBase],
@@ -1333,7 +1332,6 @@ class SQLGraph(BaseGraph):
         name = f"ix_{table_class.__tablename__.lower()}_{cols_fragment}"
         return resolved_columns, name
 
-
     def _ensure_attr_index(
         self,
         table_class: type[DeclarativeBase],
@@ -1371,7 +1369,6 @@ class SQLGraph(BaseGraph):
         )
         index.drop(bind=self._engine, checkfirst=True)
         return name
-
 
     def ensure_node_attr_index(
         self,
@@ -1456,8 +1453,6 @@ class SQLGraph(BaseGraph):
             The dropped index name.
         """
         return self._drop_attr_index(self.Edge, attr_keys)
-
-
 
     def _sqlalchemy_type_inference(self, default_value: Any) -> TypeEngine:
         if np.isscalar(default_value) and hasattr(default_value, "item"):
