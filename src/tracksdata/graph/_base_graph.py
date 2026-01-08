@@ -1155,7 +1155,7 @@ class BaseGraph(abc.ABC):
         from tracksdata.graph.filters._spatial_filter import SpatialFilter
 
         cache_key = None if attr_keys is None else tuple(attr_keys)
-        if not hasattr(self, "_spatial_filter_cache") or clear_cache:
+        if not hasattr(self, "_spatial_filter_cache"):
             self._spatial_filter_cache: dict[tuple[str, ...] | None, SpatialFilter] = {}
 
         if cache_key not in self._spatial_filter_cache:

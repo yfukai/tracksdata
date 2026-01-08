@@ -15,7 +15,7 @@ class SQLIndexingBenchmark:
         if hasattr(graph, "ensure_node_attr_index"):
             graph.ensure_node_attr_index("attr1")
         self.graph = graph
- 
+
     def time_sql_index_search(self) -> None:
         self.graph.filter(td.NodeAttr("attr1") == 0).subgraph()
 
