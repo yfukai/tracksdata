@@ -1294,14 +1294,27 @@ class SQLGraph(BaseGraph):
             keys.remove(k)
         return keys
 
-    def _ensure_attr_index(
+    
+    def _resolve_attr_keys(
         self,
         table_class: type[DeclarativeBase],
         attr_keys: Sequence[str] | str,
-        *,
-        unique: bool = False,
-        name: str | None = None,
-    ) -> str:
+    ) -> tuple[list[sa.Column], str]:
+        """Check that the given attribute keys exist on the table class and
+        generate resolved columns and an index name based on them.
+
+        Parameters
+        ----------
+        table_class : type[DeclarativeBase]
+            The SQLAlchemy table class.
+        attr_keys : Sequence[str] | str
+            The attribute keys to include in the index name.
+
+        Returns
+        -------
+        str
+            The generated index name.
+        """
         if isinstance(attr_keys, str):
             attr_keys = [attr_keys]
 
@@ -1311,14 +1324,27 @@ class SQLGraph(BaseGraph):
         missing = [key for key in attr_keys if key not in table_class.__table__.columns]
         if missing:
             raise ValueError(f"Columns {missing} do not exist on table {table_class.__tablename__}")
-
         resolved_columns = [getattr(table_class, key) for key in attr_keys]
 
-        if name is None:
-            cols_fragment = "_".join(attr_keys)
-            name = f"ix_{table_class.__tablename__.lower()}_{cols_fragment}"
+        if isinstance(attr_keys, str):
+            attr_keys = [attr_keys]
+
+        cols_fragment = "_".join(attr_keys)
+        name = f"ix_{table_class.__tablename__.lower()}_{cols_fragment}"
+        return resolved_columns, name
+
+
+    def _ensure_attr_index(
+        self,
+        table_class: type[DeclarativeBase],
+        attr_keys: Sequence[str] | str,
+        *,
+        unique: bool = False,
+    ) -> str:
+        resolved_columns, name = self._resolve_attr_keys(table_class, attr_keys)
 
         index = sa.Index(name, *resolved_columns, unique=unique)
+
         LOG.info(
             "Ensuring index '%s' on table %s (columns=%s, unique=%s)",
             name,
@@ -1327,14 +1353,31 @@ class SQLGraph(BaseGraph):
             unique,
         )
         index.create(bind=self._engine, checkfirst=True)
-        return index.name
+        return name
+
+    def _drop_attr_index(
+        self,
+        table_class: type[DeclarativeBase],
+        attr_keys: Sequence[str] | str,
+    ) -> str:
+        resolved_columns, name = self._resolve_attr_keys(table_class, attr_keys)
+        index = sa.Index(name, *resolved_columns)
+
+        LOG.info(
+            "Dropping index '%s' on table %s (columns=%s)",
+            name,
+            table_class.__tablename__,
+            attr_keys,
+        )
+        index.drop(bind=self._engine, checkfirst=True)
+        return name
+
 
     def ensure_node_attr_index(
         self,
         attr_keys: Sequence[str] | str,
         *,
         unique: bool = False,
-        name: str | None = None,
     ) -> str:
         """
         Ensure an index exists for the given node attribute columns.
@@ -1347,25 +1390,21 @@ class SQLGraph(BaseGraph):
             or a list of multiple columns for a composite index.
         unique : bool, default False
             Whether the index should enforce uniqueness.
-        name : str | None, default None
-            Optional custom index name. If omitted a deterministic name is
-            generated using the table and column names.
 
         Returns
         -------
         str
-            The name of the index (either the provided `name` or the generated
-            one).
+            The name of the index.
+
         """
 
-        return self._ensure_attr_index(self.Node, attr_keys, unique=unique, name=name)
+        return self._ensure_attr_index(self.Node, attr_keys, unique=unique)
 
     def ensure_edge_attr_index(
         self,
         attr_keys: Sequence[str] | str,
         *,
         unique: bool = False,
-        name: str | None = None,
     ) -> str:
         """Ensure an index exists for the given edge attribute columns.
 
@@ -1376,18 +1415,49 @@ class SQLGraph(BaseGraph):
             or a list of multiple columns for a composite index.
         unique : bool, default False
             Whether the index should enforce uniqueness.
-        name : str | None, default None
-            Optional custom index name. If omitted a deterministic name is
-            generated using the table and column names.
 
         Returns
         -------
         str
-            The name of the index (either the provided `name` or the generated
-            one).
+            The name of the index.
+
         """
 
-        return self._ensure_attr_index(self.Edge, attr_keys, unique=unique, name=name)
+        return self._ensure_attr_index(self.Edge, attr_keys, unique=unique)
+
+    def drop_node_attr_index(self, attr_keys: Sequence[str] | str) -> str:
+        """Drop an index for the given node attribute columns.
+
+        Parameters
+        ----------
+        attr_keys : Sequence[str] | str
+            Column names to include in the index. Can be a single column name
+            or a list of multiple columns for a composite index.
+
+        Returns
+        -------
+        str
+            The dropped index name.
+        """
+        return self._drop_attr_index(self.Node, attr_keys)
+
+    def drop_edge_attr_index(self, attr_keys: Sequence[str] | str) -> str:
+        """Drop an index for the given edge attribute columns.
+
+        Parameters
+        ----------
+        attr_keys : Sequence[str] | str
+            Column names to include in the index. Can be a single column name
+            or a list of multiple columns for a composite index.
+
+        Returns
+        -------
+        str
+            The dropped index name.
+        """
+        return self._drop_attr_index(self.Edge, attr_keys)
+
+
 
     def _sqlalchemy_type_inference(self, default_value: Any) -> TypeEngine:
         if np.isscalar(default_value) and hasattr(default_value, "item"):
