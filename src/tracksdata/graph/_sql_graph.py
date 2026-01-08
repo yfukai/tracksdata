@@ -1336,7 +1336,9 @@ class SQLGraph(BaseGraph):
         unique: bool = False,
         name: str | None = None,
     ) -> str:
-        """Ensure an index exists for the given node attribute columns.
+        """
+        Ensure an index exists for the given node attribute columns.
+        If they are already indexed, they are kept as they are.
 
         Parameters
         ----------
