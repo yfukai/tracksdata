@@ -23,7 +23,7 @@ TracksData supports multiple graph backends for different use cases:
 - **Features**: Persistent storage, complex queries, database indexes on frequently filtered attributes
 
 SQLGraph lets you create indexes on node or edge attributes to keep repeated
-filters fast:
+filters fast (-150x speedup when selecting 1k nodes out of 10M total nodes.):
 
 ```python
 graph.ensure_node_attr_index(["t", "label"])  # composite index
