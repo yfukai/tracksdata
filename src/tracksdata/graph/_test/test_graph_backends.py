@@ -2049,7 +2049,7 @@ def test_sqlgraph_edge_attr_index_create_and_drop(graph_backend: BaseGraph) -> N
     graph_backend.add_edge_attr_key("score", 0.0)
     index_name = f"ix_{graph_backend.Edge.__tablename__.lower()}_score"
 
-    graph_backend.set_edge_attr_index("score", unique=True)
+    graph_backend.create_edge_attr_index("score", unique=True)
 
     inspector = sa.inspect(graph_backend._engine)
     indexes = inspector.get_indexes(graph_backend.Edge.__tablename__)
