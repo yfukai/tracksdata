@@ -2028,7 +2028,7 @@ def test_sqlgraph_node_attr_index_create_and_drop(graph_backend: BaseGraph) -> N
     graph_backend.add_node_attr_key("label", "")
     index_name = f"ix_{graph_backend.Node.__tablename__.lower()}_t_label"
 
-    graph_backend.ensure_node_attr_index(["t", "label"], unique=False)
+    graph_backend.create_node_attr_index(["t", "label"], unique=False)
 
     inspector = sa.inspect(graph_backend._engine)
     indexes = inspector.get_indexes(graph_backend.Node.__tablename__)
@@ -2049,7 +2049,7 @@ def test_sqlgraph_edge_attr_index_create_and_drop(graph_backend: BaseGraph) -> N
     graph_backend.add_edge_attr_key("score", 0.0)
     index_name = f"ix_{graph_backend.Edge.__tablename__.lower()}_score"
 
-    graph_backend.ensure_edge_attr_index("score", unique=True)
+    graph_backend.set_edge_attr_index("score", unique=True)
 
     inspector = sa.inspect(graph_backend._engine)
     indexes = inspector.get_indexes(graph_backend.Edge.__tablename__)
@@ -2069,7 +2069,7 @@ def test_sqlgraph_index_missing_column(graph_backend: BaseGraph) -> None:
         pytest.skip("Only SQLGraph supports explicit SQL indexes")
 
     with pytest.raises(ValueError, match=r"Columns .* do not exist"):
-        graph_backend.ensure_node_attr_index("does_not_exist")
+        graph_backend.create_node_attr_index("does_not_exist")
 
 
 def test_remove_node(graph_backend: BaseGraph) -> None:

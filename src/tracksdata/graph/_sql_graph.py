@@ -1332,7 +1332,7 @@ class SQLGraph(BaseGraph):
         name = f"ix_{table_class.__tablename__.lower()}_{cols_fragment}"
         return resolved_columns, name
 
-    def _ensure_attr_index(
+    def _create_attr_index(
         self,
         table_class: type[DeclarativeBase],
         attr_keys: Sequence[str] | str,
@@ -1370,7 +1370,7 @@ class SQLGraph(BaseGraph):
         index.drop(bind=self._engine, checkfirst=True)
         return name
 
-    def ensure_node_attr_index(
+    def create_node_attr_index(
         self,
         attr_keys: Sequence[str] | str,
         *,
@@ -1395,9 +1395,9 @@ class SQLGraph(BaseGraph):
 
         """
 
-        return self._ensure_attr_index(self.Node, attr_keys, unique=unique)
+        return self._create_attr_index(self.Node, attr_keys, unique=unique)
 
-    def ensure_edge_attr_index(
+    def create_edge_attr_index(
         self,
         attr_keys: Sequence[str] | str,
         *,
@@ -1420,7 +1420,7 @@ class SQLGraph(BaseGraph):
 
         """
 
-        return self._ensure_attr_index(self.Edge, attr_keys, unique=unique)
+        return self._create_attr_index(self.Edge, attr_keys, unique=unique)
 
     def drop_node_attr_index(self, attr_keys: Sequence[str] | str) -> str:
         """Drop an index for the given node attribute columns.

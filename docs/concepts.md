@@ -26,8 +26,8 @@ SQLGraph lets you create indexes on node or edge attributes to keep repeated
 filters fast (-150x speedup when selecting 1k nodes out of 10M total nodes.):
 
 ```python
-graph.ensure_node_attr_index(["t", "label"])  # composite index
-graph.ensure_edge_attr_index("score", unique=True)
+graph.create_node_attr_index(["t", "label"])  # composite index
+graph.create_edge_attr_index("score", unique=True)
 ```
 
 ### GraphView
