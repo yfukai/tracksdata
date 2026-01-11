@@ -1138,6 +1138,7 @@ class RustWorkXGraph(BaseGraph):
         tracklet_id_offset: int | None = None,
         node_ids: list[int] | None = None,
         return_id_update: bool = False,
+        allow_frame_skip: bool = False,
     ) -> rx.PyDiGraph | tuple[rx.PyDiGraph, pl.DataFrame]:
         # local import to avoid circular import
         from tracksdata.functional._rx import _assign_tracklet_ids
@@ -1152,6 +1153,7 @@ class RustWorkXGraph(BaseGraph):
                     reset=reset,
                     tracklet_id_offset=tracklet_id_offset,
                     return_id_update=return_id_update,
+                    allow_frame_skip=allow_frame_skip,
                 )
             )
         else:
@@ -1174,7 +1176,9 @@ class RustWorkXGraph(BaseGraph):
                     tracklet_id_offset = max(previous_id_df[output_key].max(), 0) + 1
 
             try:
-                track_node_ids, tracklet_ids, tracks_graph = _assign_tracklet_ids(self.rx_graph, tracklet_id_offset)
+                track_node_ids, tracklet_ids, tracks_graph = _assign_tracklet_ids(
+                    self.rx_graph, tracklet_id_offset, allow_frame_skip=allow_frame_skip
+                )
             except RuntimeError as e:
                 raise RuntimeError(
                     "Are you sure this graph is a valid lineage graph?\n"
