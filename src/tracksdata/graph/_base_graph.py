@@ -19,8 +19,8 @@ from tracksdata.attrs import AttrComparison, NodeAttr
 from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.utils._cache import cache_method
 from tracksdata.utils._dtypes import (
+    AttrSchema,
     column_to_numpy,
-    infer_default_value,
     polars_dtype_to_numpy_dtype,
 )
 from tracksdata.utils._logging import LOG
@@ -637,11 +637,93 @@ class BaseGraph(abc.ABC):
         Get the keys of the attributes of the edges.
         """
 
+    @overload
     @abc.abstractmethod
-    def add_node_attr_key(self, key: str, default_value: Any) -> None:
+    def add_node_attr_key(self, schema: AttrSchema) -> None: ...
+
+    @overload
+    @abc.abstractmethod
+    def add_node_attr_key(
+        self,
+        key: str,
+        dtype: pl.DataType,
+        default_value: Any = None,
+    ) -> None: ...
+
+    @abc.abstractmethod
+    def add_node_attr_key(
+        self,
+        key_or_schema: str | AttrSchema,
+        dtype: pl.DataType | None = None,
+        default_value: Any = None,
+    ) -> None:
         """
         Add a new attribute key to the graph.
-        All existing nodes will have the default value for the new attribute key.
+
+        All existing nodes will have the specified default value for the new attribute key.
+
+        Parameters
+        ----------
+        key_or_schema : str | AttrSchema
+            Either the attribute key name (str) or an AttrSchema object containing
+            the key, dtype, and default value.
+        dtype : pl.DataType, optional
+            The polars data type for this attribute. Required when key_or_schema is a string.
+            If provided with default_value, compatibility will be validated.
+        default_value : Any, optional
+            The default value for existing nodes. If None and dtype is provided,
+            a default will be inferred from the dtype based on these rules:
+            - Unsigned integers (pl.UInt*) → 0
+            - Signed integers (pl.Int*) → -1
+            - Floats (pl.Float*) → -1.0
+            - Boolean → False
+            - String → ""
+            - Arrays (pl.Array) → np.zeros with correct shape and dtype
+            - Objects/Lists → None
+
+        Raises
+        ------
+        TypeError
+            If dtype is not provided when using string key.
+        ValueError
+            If the attribute key already exists or if default_value and dtype are incompatible.
+
+        Examples
+        --------
+        Add attribute with dtype only (default inferred):
+
+        ```python
+        import polars as pl
+
+        graph.add_node_attr_key("count", pl.UInt32)  # default=0
+        ```
+
+        Add attribute with dtype and custom default:
+
+        ```python
+        graph.add_node_attr_key("score", pl.Float64, default_value=-99.0)
+        ```
+
+        Add array attribute (zeros default):
+
+        ```python
+        graph.add_node_attr_key("bbox", pl.Array(pl.Float64, 4))
+        # default=np.zeros(4, dtype=float64)
+        ```
+
+        Using AttrSchema for reusability:
+
+        ```python
+        from tracksdata.utils import AttrSchema
+
+        schema = AttrSchema(key="intensity", dtype=pl.Float64)
+        graph.add_node_attr_key(schema)
+        ```
+
+        See Also
+        --------
+        remove_node_attr_key : Remove an attribute key from the graph
+        add_edge_attr_key : Add an edge attribute key
         """
 
     @abc.abstractmethod
@@ -655,11 +737,79 @@ class BaseGraph(abc.ABC):
             The attribute key to remove.
         """
 
+    @overload
     @abc.abstractmethod
-    def add_edge_attr_key(self, key: str, default_value: Any) -> None:
+    def add_edge_attr_key(self, schema: AttrSchema) -> None: ...
+
+    @overload
+    @abc.abstractmethod
+    def add_edge_attr_key(
+        self,
+        key: str,
+        dtype: pl.DataType,
+        default_value: Any = None,
+    ) -> None: ...
+
+    @abc.abstractmethod
+    def add_edge_attr_key(
+        self,
+        key_or_schema: str | AttrSchema,
+        dtype: pl.DataType | None = None,
+        default_value: Any = None,
+    ) -> None:
         """
         Add a new attribute key to the graph.
-        All existing edges will have the default value for the new attribute key.
+
+        All existing edges will have the specified default value for the new attribute key.
+
+        Parameters
+        ----------
+        key_or_schema : str | AttrSchema
+            Either the attribute key name (str) or an AttrSchema object containing
+            the key, dtype, and default value.
+        dtype : pl.DataType, optional
+            The polars data type for this attribute. Required when key_or_schema is a string.
+            If provided with default_value, compatibility will be validated.
+        default_value : Any, optional
+            The default value for existing edges. If None and dtype is provided,
+            a default will be inferred from the dtype. See add_node_attr_key for inference rules.
+
+        Raises
+        ------
+        TypeError
+            If dtype is not provided when using string key.
+        ValueError
+            If the attribute key already exists or if default_value and dtype are incompatible.
+
+        Examples
+        --------
+        Add edge attribute with dtype only:
+
+        ```python
+        import polars as pl
+
+        graph.add_edge_attr_key("weight", pl.Float64)  # default=-1.0
+        ```
+
+        Add edge attribute with custom default:
+
+        ```python
+        graph.add_edge_attr_key("distance", pl.Float64)
+        ```
+
+        Using AttrSchema:
+
+        ```python
+        from tracksdata.utils import AttrSchema
+
+        schema = AttrSchema(key="cost", dtype=pl.Float64, default_value=1.0)
+        graph.add_edge_attr_key(schema)
+        ```
+
+        See Also
+        --------
+        remove_edge_attr_key : Remove an edge attribute key from the graph
+        add_node_attr_key : Add a node attribute key
         """
 
     @abc.abstractmethod
@@ -945,13 +1095,13 @@ class BaseGraph(abc.ABC):
         )
 
         if matched_node_id_key not in self.node_attr_keys():
-            self.add_node_attr_key(matched_node_id_key, -1)
+            self.add_node_attr_key(matched_node_id_key, pl.Int64)
 
         if match_score_key not in self.node_attr_keys():
-            self.add_node_attr_key(match_score_key, 0.0)
+            self.add_node_attr_key(match_score_key, pl.Float64, default_value=0.0)
 
         if matched_edge_mask_key not in self.edge_attr_keys():
-            self.add_edge_attr_key(matched_edge_mask_key, False)
+            self.add_edge_attr_key(matched_edge_mask_key, pl.Boolean)
 
         node_ids = functools.reduce(operator.iadd, matching_data["mapped_comp"])
         other_ids = functools.reduce(operator.iadd, matching_data["mapped_ref"])
@@ -1021,8 +1171,9 @@ class BaseGraph(abc.ABC):
 
         for col in node_attrs.columns:
             if col != DEFAULT_ATTR_KEYS.T:
-                first_value = node_attrs[col].first()
-                graph.add_node_attr_key(col, infer_default_value(first_value))
+                # Use the dtype from the source DataFrame
+                dtype = node_attrs[col].dtype
+                graph.add_node_attr_key(col, dtype)
 
         if graph.supports_custom_indices():
             new_node_ids = graph.bulk_add_nodes(
@@ -1046,7 +1197,9 @@ class BaseGraph(abc.ABC):
 
         for col in edge_attrs.columns:
             if col not in [DEFAULT_ATTR_KEYS.EDGE_SOURCE, DEFAULT_ATTR_KEYS.EDGE_TARGET]:
-                graph.add_edge_attr_key(col, edge_attrs[col].first())
+                # Use the dtype from the source DataFrame
+                dtype = edge_attrs[col].dtype
+                graph.add_edge_attr_key(col, dtype)
 
         edge_attrs = edge_attrs.with_columns(
             edge_attrs[col].map_elements(node_map.get, return_dtype=pl.Int64).alias(col)
