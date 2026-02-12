@@ -63,7 +63,7 @@ class BaseGraph(abc.ABC):
     def _validate_attributes(
         attrs: dict[str, Any],
         reference_keys: list[str],
-        mode: str,
+        mode: Literal["node", "edge"],
     ) -> None:
         """
         Validate the attributes of a node.
@@ -85,11 +85,18 @@ class BaseGraph(abc.ABC):
                     f"`graph.add_{mode}_attr_key(key, default_value)`"
                 )
 
-        for ref_key in reference_keys:
-            if ref_key not in attrs.keys() and ref_key != DEFAULT_ATTR_KEYS.NODE_ID:
-                raise ValueError(
-                    f"Attribute '{ref_key}' not found in attrs: '{attrs.keys()}'\nRequested keys: '{reference_keys}'"
-                )
+        missing_keys = set(reference_keys) - set(attrs.keys())
+        missing_keys = missing_keys - {
+            DEFAULT_ATTR_KEYS.NODE_ID,
+            DEFAULT_ATTR_KEYS.EDGE_ID,
+            DEFAULT_ATTR_KEYS.EDGE_SOURCE,
+            DEFAULT_ATTR_KEYS.EDGE_TARGET,
+        }
+
+        if missing_keys:
+            raise ValueError(
+                f"{mode} attribute keys not found in attrs: '{missing_keys}'\nRequested keys: '{reference_keys}'"
+            )
 
     @abc.abstractmethod
     def add_node(
@@ -626,15 +633,27 @@ class BaseGraph(abc.ABC):
         """
 
     @abc.abstractmethod
-    def node_attr_keys(self) -> list[str]:
+    def node_attr_keys(self, return_ids: bool = False) -> list[str]:
         """
         Get the keys of the attributes of the nodes.
+
+        Parameters
+        ----------
+        return_ids : bool, default False
+            Whether to include NODE_ID in the returned keys. Defaults to False.
+            If True, NODE_ID will be included in the list.
         """
 
     @abc.abstractmethod
-    def edge_attr_keys(self) -> list[str]:
+    def edge_attr_keys(self, return_ids: bool = False) -> list[str]:
         """
         Get the keys of the attributes of the edges.
+
+        Parameters
+        ----------
+        return_ids : bool, optional
+            Whether to include EDGE_ID, EDGE_SOURCE, and EDGE_TARGET in the returned keys.
+            Defaults to False. If True, these ID fields will be included in the list.
         """
 
     @overload
@@ -1169,11 +1188,10 @@ class BaseGraph(abc.ABC):
         graph = cls(**kwargs)
         graph.update_metadata(**other.metadata())
 
-        for col in node_attrs.columns:
-            if col != DEFAULT_ATTR_KEYS.T:
-                # Use the dtype from the source DataFrame
-                dtype = node_attrs[col].dtype
-                graph.add_node_attr_key(col, dtype)
+        current_node_attr_schemas = graph._node_attr_schemas()
+        for k, v in other._node_attr_schemas().items():
+            if k not in current_node_attr_schemas:
+                graph.add_node_attr_key(k, v.dtype, v.default_value)
 
         if graph.supports_custom_indices():
             new_node_ids = graph.bulk_add_nodes(
@@ -1195,11 +1213,11 @@ class BaseGraph(abc.ABC):
         edge_attrs = other.edge_attrs()
         edge_attrs = edge_attrs.drop(DEFAULT_ATTR_KEYS.EDGE_ID)
 
-        for col in edge_attrs.columns:
-            if col not in [DEFAULT_ATTR_KEYS.EDGE_SOURCE, DEFAULT_ATTR_KEYS.EDGE_TARGET]:
-                # Use the dtype from the source DataFrame
-                dtype = edge_attrs[col].dtype
-                graph.add_edge_attr_key(col, dtype)
+        current_edge_attr_schemas = graph._edge_attr_schemas()
+        for k, v in other._edge_attr_schemas().items():
+            if k not in current_edge_attr_schemas:
+                print(f"Adding edge attribute key: {k} with dtype: {v.dtype} and default value: {v.default_value}")
+                graph.add_edge_attr_key(k, v.dtype, v.default_value)
 
         edge_attrs = edge_attrs.with_columns(
             edge_attrs[col].map_elements(node_map.get, return_dtype=pl.Int64).alias(col)
@@ -1915,24 +1933,111 @@ class BaseGraph(abc.ABC):
         """
         return self.__class__.from_other(self, **kwargs)
 
+    @property
+    def nodes(self) -> "NodesAccessor":
+        """
+        Access node attributes with dictionary-style syntax.
+
+        Use bracket notation to get or set attributes for a specific node,
+        or call to_dict() to retrieve all attributes as a dictionary.
+
+        Returns
+        -------
+        NodesAccessor
+            An accessor for node attributes.
+        """
+        return NodesAccessor(self)
+
+    @property
+    def edges(self) -> "EdgesAccessor":
+        """
+        Access edge attributes with dictionary-style syntax.
+
+        Use bracket notation to get or set attributes for a specific edge,
+        or call to_dict() to retrieve all attributes as a dictionary.
+
+        Returns
+        -------
+        EdgesAccessor
+            An accessor for edge attributes.
+        """
+        return EdgesAccessor(self)
+
+    @abc.abstractmethod
+    def _node_attr_schemas(self) -> dict[str, AttrSchema]:
+        """
+        Get the attribute schemas for the nodes.
+        """
+
+    @abc.abstractmethod
+    def _edge_attr_schemas(self) -> dict[str, AttrSchema]:
+        """
+        Get the attribute schemas for the edges.
+        """
+
+
+class NodesAccessor:
+    """
+    Accessor class for node attributes with dictionary-style syntax.
+
+    Parameters
+    ----------
+    graph : BaseGraph
+        The graph to access nodes from.
+    """
+
+    def __init__(self, graph: BaseGraph):
+        self._graph = graph
+
     def __getitem__(self, node_id: int) -> "NodeInterface":
         """
-        Helper method to interact with a single node.
+        Access a specific node's attributes.
 
         Parameters
         ----------
         node_id : int
-            The id of the node to interact with.
+            The id of the node to access.
 
         Returns
         -------
         NodeInterface
-            A node interface for the given node id.
+            Interface for accessing the node's attributes.
         """
-
         if not isinstance(node_id, int):
-            raise ValueError(f"graph index must be a integer, found '{node_id}' of type {type(node_id)}")
-        return NodeInterface(self, node_id)
+            raise ValueError(f"node_id must be an integer, found '{node_id}' of type {type(node_id)}")
+        return NodeInterface(self._graph, node_id)
+
+
+class EdgesAccessor:
+    """
+    Accessor class for edge attributes with dictionary-style syntax.
+
+    Parameters
+    ----------
+    graph : BaseGraph
+        The graph to access edges from.
+    """
+
+    def __init__(self, graph: BaseGraph):
+        self._graph = graph
+
+    def __getitem__(self, edge_id: int) -> "EdgeInterface":
+        """
+        Access a specific edge's attributes.
+
+        Parameters
+        ----------
+        edge_id : int
+            The id of the edge to access.
+
+        Returns
+        -------
+        EdgeInterface
+            Interface for accessing the edge's attributes.
+        """
+        if not isinstance(edge_id, int):
+            raise ValueError(f"edge_id must be an integer, found '{edge_id}' of type {type(edge_id)}")
+        return EdgeInterface(self._graph, edge_id)
 
 
 class NodeInterface:
@@ -1982,3 +2087,77 @@ class NodeInterface:
         """
         Get the edge list of the graph.
         """
+
+
+class EdgeInterface:
+    """
+    Helper class to interact with a single edge.
+
+    Parameters
+    ----------
+    graph : BaseGraph
+        The graph to interact with.
+    edge_id : int
+        The id of the edge to interact with.
+
+    See Also
+    --------
+    [BaseGraph][tracksdata.graph.BaseGraph] The base graph class.
+    """
+
+    def __init__(self, graph: BaseGraph, edge_id: int):
+        self._graph = graph
+        self._edge_id = edge_id
+
+    def __getitem__(self, key: str) -> Any:
+        """
+        Get an edge attribute value.
+
+        Parameters
+        ----------
+        key : str
+            The attribute key to retrieve.
+
+        Returns
+        -------
+        Any
+            The attribute value.
+        """
+        df = self._graph.edge_attrs(attr_keys=[key])
+        filtered = df.filter(pl.col(DEFAULT_ATTR_KEYS.EDGE_ID) == self._edge_id)
+        return filtered[key].item()
+
+    def __setitem__(self, key: str, value: Any) -> None:
+        """
+        Set an edge attribute value.
+
+        Parameters
+        ----------
+        key : str
+            The attribute key to set.
+        value : Any
+            The value to set.
+        """
+        return self._graph.update_edge_attrs(attrs={key: value}, edge_ids=[self._edge_id])
+
+    def __str__(self) -> str:
+        df = self._graph.edge_attrs()
+        edge_attr = df.filter(pl.col(DEFAULT_ATTR_KEYS.EDGE_ID) == self._edge_id)
+        return str(edge_attr)
+
+    def __repr__(self) -> str:
+        return str(self)
+
+    def to_dict(self) -> dict[str, Any]:
+        """
+        Get all edge attributes as a dictionary.
+
+        Returns
+        -------
+        dict[str, Any]
+            Dictionary of attribute keys and values.
+        """
+        df = self._graph.edge_attrs()
+        filtered = df.filter(pl.col(DEFAULT_ATTR_KEYS.EDGE_ID) == self._edge_id)
+        data = filtered.drop(DEFAULT_ATTR_KEYS.EDGE_ID).rows(named=True)[0]
+        return data

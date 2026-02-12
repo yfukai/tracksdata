@@ -374,8 +374,8 @@ def test_subgraph_with_node_and_edge_attr_filters(graph_backend: BaseGraph) -> N
 
 def test_subgraph_with_node_ids_and_filters(graph_backend: BaseGraph) -> None:
     """Test subgraph with node IDs and filters."""
-    graph_backend.add_node_attr_key("x", pl.Float64)
-    graph_backend.add_edge_attr_key("weight", dtype=pl.Float64)
+    graph_backend.add_node_attr_key("x", pl.Float32)
+    graph_backend.add_edge_attr_key("weight", dtype=pl.Float32)
 
     node0 = graph_backend.add_node({"t": 0, "x": 1.0})
     node1 = graph_backend.add_node({"t": 1, "x": 2.0})
@@ -405,6 +405,12 @@ def test_subgraph_with_node_ids_and_filters(graph_backend: BaseGraph) -> None:
 
     subgraph_edge_ids = subgraph.edge_ids()
     assert len(subgraph_edge_ids) == 0
+
+    assert subgraph._node_attr_schemas() == graph_backend._node_attr_schemas()
+    assert subgraph._edge_attr_schemas() == graph_backend._edge_attr_schemas()
+
+    assert dict(subgraph.node_attrs().schema) == dict(graph_backend.node_attrs().schema)
+    assert dict(subgraph.edge_attrs().schema) == dict(graph_backend.edge_attrs().schema)
 
 
 @pytest.mark.parametrize(
@@ -1356,7 +1362,7 @@ def test_from_other_with_edges(
     graph_backend.update_metadata(special_key="special_value")
 
     graph_backend.add_node_attr_key("x", dtype=pl.Float64)
-    graph_backend.add_edge_attr_key("weight", dtype=pl.Float64)
+    graph_backend.add_edge_attr_key("weight", dtype=pl.Float64, default_value=-1)
     graph_backend.add_edge_attr_key("type", dtype=pl.String, default_value="forward")
 
     node1 = graph_backend.add_node({"t": 0, "x": 1.0})
@@ -1381,6 +1387,12 @@ def test_from_other_with_edges(
     assert set(new_graph.edge_attr_keys()) == set(graph_backend.edge_attr_keys())
 
     assert new_graph.metadata() == graph_backend.metadata()
+
+    assert new_graph._node_attr_schemas() == graph_backend._node_attr_schemas()
+    assert new_graph._edge_attr_schemas() == graph_backend._edge_attr_schemas()
+
+    assert dict(new_graph.node_attrs().schema) == dict(graph_backend.node_attrs().schema)
+    assert dict(new_graph.edge_attrs().schema) == dict(graph_backend.edge_attrs().schema)
 
     # Verify edge attributes are copied correctly
     source_edges = graph_backend.edge_attrs(attr_keys=["weight", "type"])
@@ -2002,21 +2014,39 @@ def test_nodes_interface(graph_backend: BaseGraph) -> None:
     node2 = graph_backend.add_node({"t": 1, "x": 0})
     node3 = graph_backend.add_node({"t": 2, "x": -1})
 
-    assert graph_backend[node1]["x"] == 1
-    assert graph_backend[node2]["x"] == 0
-    assert graph_backend[node3]["x"] == -1
+    assert graph_backend.nodes[node1]["x"] == 1
+    assert graph_backend.nodes[node2]["x"] == 0
+    assert graph_backend.nodes[node3]["x"] == -1
 
     graph_backend.add_node_attr_key("y", pl.Int64)
 
-    graph_backend[node2]["y"] = 5
+    graph_backend.nodes[node2]["y"] = 5
 
-    assert graph_backend[node1]["y"] == -1
-    assert graph_backend[node2]["y"] == 5
-    assert graph_backend[node3]["y"] == -1
+    assert graph_backend.nodes[node1]["y"] == -1
+    assert graph_backend.nodes[node2]["y"] == 5
+    assert graph_backend.nodes[node3]["y"] == -1
 
-    assert graph_backend[node1].to_dict() == {"t": 0, "x": 1, "y": -1}
-    assert graph_backend[node2].to_dict() == {"t": 1, "x": 0, "y": 5}
-    assert graph_backend[node3].to_dict() == {"t": 2, "x": -1, "y": -1}
+    assert graph_backend.nodes[node1].to_dict() == {"t": 0, "x": 1, "y": -1}
+    assert graph_backend.nodes[node2].to_dict() == {"t": 1, "x": 0, "y": 5}
+    assert graph_backend.nodes[node3].to_dict() == {"t": 2, "x": -1, "y": -1}
+
+
+def test_edges_interface(graph_backend: BaseGraph) -> None:
+    """Test edge attribute access using graph.edges[edge_id]['attr'] syntax."""
+    graph_backend.add_node_attr_key("x", dtype=pl.Int64, default_value=-1)
+    graph_backend.add_edge_attr_key("weight", dtype=pl.Float64, default_value=0.0)
+    graph_backend.add_edge_attr_key("score", dtype=pl.Float64, default_value=-1.0)
+
+    # Create nodes and edges
+    node1 = graph_backend.add_node({"t": 0, "x": 1})
+    node2 = graph_backend.add_node({"t": 1, "x": 2})
+    node3 = graph_backend.add_node({"t": 2, "x": 3})
+
+    edge1 = graph_backend.add_edge(node1, node2, {"weight": 0.5, "score": -1.0})
+    graph_backend.add_edge(node2, node3, {"weight": 0.8, "score": -1.0})
+
+    # Test getting edge attributes
+    assert graph_backend.edges[edge1]["weight"] == 0.5
 
 
 def test_custom_indices(graph_backend: BaseGraph) -> None:
@@ -2368,7 +2398,7 @@ def test_geff_roundtrip(graph_backend: BaseGraph) -> None:
     assert set(graph_backend.edge_attr_keys()) == set(geff_graph.edge_attr_keys())
 
     for node_id in geff_graph.node_ids():
-        assert geff_graph[node_id].to_dict() == graph_backend[node_id].to_dict()
+        assert geff_graph.nodes[node_id].to_dict() == graph_backend.nodes[node_id].to_dict()
 
     assert rx.is_isomorphic(
         rx_graph,
@@ -2596,3 +2626,32 @@ def test_to_traccuracy_graph(graph_backend: BaseGraph) -> None:
 
     for name in ["TRA", "DET", "LNK"]:
         assert ctc_results[name] == 1.0
+
+
+class _MockObject:
+    def __init__(self, idx: int):
+        self.idx = idx
+
+
+def test_array_default_values(graph_backend: BaseGraph) -> None:
+    """Test that array default values are handled correctly."""
+
+    graph_backend.add_node_attr_key("ndfeature", pl.Array(pl.Float64, (3, 1, 5)), np.zeros((3, 1, 5)))
+    graph_backend.add_node_attr_key("random_object", pl.Object(), _MockObject(0))
+    graph_backend.add_node({"t": 0, "ndfeature": np.ones((3, 1, 5)), "random_object": _MockObject(1)})
+    node_attrs = graph_backend.node_attrs()
+    assert node_attrs.shape == (1, 4)  # including IDs
+    for col, dtype in node_attrs.schema.items():
+        assert dtype == graph_backend._node_attr_schemas()[col].dtype
+
+    graph_backend.add_node({"t": 0, "ndfeature": np.ones((3, 1, 5))}, validate_keys=False)
+    node_attrs = graph_backend.node_attrs()
+    assert node_attrs.shape == (2, 4)
+    for col, dtype in node_attrs.schema.items():
+        assert dtype == graph_backend._node_attr_schemas()[col].dtype
+
+    graph_backend.add_node({"t": 0, "random_object": _MockObject(2)}, validate_keys=False)
+    node_attrs = graph_backend.node_attrs()
+    assert node_attrs.shape == (3, 4)
+    for col, dtype in node_attrs.schema.items():
+        assert dtype == graph_backend._node_attr_schemas()[col].dtype
