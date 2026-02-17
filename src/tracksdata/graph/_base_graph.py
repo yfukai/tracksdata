@@ -42,6 +42,61 @@ else:
 T = TypeVar("T", bound="BaseGraph")
 
 
+class MetadataView(dict[str, Any]):
+    """Dictionary-like metadata view that syncs mutations back to the graph."""
+
+    _MISSING = object()
+
+    def __init__(self, graph: "BaseGraph", data: dict[str, Any]) -> None:
+        super().__init__(data)
+        self._graph = graph
+
+    def __setitem__(self, key: str, value: Any) -> None:
+        self._graph._set_public_metadata(**{key: value})
+        super().__setitem__(key, value)
+
+    def __delitem__(self, key: str) -> None:
+        self._graph._remove_public_metadata(key)
+        super().__delitem__(key)
+
+    def pop(self, key: str, default: Any = _MISSING) -> Any:
+        self._graph._validate_public_metadata_key(key)
+
+        if key not in self:
+            if default is self._MISSING:
+                raise KeyError(key)
+            return default
+
+        value = super().__getitem__(key)
+        self._graph._remove_metadata(key)
+        super().pop(key, None)
+        return value
+
+    def popitem(self) -> tuple[str, Any]:
+        key, value = super().popitem()
+        self._graph._remove_metadata(key)
+        return key, value
+
+    def clear(self) -> None:
+        keys = list(self.keys())
+        for key in keys:
+            self._graph._remove_metadata(key)
+        super().clear()
+
+    def setdefault(self, key: str, default: Any = None) -> Any:
+        if key in self:
+            return super().__getitem__(key)
+        self._graph._set_public_metadata(**{key: default})
+        super().__setitem__(key, default)
+        return default
+
+    def update(self, *args, **kwargs) -> None:
+        updates = dict(*args, **kwargs)
+        if updates:
+            self._graph._set_public_metadata(**updates)
+        super().update(updates)
+
+
 class BaseGraph(abc.ABC):
     """
     Base class for a graph backend.
@@ -1188,7 +1243,7 @@ class BaseGraph(abc.ABC):
         node_attrs = node_attrs.drop(DEFAULT_ATTR_KEYS.NODE_ID)
 
         graph = cls(**kwargs)
-        graph.update_metadata(**other.metadata())
+        graph.metadata.update(other.metadata)
         private_metadata = other._private_metadata()
         if private_metadata:
             graph._update_metadata(**private_metadata)
@@ -1791,7 +1846,7 @@ class BaseGraph(abc.ABC):
                 for k, v in edge_attrs.to_dict().items()
             }
 
-            td_metadata = self.metadata().copy()
+            td_metadata = self.metadata.copy()
             td_metadata.pop("geff", None)  # avoid geff being written multiple times
 
             geff_metadata = geff.GeffMetadata(
@@ -1829,72 +1884,49 @@ class BaseGraph(abc.ABC):
             zarr_format=zarr_format,
         )
 
-    def metadata(self) -> dict[str, Any]:
+    @property
+    def metadata(self) -> MetadataView:
         """
         Return the metadata of the graph.
 
         Returns
         -------
-        dict[str, Any]
+        MetadataView
             The metadata of the graph as a dictionary.
 
         Examples
         --------
         ```python
-        metadata = graph.metadata()
+        metadata = graph.metadata
         print(metadata["shape"])
         ```
         """
-        return {k: v for k, v in self._metadata().items() if not self._is_private_metadata_key(k)}
-
-    def update_metadata(self, **kwargs) -> None:
-        """
-        Set or update metadata for the graph.
-
-        Parameters
-        ----------
-        **kwargs : Any
-            The metadata items to set by key. Values will be stored as JSON.
-
-        Examples
-        --------
-        ```python
-        graph.update_metadata(shape=[1, 25, 25], path="path/to/image.ome.zarr")
-        graph.update_metadata(description="Tracking data from experiment 1")
-        ```
-        """
-        self._validate_public_metadata_keys(kwargs.keys())
-        self._update_metadata(**kwargs)
-
-    def remove_metadata(self, key: str) -> None:
-        """
-        Remove a metadata key from the graph.
-
-        Parameters
-        ----------
-        key : str
-            The key of the metadata to remove.
-
-        Examples
-        --------
-        ```python
-        graph.remove_metadata("shape")
-        ```
-        """
-        self._validate_public_metadata_key(key)
-        self._remove_metadata(key)
+        return MetadataView(
+            graph=self,
+            data={k: v for k, v in self._metadata().items() if not self._is_private_metadata_key(k)},
+        )
 
     @classmethod
     def _is_private_metadata_key(cls, key: str) -> bool:
         return key.startswith(cls._PRIVATE_METADATA_PREFIX)
 
     def _validate_public_metadata_key(self, key: str) -> None:
+        if not isinstance(key, str):
+            raise TypeError(f"Metadata key must be a string. Got {type(key)}.")
         if self._is_private_metadata_key(key):
             raise ValueError(f"Metadata key '{key}' is reserved for internal use.")
 
     def _validate_public_metadata_keys(self, keys: Sequence[str]) -> None:
         for key in keys:
             self._validate_public_metadata_key(key)
+
+    def _set_public_metadata(self, **kwargs) -> None:
+        self._validate_public_metadata_keys(kwargs.keys())
+        self._update_metadata(**kwargs)
+
+    def _remove_public_metadata(self, key: str) -> None:
+        self._validate_public_metadata_key(key)
+        self._remove_metadata(key)
 
     def _private_metadata(self) -> dict[str, Any]:
         return {k: v for k, v in self._metadata().items() if self._is_private_metadata_key(k)}

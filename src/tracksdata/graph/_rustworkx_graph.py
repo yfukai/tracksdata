@@ -371,7 +371,7 @@ class RustWorkXGraph(BaseGraph):
 
             elif not isinstance(self._graph.attrs, dict):
                 LOG.warning(
-                    "previous attribute %s will be added to key 'old_attrs' of `graph.metadata()`",
+                    "previous attribute %s will be added to key 'old_attrs' of `graph.metadata`",
                     self._graph.attrs,
                 )
                 self._graph.attrs = {
