@@ -14,6 +14,18 @@ def test_mask_init() -> None:
     assert np.array_equal(mask._bbox, bbox)
 
 
+def test_mask_regionprops_spacing_aware() -> None:
+    """Regionprops should account for spacing when provided."""
+    mask_array = np.array([[False, True], [True, False]], dtype=bool)
+    bbox = np.array([0, 0, 2, 2])
+    spacing = np.array([2.0, 3.0])  # y-spacing=2.0, x-spacing=3.0
+
+    props = Mask(mask_array, bbox).regionprops(spacing=spacing)
+
+    assert props.area == 12  # area (2) should be scaled by spacing (2*3=6)
+    np.testing.assert_allclose(props.centroid, np.array([1.0, 1.5]))
+
+
 def test_mask_regionprops_bbox_aware() -> None:
     """Regionprops should return absolute coordinates using the bbox offset."""
     mask_array = np.array([[False, True], [True, False]], dtype=bool)
@@ -53,6 +65,17 @@ def test_mask_regionprops_empty() -> None:
 
     with pytest.raises(ValueError, match="single region"):
         _ = Mask(mask_array, bbox).regionprops()
+
+
+def test_mask_regionprops_intensity_image() -> None:
+    """Regionprops should handle intensity images."""
+    mask_array = np.array([[False, True], [True, False]], dtype=bool)
+    bbox = np.array([0, 0, 2, 2])
+    intensity_image = np.array([[1, 2], [3, 4]])
+
+    props = Mask(mask_array, bbox).regionprops(intensity_image=intensity_image)
+    assert props.intensity_max == 3  # 4 is outside the mask
+    assert props.intensity_min == 2  # 0 is outside the mask
 
 
 def test_mask_getstate_setstate() -> None:
@@ -364,6 +387,7 @@ def test_mask_from_coordinates_2d_basic() -> None:
     # Should be a disk of radius 2, shape (5,5), centered at (5,5)
     assert mask.mask.shape == (5, 5)
     assert mask.mask[2, 2]  # center pixel is True
+    assert mask.mask.dtype == bool
     np.testing.assert_array_equal(mask.bbox, [3, 3, 8, 8])
 
 

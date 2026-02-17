@@ -19,8 +19,8 @@ from tracksdata.attrs import AttrComparison, NodeAttr
 from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.utils._cache import cache_method
 from tracksdata.utils._dtypes import (
+    AttrSchema,
     column_to_numpy,
-    infer_default_value,
     polars_dtype_to_numpy_dtype,
 )
 from tracksdata.utils._logging import LOG
@@ -34,6 +34,7 @@ if TYPE_CHECKING:
         BBoxSpatialFilter,
         SpatialFilter,
     )
+    from tracksdata.metrics._matching import Matching
 else:
     TrackingGraph = Any
 
@@ -62,7 +63,7 @@ class BaseGraph(abc.ABC):
     def _validate_attributes(
         attrs: dict[str, Any],
         reference_keys: list[str],
-        mode: str,
+        mode: Literal["node", "edge"],
     ) -> None:
         """
         Validate the attributes of a node.
@@ -84,11 +85,18 @@ class BaseGraph(abc.ABC):
                     f"`graph.add_{mode}_attr_key(key, default_value)`"
                 )
 
-        for ref_key in reference_keys:
-            if ref_key not in attrs.keys() and ref_key != DEFAULT_ATTR_KEYS.NODE_ID:
-                raise ValueError(
-                    f"Attribute '{ref_key}' not found in attrs: '{attrs.keys()}'\nRequested keys: '{reference_keys}'"
-                )
+        missing_keys = set(reference_keys) - set(attrs.keys())
+        missing_keys = missing_keys - {
+            DEFAULT_ATTR_KEYS.NODE_ID,
+            DEFAULT_ATTR_KEYS.EDGE_ID,
+            DEFAULT_ATTR_KEYS.EDGE_SOURCE,
+            DEFAULT_ATTR_KEYS.EDGE_TARGET,
+        }
+
+        if missing_keys:
+            raise ValueError(
+                f"{mode} attribute keys not found in attrs: '{missing_keys}'\nRequested keys: '{reference_keys}'"
+            )
 
     @abc.abstractmethod
     def add_node(
@@ -625,22 +633,116 @@ class BaseGraph(abc.ABC):
         """
 
     @abc.abstractmethod
-    def node_attr_keys(self) -> list[str]:
+    def node_attr_keys(self, return_ids: bool = False) -> list[str]:
         """
         Get the keys of the attributes of the nodes.
+
+        Parameters
+        ----------
+        return_ids : bool, default False
+            Whether to include NODE_ID in the returned keys. Defaults to False.
+            If True, NODE_ID will be included in the list.
         """
 
     @abc.abstractmethod
-    def edge_attr_keys(self) -> list[str]:
+    def edge_attr_keys(self, return_ids: bool = False) -> list[str]:
         """
         Get the keys of the attributes of the edges.
+
+        Parameters
+        ----------
+        return_ids : bool, optional
+            Whether to include EDGE_ID, EDGE_SOURCE, and EDGE_TARGET in the returned keys.
+            Defaults to False. If True, these ID fields will be included in the list.
         """
 
+    @overload
     @abc.abstractmethod
-    def add_node_attr_key(self, key: str, default_value: Any) -> None:
+    def add_node_attr_key(self, schema: AttrSchema) -> None: ...
+
+    @overload
+    @abc.abstractmethod
+    def add_node_attr_key(
+        self,
+        key: str,
+        dtype: pl.DataType,
+        default_value: Any = None,
+    ) -> None: ...
+
+    @abc.abstractmethod
+    def add_node_attr_key(
+        self,
+        key_or_schema: str | AttrSchema,
+        dtype: pl.DataType | None = None,
+        default_value: Any = None,
+    ) -> None:
         """
         Add a new attribute key to the graph.
-        All existing nodes will have the default value for the new attribute key.
+
+        All existing nodes will have the specified default value for the new attribute key.
+
+        Parameters
+        ----------
+        key_or_schema : str | AttrSchema
+            Either the attribute key name (str) or an AttrSchema object containing
+            the key, dtype, and default value.
+        dtype : pl.DataType, optional
+            The polars data type for this attribute. Required when key_or_schema is a string.
+            If provided with default_value, compatibility will be validated.
+        default_value : Any, optional
+            The default value for existing nodes. If None and dtype is provided,
+            a default will be inferred from the dtype based on these rules:
+            - Unsigned integers (pl.UInt*) → 0
+            - Signed integers (pl.Int*) → -1
+            - Floats (pl.Float*) → -1.0
+            - Boolean → False
+            - String → ""
+            - Arrays (pl.Array) → np.zeros with correct shape and dtype
+            - Objects/Lists → None
+
+        Raises
+        ------
+        TypeError
+            If dtype is not provided when using string key.
+        ValueError
+            If the attribute key already exists or if default_value and dtype are incompatible.
+
+        Examples
+        --------
+        Add attribute with dtype only (default inferred):
+
+        ```python
+        import polars as pl
+
+        graph.add_node_attr_key("count", pl.UInt32)  # default=0
+        ```
+
+        Add attribute with dtype and custom default:
+
+        ```python
+        graph.add_node_attr_key("score", pl.Float64, default_value=-99.0)
+        ```
+
+        Add array attribute (zeros default):
+
+        ```python
+        graph.add_node_attr_key("bbox", pl.Array(pl.Float64, 4))
+        # default=np.zeros(4, dtype=float64)
+        ```
+
+        Using AttrSchema for reusability:
+
+        ```python
+        from tracksdata.utils import AttrSchema
+
+        schema = AttrSchema(key="intensity", dtype=pl.Float64)
+        graph.add_node_attr_key(schema)
+        ```
+
+        See Also
+        --------
+        remove_node_attr_key : Remove an attribute key from the graph
+        add_edge_attr_key : Add an edge attribute key
         """
 
     @abc.abstractmethod
@@ -654,11 +756,79 @@ class BaseGraph(abc.ABC):
             The attribute key to remove.
         """
 
+    @overload
     @abc.abstractmethod
-    def add_edge_attr_key(self, key: str, default_value: Any) -> None:
+    def add_edge_attr_key(self, schema: AttrSchema) -> None: ...
+
+    @overload
+    @abc.abstractmethod
+    def add_edge_attr_key(
+        self,
+        key: str,
+        dtype: pl.DataType,
+        default_value: Any = None,
+    ) -> None: ...
+
+    @abc.abstractmethod
+    def add_edge_attr_key(
+        self,
+        key_or_schema: str | AttrSchema,
+        dtype: pl.DataType | None = None,
+        default_value: Any = None,
+    ) -> None:
         """
         Add a new attribute key to the graph.
-        All existing edges will have the default value for the new attribute key.
+
+        All existing edges will have the specified default value for the new attribute key.
+
+        Parameters
+        ----------
+        key_or_schema : str | AttrSchema
+            Either the attribute key name (str) or an AttrSchema object containing
+            the key, dtype, and default value.
+        dtype : pl.DataType, optional
+            The polars data type for this attribute. Required when key_or_schema is a string.
+            If provided with default_value, compatibility will be validated.
+        default_value : Any, optional
+            The default value for existing edges. If None and dtype is provided,
+            a default will be inferred from the dtype. See add_node_attr_key for inference rules.
+
+        Raises
+        ------
+        TypeError
+            If dtype is not provided when using string key.
+        ValueError
+            If the attribute key already exists or if default_value and dtype are incompatible.
+
+        Examples
+        --------
+        Add edge attribute with dtype only:
+
+        ```python
+        import polars as pl
+
+        graph.add_edge_attr_key("weight", pl.Float64)  # default=-1.0
+        ```
+
+        Add edge attribute with custom default:
+
+        ```python
+        graph.add_edge_attr_key("distance", pl.Float64)
+        ```
+
+        Using AttrSchema:
+
+        ```python
+        from tracksdata.utils import AttrSchema
+
+        schema = AttrSchema(key="cost", dtype=pl.Float64, default_value=1.0)
+        graph.add_edge_attr_key(schema)
+        ```
+
+        See Also
+        --------
+        remove_edge_attr_key : Remove an edge attribute key from the graph
+        add_node_attr_key : Add a node attribute key
         """
 
     @abc.abstractmethod
@@ -879,6 +1049,7 @@ class BaseGraph(abc.ABC):
     def match(
         self,
         other: "BaseGraph",
+        matching: "Matching | None" = None,
         matched_node_id_key: str = DEFAULT_ATTR_KEYS.MATCHED_NODE_ID,
         match_score_key: str = DEFAULT_ATTR_KEYS.MATCH_SCORE,
         matched_edge_mask_key: str = DEFAULT_ATTR_KEYS.MATCHED_EDGE_MASK,
@@ -890,35 +1061,70 @@ class BaseGraph(abc.ABC):
         ----------
         other : BaseGraph
             The other graph to match to.
+        matching : Matching | None
+            The matching strategy to use. If None, defaults to
+            MaskMatching with optimal=True and min_reference_intersection=0.5.
+            See [MaskMatching][tracksdata.metrics.MaskMatching] and
+            [DistanceMatching][tracksdata.metrics.DistanceMatching] for available strategies.
         matched_node_id_key : str
             The key of the output value of the corresponding node ID in the other graph.
         match_score_key : str
-            The key of the output value of the match score between matched nodes
+            The key of the output value of the match score between matched nodes.
         matched_edge_mask_key : str
             The key of the output as a boolean value indicating if a corresponding edge exists in the other graph.
+
+        Examples
+        --------
+        Match using default mask-based matching:
+
+        ```python
+        graph1.match(graph2)
+        ```
+
+        Match using distance-based matching:
+
+        ```python
+        from tracksdata.metrics import DistanceMatching
+
+        matching = DistanceMatching(optimal=True, max_distance=10.0, centroid_keys=("y", "x"))
+        graph1.match(graph2, matching=matching)
+        ```
+
+        Match with custom mask matching threshold:
+
+        ```python
+        from tracksdata.metrics import MaskMatching
+
+        matching = MaskMatching(optimal=True, min_reference_intersection=0.7)
+        graph1.match(graph2, matching=matching)
+        ```
         """
         from tracksdata.metrics._ctc_metrics import _matching_data
+        from tracksdata.metrics._matching import MaskMatching
+
+        if matching is None:
+            matching = MaskMatching(optimal=True, min_reference_intersection=0.5)
 
         matching_data = _matching_data(
             self,
             other,
             input_graph_key=DEFAULT_ATTR_KEYS.NODE_ID,
             reference_graph_key=DEFAULT_ATTR_KEYS.NODE_ID,
-            optimal_matching=True,
+            matching=matching,
         )
 
         if matched_node_id_key not in self.node_attr_keys():
-            self.add_node_attr_key(matched_node_id_key, -1)
+            self.add_node_attr_key(matched_node_id_key, pl.Int64)
 
         if match_score_key not in self.node_attr_keys():
-            self.add_node_attr_key(match_score_key, 0.0)
+            self.add_node_attr_key(match_score_key, pl.Float64, default_value=0.0)
 
         if matched_edge_mask_key not in self.edge_attr_keys():
-            self.add_edge_attr_key(matched_edge_mask_key, False)
+            self.add_edge_attr_key(matched_edge_mask_key, pl.Boolean)
 
         node_ids = functools.reduce(operator.iadd, matching_data["mapped_comp"])
         other_ids = functools.reduce(operator.iadd, matching_data["mapped_ref"])
-        ious = functools.reduce(operator.iadd, matching_data["ious"])
+        scores = functools.reduce(operator.iadd, matching_data["scores"])
 
         if len(node_ids) == 0:
             LOG.warning("No matching nodes found.")
@@ -926,7 +1132,7 @@ class BaseGraph(abc.ABC):
 
         self.update_node_attrs(
             node_ids=node_ids,
-            attrs={matched_node_id_key: other_ids, match_score_key: ious},
+            attrs={matched_node_id_key: other_ids, match_score_key: scores},
         )
 
         other_to_node_ids = dict(zip(other_ids, node_ids, strict=True))
@@ -959,6 +1165,9 @@ class BaseGraph(abc.ABC):
         """
         Create a graph from another graph.
 
+        Important:
+        Metadata is copied by reference, so if the content is modified in one graph, it will be modified in the other.
+
         Parameters
         ----------
         other : BaseGraph
@@ -977,11 +1186,12 @@ class BaseGraph(abc.ABC):
         node_attrs = node_attrs.drop(DEFAULT_ATTR_KEYS.NODE_ID)
 
         graph = cls(**kwargs)
+        graph.update_metadata(**other.metadata())
 
-        for col in node_attrs.columns:
-            if col != DEFAULT_ATTR_KEYS.T:
-                first_value = node_attrs[col].first()
-                graph.add_node_attr_key(col, infer_default_value(first_value))
+        current_node_attr_schemas = graph._node_attr_schemas()
+        for k, v in other._node_attr_schemas().items():
+            if k not in current_node_attr_schemas:
+                graph.add_node_attr_key(k, v.dtype, v.default_value)
 
         if graph.supports_custom_indices():
             new_node_ids = graph.bulk_add_nodes(
@@ -1003,9 +1213,11 @@ class BaseGraph(abc.ABC):
         edge_attrs = other.edge_attrs()
         edge_attrs = edge_attrs.drop(DEFAULT_ATTR_KEYS.EDGE_ID)
 
-        for col in edge_attrs.columns:
-            if col not in [DEFAULT_ATTR_KEYS.EDGE_SOURCE, DEFAULT_ATTR_KEYS.EDGE_TARGET]:
-                graph.add_edge_attr_key(col, edge_attrs[col].first())
+        current_edge_attr_schemas = graph._edge_attr_schemas()
+        for k, v in other._edge_attr_schemas().items():
+            if k not in current_edge_attr_schemas:
+                print(f"Adding edge attribute key: {k} with dtype: {v.dtype} and default value: {v.default_value}")
+                graph.add_edge_attr_key(k, v.dtype, v.default_value)
 
         edge_attrs = edge_attrs.with_columns(
             edge_attrs[col].map_elements(node_map.get, return_dtype=pl.Int64).alias(col)
@@ -1482,11 +1694,18 @@ class BaseGraph(abc.ABC):
                 for edge_attr in rx_graph.edges():
                     edge_attr[dst_k] = edge_attr.pop(src_k)
 
-        indexed_graph = IndexedRXGraph(
-            rx_graph=rx_graph,
-            node_id_map=node_id_map,
-            **kwargs,
-        )
+        if cls == IndexedRXGraph:
+            indexed_graph = IndexedRXGraph(
+                rx_graph=rx_graph,
+                node_id_map=node_id_map,
+                **kwargs,
+            )
+        else:
+            # kwargs is used in the final call to cls.from_other
+            indexed_graph = IndexedRXGraph(
+                rx_graph=rx_graph,
+                node_id_map=node_id_map,
+            )
 
         node_attr_key = indexed_graph.node_attr_keys()
         if DEFAULT_ATTR_KEYS.MASK in node_attr_key and DEFAULT_ATTR_KEYS.BBOX in node_attr_key:
@@ -1508,6 +1727,7 @@ class BaseGraph(abc.ABC):
         self,
         geff_store: StoreLike,
         geff_metadata: geff.GeffMetadata | None = None,
+        overwrite: bool = False,
         zarr_format: Literal[2, 3] = 3,
     ) -> None:
         """
@@ -1522,6 +1742,8 @@ class BaseGraph(abc.ABC):
             It automatically generates the metadata with:
             - axes: time (t) and spatial axes ((z), y, x)
             - tracklet node property: tracklet_id
+        overwrite : bool
+            Whether to overwrite the geff data directory if it exists.
         zarr_format : Literal[2, 3]
             The zarr format to write the graph to.
             Defaults to 3.
@@ -1555,13 +1777,17 @@ class BaseGraph(abc.ABC):
             node_props_metadata = {
                 k: PropMetadata(
                     identifier=k,
-                    dtype=polars_dtype_to_numpy_dtype(v.dtype) if k != DEFAULT_ATTR_KEYS.MASK else np.uint64,
+                    dtype=(
+                        polars_dtype_to_numpy_dtype(v.dtype, compatibility=True)
+                        if k != DEFAULT_ATTR_KEYS.MASK
+                        else np.uint64
+                    ),
                     varlength=k == DEFAULT_ATTR_KEYS.MASK,
                 )
                 for k, v in node_attrs.to_dict().items()
             }
             edge_props_metadata = {
-                k: PropMetadata(identifier=k, dtype=polars_dtype_to_numpy_dtype(v.dtype))
+                k: PropMetadata(identifier=k, dtype=polars_dtype_to_numpy_dtype(v.dtype, compatibility=True))
                 for k, v in edge_attrs.to_dict().items()
             }
 
@@ -1599,8 +1825,62 @@ class BaseGraph(abc.ABC):
             edge_ids=edge_ids.astype(np.uint64),
             edge_props=edge_dict,
             metadata=geff_metadata,
+            overwrite=overwrite,
             zarr_format=zarr_format,
         )
+
+    @abc.abstractmethod
+    def metadata(self) -> dict[str, Any]:
+        """
+        Return the metadata of the graph.
+
+        Returns
+        -------
+        dict[str, Any]
+            The metadata of the graph as a dictionary.
+
+        Examples
+        --------
+        ```python
+        metadata = graph.metadata()
+        print(metadata["shape"])
+        ```
+        """
+
+    @abc.abstractmethod
+    def update_metadata(self, **kwargs) -> None:
+        """
+        Set or update metadata for the graph.
+
+        Parameters
+        ----------
+        **kwargs : Any
+            The metadata items to set by key. Values will be stored as JSON.
+
+        Examples
+        --------
+        ```python
+        graph.update_metadata(shape=[1, 25, 25], path="path/to/image.ome.zarr")
+        graph.update_metadata(description="Tracking data from experiment 1")
+        ```
+        """
+
+    @abc.abstractmethod
+    def remove_metadata(self, key: str) -> None:
+        """
+        Remove a metadata key from the graph.
+
+        Parameters
+        ----------
+        key : str
+            The key of the metadata to remove.
+
+        Examples
+        --------
+        ```python
+        graph.remove_metadata("shape")
+        ```
+        """
 
     def to_traccuracy_graph(self, array_view_kwargs: dict[str, Any] | None = None) -> "TrackingGraph":
         """
@@ -1662,24 +1942,111 @@ class BaseGraph(abc.ABC):
         """
         return self.__class__.from_other(self, **kwargs)
 
+    @property
+    def nodes(self) -> "NodesAccessor":
+        """
+        Access node attributes with dictionary-style syntax.
+
+        Use bracket notation to get or set attributes for a specific node,
+        or call to_dict() to retrieve all attributes as a dictionary.
+
+        Returns
+        -------
+        NodesAccessor
+            An accessor for node attributes.
+        """
+        return NodesAccessor(self)
+
+    @property
+    def edges(self) -> "EdgesAccessor":
+        """
+        Access edge attributes with dictionary-style syntax.
+
+        Use bracket notation to get or set attributes for a specific edge,
+        or call to_dict() to retrieve all attributes as a dictionary.
+
+        Returns
+        -------
+        EdgesAccessor
+            An accessor for edge attributes.
+        """
+        return EdgesAccessor(self)
+
+    @abc.abstractmethod
+    def _node_attr_schemas(self) -> dict[str, AttrSchema]:
+        """
+        Get the attribute schemas for the nodes.
+        """
+
+    @abc.abstractmethod
+    def _edge_attr_schemas(self) -> dict[str, AttrSchema]:
+        """
+        Get the attribute schemas for the edges.
+        """
+
+
+class NodesAccessor:
+    """
+    Accessor class for node attributes with dictionary-style syntax.
+
+    Parameters
+    ----------
+    graph : BaseGraph
+        The graph to access nodes from.
+    """
+
+    def __init__(self, graph: BaseGraph):
+        self._graph = graph
+
     def __getitem__(self, node_id: int) -> "NodeInterface":
         """
-        Helper method to interact with a single node.
+        Access a specific node's attributes.
 
         Parameters
         ----------
         node_id : int
-            The id of the node to interact with.
+            The id of the node to access.
 
         Returns
         -------
         NodeInterface
-            A node interface for the given node id.
+            Interface for accessing the node's attributes.
         """
-
         if not isinstance(node_id, int):
-            raise ValueError(f"graph index must be a integer, found '{node_id}' of type {type(node_id)}")
-        return NodeInterface(self, node_id)
+            raise ValueError(f"node_id must be an integer, found '{node_id}' of type {type(node_id)}")
+        return NodeInterface(self._graph, node_id)
+
+
+class EdgesAccessor:
+    """
+    Accessor class for edge attributes with dictionary-style syntax.
+
+    Parameters
+    ----------
+    graph : BaseGraph
+        The graph to access edges from.
+    """
+
+    def __init__(self, graph: BaseGraph):
+        self._graph = graph
+
+    def __getitem__(self, edge_id: int) -> "EdgeInterface":
+        """
+        Access a specific edge's attributes.
+
+        Parameters
+        ----------
+        edge_id : int
+            The id of the edge to access.
+
+        Returns
+        -------
+        EdgeInterface
+            Interface for accessing the edge's attributes.
+        """
+        if not isinstance(edge_id, int):
+            raise ValueError(f"edge_id must be an integer, found '{edge_id}' of type {type(edge_id)}")
+        return EdgeInterface(self._graph, edge_id)
 
 
 class NodeInterface:
@@ -1725,60 +2092,81 @@ class NodeInterface:
         return data
 
     @abc.abstractmethod
-    def metadata(self) -> dict[str, Any]:
-        """
-        Return the metadata of the graph.
-
-        Returns
-        -------
-        dict[str, Any]
-            The metadata of the graph as a dictionary.
-
-        Examples
-        --------
-        ```python
-        metadata = graph.metadata()
-        print(metadata["shape"])
-        ```
-        """
-
-    @abc.abstractmethod
-    def update_metadata(self, **kwargs) -> None:
-        """
-        Set or update metadata for the graph.
-
-        Parameters
-        ----------
-        **kwargs : Any
-            The metadata items to set by key. Values will be stored as JSON.
-
-        Examples
-        --------
-        ```python
-        graph.update_metadata(shape=[1, 25, 25], path="path/to/image.ome.zarr")
-        graph.update_metadata(description="Tracking data from experiment 1")
-        ```
-        """
-
-    @abc.abstractmethod
-    def remove_metadata(self, key: str) -> None:
-        """
-        Remove a metadata key from the graph.
-
-        Parameters
-        ----------
-        key : str
-            The key of the metadata to remove.
-
-        Examples
-        --------
-        ```python
-        graph.remove_metadata("shape")
-        ```
-        """
-
-    @abc.abstractmethod
     def edge_list(self) -> list[list[int, int]]:
         """
         Get the edge list of the graph.
         """
+
+
+class EdgeInterface:
+    """
+    Helper class to interact with a single edge.
+
+    Parameters
+    ----------
+    graph : BaseGraph
+        The graph to interact with.
+    edge_id : int
+        The id of the edge to interact with.
+
+    See Also
+    --------
+    [BaseGraph][tracksdata.graph.BaseGraph] The base graph class.
+    """
+
+    def __init__(self, graph: BaseGraph, edge_id: int):
+        self._graph = graph
+        self._edge_id = edge_id
+
+    def __getitem__(self, key: str) -> Any:
+        """
+        Get an edge attribute value.
+
+        Parameters
+        ----------
+        key : str
+            The attribute key to retrieve.
+
+        Returns
+        -------
+        Any
+            The attribute value.
+        """
+        df = self._graph.edge_attrs(attr_keys=[key])
+        filtered = df.filter(pl.col(DEFAULT_ATTR_KEYS.EDGE_ID) == self._edge_id)
+        return filtered[key].item()
+
+    def __setitem__(self, key: str, value: Any) -> None:
+        """
+        Set an edge attribute value.
+
+        Parameters
+        ----------
+        key : str
+            The attribute key to set.
+        value : Any
+            The value to set.
+        """
+        return self._graph.update_edge_attrs(attrs={key: value}, edge_ids=[self._edge_id])
+
+    def __str__(self) -> str:
+        df = self._graph.edge_attrs()
+        edge_attr = df.filter(pl.col(DEFAULT_ATTR_KEYS.EDGE_ID) == self._edge_id)
+        return str(edge_attr)
+
+    def __repr__(self) -> str:
+        return str(self)
+
+    def to_dict(self) -> dict[str, Any]:
+        """
+        Get all edge attributes as a dictionary.
+
+        Returns
+        -------
+        dict[str, Any]
+            Dictionary of attribute keys and values.
+        """
+        df = self._graph.edge_attrs()
+        filtered = df.filter(pl.col(DEFAULT_ATTR_KEYS.EDGE_ID) == self._edge_id)
+        data = filtered.drop(DEFAULT_ATTR_KEYS.EDGE_ID).rows(named=True)[0]
+        return data

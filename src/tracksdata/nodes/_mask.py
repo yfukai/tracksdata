@@ -4,16 +4,19 @@ from typing import TYPE_CHECKING, Any
 
 import blosc2
 import numpy as np
+import polars as pl
 import skimage.morphology as morph
 from numpy.typing import ArrayLike, NDArray
 from skimage.measure import regionprops
 
-if TYPE_CHECKING:
-    from skimage.measure._regionprops import RegionProperties
-
 from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.functional._iou import fast_intersection_with_bbox, fast_iou_with_bbox
 from tracksdata.nodes._generic_nodes import GenericFuncNodeAttrs
+
+if TYPE_CHECKING:
+    from skimage.measure._regionprops import RegionProperties
+
+    from tracksdata.graph._base_graph import BaseGraph
 
 
 @lru_cache(maxsize=5)
@@ -26,10 +29,10 @@ def _nd_sphere(
     """
 
     if ndim == 2:
-        return morph.disk(radius)
+        return morph.disk(radius).astype(bool)
 
     if ndim == 3:
-        return morph.ball(radius)
+        return morph.ball(radius).astype(bool)
 
     raise ValueError(f"Spherical is only implemented for 2D and 3D, got ndim={ndim}")
 
@@ -370,18 +373,26 @@ class Mask:
         if image_shape is not None:
             self._crop_overhang(image_shape)
 
-    def regionprops(self) -> "RegionProperties":
+    def regionprops(self, **kwargs) -> "RegionProperties":
         """
         Compute scikit-image regionprops for this mask.
 
         The computation is aware of the mask bounding box, so coordinate-based
         properties (e.g. centroid, coords) are returned in absolute
         image coordinates.
+
+        IMPORTANT: When providing an intensity image it should match the bounding box shape, not the actual image shape.
+
+        Parameters
+        ----------
+        **kwargs : dict
+            Keyword arguments to pass to regionprops.
         """
         props = regionprops(
             self._mask.astype(np.uint16),
             cache=True,
             offset=tuple(self._bbox[: self._mask.ndim]),
+            **kwargs,
         )
 
         if len(props) != 1:
@@ -497,6 +508,8 @@ class MaskDiskAttrs(GenericFuncNodeAttrs):
                 f"Expected image shape {image_shape} to have the same number of dimensions as attr_keys '{attr_keys}'."
             )
 
+        self._image_shape = image_shape
+
         super().__init__(
             func=lambda **kwargs: Mask.from_coordinates(
                 center=np.asarray(list(kwargs.values())),
@@ -505,6 +518,12 @@ class MaskDiskAttrs(GenericFuncNodeAttrs):
             ),
             output_key=output_key,
             attr_keys=attr_keys,
-            default_value=None,
             batch_size=0,
         )
+
+    def _init_node_attrs(self, graph: "BaseGraph") -> None:
+        """
+        Validate that the output key exists in the graph.
+        """
+        if self.output_key not in graph.node_attr_keys():
+            graph.add_node_attr_key(self.output_key, pl.Object)
