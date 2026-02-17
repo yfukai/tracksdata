@@ -557,7 +557,7 @@ class SQLGraph(BaseGraph):
         Initialize AttrSchema objects from existing database table columns.
         This is used when loading an existing graph from the database.
         """
-        
+
         node_column_names = list(self.Node.__table__.columns.keys())
         preferred_node_order = [DEFAULT_ATTR_KEYS.T, DEFAULT_ATTR_KEYS.NODE_ID]
         ordered_node_columns = [name for name in preferred_node_order if name in node_column_names]

@@ -1,10 +1,10 @@
 import abc
 import functools
 import operator
+import warnings
 from collections.abc import Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, TypeVar, overload
-import warnings
 
 import geff
 import numpy as np
@@ -1999,22 +1999,18 @@ class BaseGraph(abc.ABC):
         except Exception:
             warnings.warn(
                 f"Initializing schemas from existing database tables for the key {key}. "
-                "This is a fallback mechanism when loading existing graphs, and may not perfectly restore the original schemas. "
+                "This is a fallback mechanism when loading existing graphs, and may not "
+                "perfectly restore the original schemas. "
                 "This method is deprecated and will be removed in the major release. ",
                 UserWarning,
+                stacklevel=2,
             )
             return None
 
     def _sync_attr_dtype_metadata(self) -> None:
         dtype_map = {
-            "node": {
-                key: serialize_polars_dtype(schema.dtype)
-                for key, schema in self._node_attr_schemas().items()
-            },
-            "edge": {
-                key: serialize_polars_dtype(schema.dtype)
-                for key, schema in self._edge_attr_schemas().items()
-            },
+            "node": {key: serialize_polars_dtype(schema.dtype) for key, schema in self._node_attr_schemas().items()},
+            "edge": {key: serialize_polars_dtype(schema.dtype) for key, schema in self._edge_attr_schemas().items()},
         }
         self._set_private_dtype_map(dtype_map)
 

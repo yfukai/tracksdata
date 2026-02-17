@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import base64
-from dataclasses import dataclass
 import io
+from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
@@ -491,7 +491,7 @@ def serialize_polars_dtype(dtype: pl.DataType) -> str:
     buffer = io.BytesIO()
     dummy_df.write_ipc(buffer)
     # Encode binary to a standard string
-    return base64.b64encode(buffer.getvalue()).decode('utf-8')
+    return base64.b64encode(buffer.getvalue()).decode("utf-8")
 
 
 def deserialize_polars_dtype(encoded_dtype: str) -> pl.DataType:
@@ -505,6 +505,7 @@ def deserialize_polars_dtype(encoded_dtype: str) -> pl.DataType:
     restored_df = pl.read_ipc(buffer)
     # Extract the dtype from the schema
     return restored_df.schema["dummy"]
+
 
 def validate_default_value_dtype_compatibility(default_value: Any, dtype: pl.DataType) -> None:
     """
