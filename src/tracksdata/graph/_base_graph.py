@@ -59,11 +59,11 @@ class MetadataView(dict[str, Any]):
         self._is_public = is_public
 
     def __setitem__(self, key: str, value: Any) -> None:
-        self._graph._set_public_metadata(is_public=self._is_public, **{key: value})
+        self._graph._set_metadata_with_validation(is_public=self._is_public, **{key: value})
         super().__setitem__(key, value)
 
     def __delitem__(self, key: str) -> None:
-        self._graph._remove_public_metadata(key, is_public=self._is_public)
+        self._graph._remove_metadata_with_validation(key, is_public=self._is_public)
         super().__delitem__(key)
 
     def pop(self, key: str, default: Any = _MISSING) -> Any:
@@ -75,32 +75,32 @@ class MetadataView(dict[str, Any]):
             return default
 
         value = super().__getitem__(key)
-        self._graph._remove_public_metadata(key, is_public=self._is_public)
+        self._graph._remove_metadata_with_validation(key, is_public=self._is_public)
         super().pop(key, None)
         return value
 
     def popitem(self) -> tuple[str, Any]:
         key, value = super().popitem()
-        self._graph._remove_public_metadata(key, is_public=self._is_public)
+        self._graph._remove_metadata_with_validation(key, is_public=self._is_public)
         return key, value
 
     def clear(self) -> None:
         keys = list(self.keys())
         for key in keys:
-            self._graph._remove_public_metadata(key, is_public=self._is_public)
+            self._graph._remove_metadata_with_validation(key, is_public=self._is_public)
         super().clear()
 
     def setdefault(self, key: str, default: Any = None) -> Any:
         if key in self:
             return super().__getitem__(key)
-        self._graph._set_public_metadata(is_public=self._is_public, **{key: default})
+        self._graph._set_metadata_with_validation(is_public=self._is_public, **{key: default})
         super().__setitem__(key, default)
         return default
 
     def update(self, *args, **kwargs) -> None:
         updates = dict(*args, **kwargs)
         if updates:
-            self._graph._set_public_metadata(is_public=self._is_public, **updates)
+            self._graph._set_metadata_with_validation(is_public=self._is_public, **updates)
         super().update(updates)
 
 
@@ -1940,11 +1940,11 @@ class BaseGraph(abc.ABC):
         for key in keys:
             self._validate_metadata_key(key, is_public=is_public)
 
-    def _set_public_metadata(self, is_public: bool = True, **kwargs) -> None:
+    def _set_metadata_with_validation(self, is_public: bool = True, **kwargs) -> None:
         self._validate_metadata_keys(kwargs.keys(), is_public=is_public)
         self._update_metadata(**kwargs)
 
-    def _remove_public_metadata(self, key: str, *, is_public: bool = True) -> None:
+    def _remove_metadata_with_validation(self, key: str, *, is_public: bool = True) -> None:
         self._validate_metadata_key(key, is_public=is_public)
         self._remove_metadata(key)
 
