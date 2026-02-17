@@ -479,6 +479,7 @@ class SQLGraph(BaseGraph):
 
         # Initialize schemas from existing table columns
         self._init_schemas_from_tables()
+        self._sync_attr_dtype_metadata()
 
         self._max_id_per_time = {}
         self._update_max_id_per_time()
@@ -556,12 +557,19 @@ class SQLGraph(BaseGraph):
         Initialize AttrSchema objects from existing database table columns.
         This is used when loading an existing graph from the database.
         """
+        
+        node_column_names = list(self.Node.__table__.columns.keys())
+        preferred_node_order = [DEFAULT_ATTR_KEYS.T, DEFAULT_ATTR_KEYS.NODE_ID]
+        ordered_node_columns = [name for name in preferred_node_order if name in node_column_names]
+        ordered_node_columns.extend(name for name in node_column_names if name not in preferred_node_order)
+
         # Initialize node schemas from Node table columns
-        for column_name in self.Node.__table__.columns.keys():
+        for column_name in ordered_node_columns:
             if column_name not in self.__node_attr_schemas:
-                column = self.Node.__table__.columns[column_name]
-                # Infer polars dtype from SQLAlchemy type
-                pl_dtype = sqlalchemy_type_to_polars_dtype(column.type)
+                pl_dtype = self._attr_dtype_from_metadata(key=column_name, is_node=True)
+                if pl_dtype is None:
+                    column = self.Node.__table__.columns[column_name]
+                    pl_dtype = sqlalchemy_type_to_polars_dtype(column.type)
                 # AttrSchema.__post_init__ will infer the default_value
                 self.__node_attr_schemas[column_name] = AttrSchema(
                     key=column_name,
@@ -572,9 +580,10 @@ class SQLGraph(BaseGraph):
         for column_name in self.Edge.__table__.columns.keys():
             # Skip internal edge columns
             if column_name not in self.__edge_attr_schemas:
-                column = self.Edge.__table__.columns[column_name]
-                # Infer polars dtype from SQLAlchemy type
-                pl_dtype = sqlalchemy_type_to_polars_dtype(column.type)
+                pl_dtype = self._attr_dtype_from_metadata(key=column_name, is_node=False)
+                if pl_dtype is None:
+                    column = self.Edge.__table__.columns[column_name]
+                    pl_dtype = sqlalchemy_type_to_polars_dtype(column.type)
                 # AttrSchema.__post_init__ will infer the default_value
                 self.__edge_attr_schemas[column_name] = AttrSchema(
                     key=column_name,
@@ -593,11 +602,16 @@ class SQLGraph(BaseGraph):
         else:
             schemas = self._edge_attr_schemas()
 
-        # Return schema overrides for special types that need explicit casting
+        # Return schema overrides for columns safely represented in SQL.
+        # Pickled columns are unpickled and casted in a second pass.
         return {
             key: schema.dtype
             for key, schema in schemas.items()
-            if not (schema.dtype == pl.Object or isinstance(schema.dtype, pl.Array | pl.List))
+            if (
+                key in table_class.__table__.columns
+                and not isinstance(table_class.__table__.columns[key].type, sa.PickleType | sa.LargeBinary)
+                and not (schema.dtype == pl.Object or isinstance(schema.dtype, pl.Array | pl.List))
+            )
         }
 
     def _cast_array_columns(self, table_class: type[DeclarativeBase], df: pl.DataFrame) -> pl.DataFrame:
@@ -607,12 +621,19 @@ class SQLGraph(BaseGraph):
         else:
             schemas = self._edge_attr_schemas()
 
-        # Cast array columns (stored as blobs in database)
-        df = df.with_columns(
-            pl.Series(key, df[key].to_list(), dtype=schema.dtype)
-            for key, schema in schemas.items()
-            if isinstance(schema.dtype, pl.Array) and key in df.columns
-        )
+        casts: list[pl.Series] = []
+        for key, schema in schemas.items():
+            if key not in df.columns:
+                continue
+
+            try:
+                casts.append(pl.Series(key, df[key].to_list(), dtype=schema.dtype))
+            except Exception:
+                # Keep original dtype when values cannot be casted to the target schema.
+                continue
+
+        if casts:
+            df = df.with_columns(casts)
         return df
 
     def _update_max_id_per_time(self) -> None:
@@ -1289,6 +1310,8 @@ class SQLGraph(BaseGraph):
         # indices are included by default and must be removed
         if attr_keys is not None:
             nodes_df = nodes_df.select([pl.col(c) for c in attr_keys])
+        else:
+            nodes_df = nodes_df.select([pl.col(c) for c in self._node_attr_schemas() if c in nodes_df.columns])
 
         if unpack:
             nodes_df = unpack_array_attrs(nodes_df)
@@ -1331,6 +1354,8 @@ class SQLGraph(BaseGraph):
 
         if unpack:
             edges_df = unpack_array_attrs(edges_df)
+        elif attr_keys is None:
+            edges_df = edges_df.select([pl.col(c) for c in self._edge_attr_schemas() if c in edges_df.columns])
 
         return edges_df
 
@@ -1575,6 +1600,9 @@ class SQLGraph(BaseGraph):
         sa_column = sa.Column(schema.key, sa_type, default=default_value)
 
         str_dialect_type = sa_column.type.compile(dialect=self._engine.dialect)
+        identifier_preparer = self._engine.dialect.identifier_preparer
+        quoted_table_name = identifier_preparer.format_table(table_class.__table__)
+        quoted_column_name = identifier_preparer.quote(sa_column.name)
 
         # Properly quote default values based on type
         if isinstance(default_value, str):
@@ -1585,8 +1613,8 @@ class SQLGraph(BaseGraph):
             quoted_default = str(default_value)
 
         add_column_stmt = sa.DDL(
-            f"ALTER TABLE {table_class.__table__} ADD "
-            f"COLUMN {sa_column.name} {str_dialect_type} "
+            f"ALTER TABLE {quoted_table_name} ADD "
+            f"COLUMN {quoted_column_name} {str_dialect_type} "
             f"DEFAULT {quoted_default}",
         )
         LOG.info("add %s column statement:\n'%s'", table_class.__table__, add_column_stmt)
@@ -1601,7 +1629,10 @@ class SQLGraph(BaseGraph):
         table_class.__table__.append_column(sa_column)
 
     def _drop_column(self, table_class: type[DeclarativeBase], key: str) -> None:
-        drop_column_stmt = sa.DDL(f"ALTER TABLE {table_class.__table__} DROP COLUMN {key}")
+        identifier_preparer = self._engine.dialect.identifier_preparer
+        quoted_table_name = identifier_preparer.format_table(table_class.__table__)
+        quoted_column_name = identifier_preparer.quote(key)
+        drop_column_stmt = sa.DDL(f"ALTER TABLE {quoted_table_name} DROP COLUMN {quoted_column_name}")
         LOG.info("drop %s column statement:\n'%s'", table_class.__table__, drop_column_stmt)
 
         with Session(self._engine) as session:
@@ -1625,6 +1656,7 @@ class SQLGraph(BaseGraph):
 
         # Add column to database
         self._add_new_column(self.Node, schema)
+        self._set_attr_dtype_metadata(key=schema.key, dtype=schema.dtype, is_node=True)
 
     def remove_node_attr_key(self, key: str) -> None:
         if key not in self.node_attr_keys():
@@ -1635,6 +1667,7 @@ class SQLGraph(BaseGraph):
 
         self._drop_column(self.Node, key)
         self.__node_attr_schemas.pop(key, None)
+        self._remove_attr_dtype_metadata(key=key, is_node=True)
 
     def add_edge_attr_key(
         self,
@@ -1650,6 +1683,7 @@ class SQLGraph(BaseGraph):
 
         # Add column to database
         self._add_new_column(self.Edge, schema)
+        self._set_attr_dtype_metadata(key=schema.key, dtype=schema.dtype, is_node=False)
 
     def remove_edge_attr_key(self, key: str) -> None:
         if key not in self.edge_attr_keys():
@@ -1657,6 +1691,7 @@ class SQLGraph(BaseGraph):
 
         self._drop_column(self.Edge, key)
         self.__edge_attr_schemas.pop(key, None)
+        self._remove_attr_dtype_metadata(key=key, is_node=False)
 
     def num_edges(self) -> int:
         with Session(self._engine) as session:

@@ -1453,6 +1453,83 @@ def test_from_other_with_edges(
         pytest.param(IndexedRXGraph, {}, id="indexed"),
     ],
 )
+def test_from_other_preserves_schema_roundtrip(target_cls: type[BaseGraph], target_kwargs: dict[str, Any]) -> None:
+    """Test that from_other preserves node and edge attribute schemas across backends."""
+    graph = RustWorkXGraph()
+    for dtype in [
+        pl.Float16, pl.Float32, 
+                  pl.Float64, 
+                  pl.Int8, 
+                  pl.Int16, 
+                  pl.Int32, 
+                  pl.Int64, 
+                  pl.UInt8, 
+                  pl.UInt16, 
+                  pl.UInt32, 
+                  pl.UInt64, 
+                  pl.Date, pl.Datetime,
+                  pl.Boolean, 
+                  pl.Array(pl.Float32, 3), 
+                  pl.List(pl.Int32), 
+                  pl.Struct({"a": pl.Int8, "b": pl.Array(pl.String, 2)}),
+                  pl.String, 
+                  pl.Object]:
+        graph.add_node_attr_key(f"attr_{dtype}", dtype=dtype)
+    graph.add_node({"t":0, 
+                     "attr_Float16": np.float16(1.5),
+                     "attr_Float32": np.float32(2.5),
+                     "attr_Float64": np.float64(3.5),
+                     "attr_Int8": np.int8(4),
+                     "attr_Int16": np.int16(5),
+                     "attr_Int32": np.int32(6),
+                     "attr_Int64": np.int64(7),
+                     "attr_UInt8": np.uint8(8),
+                     "attr_UInt16": np.uint16(9),
+                     "attr_UInt32": np.uint32(10),
+                     "attr_UInt64": np.uint64(11),
+                     "attr_Date": pl.date(2024, 1, 1),
+                     "attr_Datetime": pl.datetime(2024, 1, 1, 12, 0, 0),
+                     "attr_Boolean": True,
+                     "attr_Array(Float32, shape=(3,))": np.array([1.0, 2.0, 3.0], dtype=np.float32),
+                     "attr_List(Int32)": [1, 2, 3],
+                     "attr_Struct({'a': Int8, 'b': Array(String, shape=(2,))})": {"a": 1, "b": np.array(["x", "y"], dtype=object)},
+                     "attr_String": "test",
+                     "attr_Object": {"key": "value"}})
+    graph2 = target_cls.from_other(graph, **target_kwargs)
+
+    assert graph2.num_nodes() == graph.num_nodes()
+    assert set(graph2.node_attr_keys()) == set(graph.node_attr_keys())
+
+    assert graph2._node_attr_schemas() == graph._node_attr_schemas()
+    assert graph2._edge_attr_schemas() == graph._edge_attr_schemas()
+    assert graph2.node_attrs().schema == graph.node_attrs().schema
+    assert graph2.edge_attrs().schema == graph.edge_attrs().schema
+
+    graph3 = RustWorkXGraph.from_other(graph2)
+    assert graph3._node_attr_schemas() == graph._node_attr_schemas()
+    assert graph3._edge_attr_schemas() == graph._edge_attr_schemas()
+    assert graph3.node_attrs().schema == graph.node_attrs().schema
+    assert graph3.edge_attrs().schema == graph.edge_attrs().schema
+
+
+
+
+@pytest.mark.parametrize(
+    ("target_cls", "target_kwargs"),
+    [
+        pytest.param(RustWorkXGraph, {}, id="rustworkx"),
+        pytest.param(
+            SQLGraph,
+            {
+                "drivername": "sqlite",
+                "database": ":memory:",
+                "engine_kwargs": {"connect_args": {"check_same_thread": False}},
+            },
+            id="sql",
+        ),
+        pytest.param(IndexedRXGraph, {}, id="indexed"),
+    ],
+)
 def test_form_other_regionprops_nodes(
     graph_backend: BaseGraph,
     target_cls: type[BaseGraph],

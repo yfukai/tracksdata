@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import base64
 from dataclasses import dataclass
+import io
 from typing import Any
 
 import numpy as np
@@ -201,6 +203,37 @@ class AttrSchema:
         ```
         """
         return AttrSchema(key=self.key, dtype=self.dtype, default_value=self.default_value)
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, AttrSchema):
+            return NotImplemented
+        return (
+            self.key == other.key
+            and self.dtype == other.dtype
+            and _values_equal(self.default_value, other.default_value)
+        )
+
+
+def _values_equal(left: Any, right: Any) -> bool:
+    if isinstance(left, np.ndarray) and isinstance(right, np.ndarray):
+        return bool(np.array_equal(left, right))
+    if isinstance(left, dict) and isinstance(right, dict):
+        if left.keys() != right.keys():
+            return False
+        return all(_values_equal(left[k], right[k]) for k in left)
+    if isinstance(left, list | tuple) and isinstance(right, list | tuple):
+        if len(left) != len(right):
+            return False
+        return all(_values_equal(lv, rv) for lv, rv in zip(left, right, strict=True))
+
+    try:
+        value = left == right
+    except Exception:
+        return False
+
+    if isinstance(value, np.ndarray):
+        return bool(np.all(value))
+    return bool(value)
 
 
 def process_attr_key_args(
@@ -444,6 +477,34 @@ def sqlalchemy_type_to_polars_dtype(sa_type: TypeEngine) -> pl.DataType:
     # Fallback to Object for unknown types
     return pl.Object
 
+
+def serialize_polars_dtype(dtype: pl.DataType) -> str:
+    """
+    Serializes a Polars dtype to a safe, cross-platform base64 string
+    using the Arrow IPC format.
+    """
+    # Wrap the dtype in an empty DataFrame schema
+    # We use an empty DataFrame so no actual data is processed, only metadata.
+    dummy_df = pl.DataFrame(schema={"dummy": dtype})
+    # Write to Arrow IPC (binary buffer)
+    # IPC is stable across versions/platforms unlike internal serialization.
+    buffer = io.BytesIO()
+    dummy_df.write_ipc(buffer)
+    # Encode binary to a standard string
+    return base64.b64encode(buffer.getvalue()).decode('utf-8')
+
+
+def deserialize_polars_dtype(encoded_dtype: str) -> pl.DataType:
+    """
+    Recovers a Polars dtype from a base64 string.
+    """
+    # Decode string back to binary
+    data = base64.b64decode(encoded_dtype)
+    # Read the IPC buffer
+    buffer = io.BytesIO(data)
+    restored_df = pl.read_ipc(buffer)
+    # Extract the dtype from the schema
+    return restored_df.schema["dummy"]
 
 def validate_default_value_dtype_compatibility(default_value: Any, dtype: pl.DataType) -> None:
     """
