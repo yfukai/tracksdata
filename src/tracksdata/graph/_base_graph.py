@@ -47,6 +47,8 @@ class BaseGraph(abc.ABC):
     Base class for a graph backend.
     """
 
+    _PRIVATE_METADATA_PREFIX = "__private_"
+
     node_added = Signal(int)
     node_removed = Signal(int)
 
@@ -1187,6 +1189,9 @@ class BaseGraph(abc.ABC):
 
         graph = cls(**kwargs)
         graph.update_metadata(**other.metadata())
+        private_metadata = other._private_metadata()
+        if private_metadata:
+            graph._update_metadata(**private_metadata)
 
         current_node_attr_schemas = graph._node_attr_schemas()
         for k, v in other._node_attr_schemas().items():
@@ -1824,7 +1829,6 @@ class BaseGraph(abc.ABC):
             zarr_format=zarr_format,
         )
 
-    @abc.abstractmethod
     def metadata(self) -> dict[str, Any]:
         """
         Return the metadata of the graph.
@@ -1841,8 +1845,8 @@ class BaseGraph(abc.ABC):
         print(metadata["shape"])
         ```
         """
+        return {k: v for k, v in self._metadata().items() if not self._is_private_metadata_key(k)}
 
-    @abc.abstractmethod
     def update_metadata(self, **kwargs) -> None:
         """
         Set or update metadata for the graph.
@@ -1859,8 +1863,9 @@ class BaseGraph(abc.ABC):
         graph.update_metadata(description="Tracking data from experiment 1")
         ```
         """
+        self._validate_public_metadata_keys(kwargs.keys())
+        self._update_metadata(**kwargs)
 
-    @abc.abstractmethod
     def remove_metadata(self, key: str) -> None:
         """
         Remove a metadata key from the graph.
@@ -1875,6 +1880,41 @@ class BaseGraph(abc.ABC):
         ```python
         graph.remove_metadata("shape")
         ```
+        """
+        self._validate_public_metadata_key(key)
+        self._remove_metadata(key)
+
+    @classmethod
+    def _is_private_metadata_key(cls, key: str) -> bool:
+        return key.startswith(cls._PRIVATE_METADATA_PREFIX)
+
+    def _validate_public_metadata_key(self, key: str) -> None:
+        if self._is_private_metadata_key(key):
+            raise ValueError(f"Metadata key '{key}' is reserved for internal use.")
+
+    def _validate_public_metadata_keys(self, keys: Sequence[str]) -> None:
+        for key in keys:
+            self._validate_public_metadata_key(key)
+
+    def _private_metadata(self) -> dict[str, Any]:
+        return {k: v for k, v in self._metadata().items() if self._is_private_metadata_key(k)}
+
+    @abc.abstractmethod
+    def _metadata(self) -> dict[str, Any]:
+        """
+        Return the full metadata including private keys.
+        """
+
+    @abc.abstractmethod
+    def _update_metadata(self, **kwargs) -> None:
+        """
+        Backend-specific metadata update implementation without public key validation.
+        """
+
+    @abc.abstractmethod
+    def _remove_metadata(self, key: str) -> None:
+        """
+        Backend-specific metadata removal implementation without public key validation.
         """
 
     def to_traccuracy_graph(self, array_view_kwargs: dict[str, Any] | None = None) -> "TrackingGraph":

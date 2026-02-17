@@ -1499,13 +1499,13 @@ class RustWorkXGraph(BaseGraph):
         """
         return self.rx_graph.get_edge_data(source_id, target_id)[DEFAULT_ATTR_KEYS.EDGE_ID]
 
-    def metadata(self) -> dict[str, Any]:
+    def _metadata(self) -> dict[str, Any]:
         return self._graph.attrs
 
-    def update_metadata(self, **kwargs) -> None:
+    def _update_metadata(self, **kwargs) -> None:
         self._graph.attrs.update(kwargs)
 
-    def remove_metadata(self, key: str) -> None:
+    def _remove_metadata(self, key: str) -> None:
         self._graph.attrs.pop(key, None)
 
     def edge_list(self) -> list[list[int, int]]:

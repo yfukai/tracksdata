@@ -2511,6 +2511,27 @@ def test_metadata_multiple_dtypes(graph_backend: BaseGraph) -> None:
     assert "mixed_list" not in retrieved
 
 
+def test_private_metadata_is_hidden_from_public_apis(graph_backend: BaseGraph) -> None:
+    private_key = "__private_dtype_map"
+
+    graph_backend._update_metadata(**{private_key: {"x": "float64"}})
+    graph_backend.update_metadata(shape=[1, 2, 3])
+
+    public_metadata = graph_backend.metadata()
+    assert private_key not in public_metadata
+    assert public_metadata["shape"] == [1, 2, 3]
+
+    with pytest.raises(ValueError, match="reserved for internal use"):
+        graph_backend.update_metadata(**{private_key: {"x": "int64"}})
+
+    with pytest.raises(ValueError, match="reserved for internal use"):
+        graph_backend.remove_metadata(private_key)
+
+    # Internal APIs can still remove private keys.
+    graph_backend._remove_metadata(private_key)
+    assert private_key not in graph_backend._metadata()
+
+
 def test_pickle_roundtrip(graph_backend: BaseGraph) -> None:
     if isinstance(graph_backend, SQLGraph):
         pytest.skip("SQLGraph does not support pickle roundtrip")
