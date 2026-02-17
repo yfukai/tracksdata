@@ -49,6 +49,7 @@ class BaseGraph(abc.ABC):
 
     node_added = Signal(int)
     node_removed = Signal(int)
+    node_attrs_updated = Signal(object, object)
 
     def __init__(self) -> None:
         self._cache = {}

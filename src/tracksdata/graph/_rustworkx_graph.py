@@ -1216,6 +1216,8 @@ class RustWorkXGraph(BaseGraph):
         """
         if node_ids is None:
             node_ids = self.node_ids()
+        else:
+            node_ids = list(node_ids)
 
         for key, value in attrs.items():
             if key not in self.node_attr_keys():
@@ -1230,6 +1232,9 @@ class RustWorkXGraph(BaseGraph):
 
             for node_id, v in zip(node_ids, value, strict=False):
                 self._graph[node_id][key] = v
+
+        if is_signal_on(self.node_attrs_updated):
+            self.node_attrs_updated.emit_fast(list(node_ids), tuple(attrs.keys()))
 
     def update_edge_attrs(
         self,
@@ -1937,8 +1942,15 @@ class IndexedRXGraph(MappedGraphMixin, RustWorkXGraph):
         node_ids : Sequence[int] | None
             The node ids to update.
         """
-        node_ids = self._get_local_ids() if node_ids is None else self._map_to_local(node_ids)
-        super().update_node_attrs(attrs=attrs, node_ids=node_ids)
+        external_node_ids = self.node_ids() if node_ids is None else list(node_ids)
+        local_node_ids = self._map_to_local(external_node_ids)
+
+        if is_signal_on(self.node_attrs_updated):
+            with self.node_attrs_updated.blocked():
+                super().update_node_attrs(attrs=attrs, node_ids=local_node_ids)
+            self.node_attrs_updated.emit_fast(external_node_ids, tuple(attrs.keys()))
+        else:
+            super().update_node_attrs(attrs=attrs, node_ids=local_node_ids)
 
     def remove_node(self, node_id: int) -> None:
         """

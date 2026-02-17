@@ -652,6 +652,10 @@ class GraphView(MappedGraphMixin, RustWorkXGraph):
     ) -> None:
         if node_ids is None:
             node_ids = self.node_ids()
+        else:
+            node_ids = list(node_ids)
+
+        emit_signal = is_signal_on(self.node_attrs_updated)
 
         self._root.update_node_attrs(
             node_ids=node_ids,
@@ -660,12 +664,23 @@ class GraphView(MappedGraphMixin, RustWorkXGraph):
         # because attributes are passed by reference, we need don't need if both are rustworkx graphs
         if not self._is_root_rx_graph:
             if self.sync:
-                super().update_node_attrs(
-                    node_ids=self._map_to_local(node_ids),
-                    attrs=attrs,
-                )
+                local_node_ids = self._map_to_local(node_ids)
+                if emit_signal:
+                    with self.node_attrs_updated.blocked():
+                        super().update_node_attrs(
+                            node_ids=local_node_ids,
+                            attrs=attrs,
+                        )
+                else:
+                    super().update_node_attrs(
+                        node_ids=local_node_ids,
+                        attrs=attrs,
+                    )
             else:
                 self._out_of_sync = True
+
+        if emit_signal:
+            self.node_attrs_updated.emit_fast(list(node_ids), tuple(attrs.keys()))
 
     def update_edge_attrs(
         self,

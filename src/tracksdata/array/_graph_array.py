@@ -1,6 +1,6 @@
 from collections.abc import Sequence
 from copy import copy
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
@@ -200,6 +200,9 @@ class GraphArrayView(BaseReadOnlyArray):
             frame_attr_key=DEFAULT_ATTR_KEYS.T,
             bbox_attr_key=DEFAULT_ATTR_KEYS.BBOX,
         )
+        self.graph.node_added.connect(self._on_node_added)
+        self.graph.node_removed.connect(self._on_node_removed)
+        self.graph.node_attrs_updated.connect(self._on_node_attrs_updated)
 
     @property
     def shape(self) -> tuple[int, ...]:
@@ -351,3 +354,95 @@ class GraphArrayView(BaseReadOnlyArray):
         for mask, value in zip(df[DEFAULT_ATTR_KEYS.MASK], df[self._attr_key], strict=True):
             mask: Mask
             mask.paint_buffer(buffer, value, offset=self._offset)
+
+    def _on_node_added(self, node_id: int) -> None:
+        self._invalidate_node_region_by_id(node_id)
+
+    def _on_node_removed(self, node_id: int) -> None:
+        self._invalidate_node_region_by_id(node_id)
+
+    def _on_node_attrs_updated(self, node_ids: Sequence[int], attr_keys: Sequence[str]) -> None:
+        changed_keys = set(attr_keys)
+        if (
+            self._attr_key not in changed_keys
+            and DEFAULT_ATTR_KEYS.T not in changed_keys
+            and DEFAULT_ATTR_KEYS.BBOX not in changed_keys
+            and DEFAULT_ATTR_KEYS.MASK not in changed_keys
+        ):
+            return
+
+        if DEFAULT_ATTR_KEYS.T in changed_keys:
+            self._cache.clear()
+            return
+
+        if DEFAULT_ATTR_KEYS.BBOX in changed_keys or DEFAULT_ATTR_KEYS.MASK in changed_keys:
+            for node_id in node_ids:
+                attrs = self._node_attrs(node_id)
+                if attrs is None:
+                    continue
+                time = attrs.get(DEFAULT_ATTR_KEYS.T)
+                if time is None:
+                    self._cache.clear()
+                    return
+                try:
+                    self._cache.invalidate(time=int(time))
+                except (TypeError, ValueError):
+                    self._cache.clear()
+                    return
+            return
+
+        for node_id in node_ids:
+            self._invalidate_node_region_by_id(node_id)
+
+    def _invalidate_node_region_by_id(self, node_id: int) -> None:
+        attrs = self._node_attrs(node_id)
+        if attrs is None:
+            return
+        self._invalidate_node_region(attrs)
+
+    def _node_attrs(self, node_id: int) -> dict[str, Any] | None:
+        try:
+            return self.graph.nodes[node_id].to_dict()
+        except (IndexError, KeyError, ValueError):
+            return None
+
+    def _invalidate_node_region(self, attrs: dict[str, Any]) -> None:
+        time = attrs.get(DEFAULT_ATTR_KEYS.T)
+        bbox = attrs.get(DEFAULT_ATTR_KEYS.BBOX)
+
+        if time is None or bbox is None:
+            self._cache.clear()
+            return
+
+        try:
+            time_int = int(time)
+        except (TypeError, ValueError):
+            self._cache.clear()
+            return
+
+        if time_int < 0 or time_int >= self.original_shape[0]:
+            return
+
+        spatial_ndim = len(self.original_shape) - 1
+        try:
+            bbox_array = np.asarray(bbox, dtype=float).reshape(-1)
+        except (TypeError, ValueError):
+            self._cache.invalidate(time=time_int)
+            return
+
+        if bbox_array.size != 2 * spatial_ndim:
+            self._cache.invalidate(time=time_int)
+            return
+
+        volume_slicing = []
+        for axis in range(spatial_ndim):
+            start = int(np.floor(bbox_array[axis]))
+            stop = int(np.ceil(bbox_array[axis + spatial_ndim]))
+            axis_size = self.original_shape[axis + 1]
+            start = max(0, min(axis_size, start))
+            stop = max(0, min(axis_size, stop))
+            if stop <= start:
+                return
+            volume_slicing.append(slice(start, stop))
+
+        self._cache.invalidate(time=time_int, volume_slicing=tuple(volume_slicing))

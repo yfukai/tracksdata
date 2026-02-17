@@ -1,4 +1,5 @@
 import time
+from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
@@ -225,50 +226,15 @@ class BBoxSpatialFilter:
         frame_attr_key: str | None = DEFAULT_ATTR_KEYS.T,
         bbox_attr_key: str = DEFAULT_ATTR_KEYS.BBOX,
     ) -> None:
-        from spatial_graph import PointRTree
-
         self._graph = graph
         self._frame_attr_key = frame_attr_key
         self._bbox_attr_key = bbox_attr_key
-
-        if frame_attr_key is None:
-            attr_keys = [DEFAULT_ATTR_KEYS.NODE_ID, bbox_attr_key]
-        else:
-            attr_keys = [DEFAULT_ATTR_KEYS.NODE_ID, frame_attr_key, bbox_attr_key]
-        nodes_df = graph.node_attrs(attr_keys=attr_keys)
-        node_ids = np.ascontiguousarray(nodes_df[DEFAULT_ATTR_KEYS.NODE_ID].to_numpy(), dtype=np.int64).copy()
-
-        if nodes_df.is_empty():
-            self._node_rtree = None
-        else:
-            bboxes = self._bboxes_to_array(nodes_df[bbox_attr_key])
-            if bboxes.shape[1] % 2 != 0:
-                raise ValueError(f"Bounding box coordinates must have even number of dimensions, got {bboxes.shape[1]}")
-            num_dims = bboxes.shape[1] // 2
-
-            if frame_attr_key is None:
-                self._ndims = num_dims
-                positions_min = np.ascontiguousarray(bboxes[:, :num_dims], dtype=np.float32)
-                positions_max = np.ascontiguousarray(bboxes[:, num_dims:], dtype=np.float32)
-            else:
-                frames = nodes_df[frame_attr_key].to_numpy()
-                self._ndims = num_dims + 1  # +1 for the frame dimension
-                positions_min = np.ascontiguousarray(
-                    np.hstack((frames[:, np.newaxis], bboxes[:, :num_dims])), dtype=np.float32
-                )
-                positions_max = np.ascontiguousarray(
-                    np.hstack((frames[:, np.newaxis], bboxes[:, num_dims:])), dtype=np.float32
-                )
-            self._node_rtree = PointRTree(
-                item_dtype="int64",
-                coord_dtype="float32",
-                dims=self._ndims,
-            )
-            self._node_rtree.insert_bb_items(node_ids, positions_min, positions_max)
+        self._rebuild_index()
 
         # setup signal connections
         self._graph.node_added.connect(self._add_node)
         self._graph.node_removed.connect(self._remove_node)
+        self._graph.node_attrs_updated.connect(self._on_node_attrs_updated)
 
     def __getitem__(self, keys: tuple[slice, ...]) -> "BaseFilter":
         """
@@ -329,6 +295,60 @@ class BBoxSpatialFilter:
             )
         )
         return self._graph.filter(node_ids=node_ids)
+
+    def _rebuild_index(self) -> None:
+        from spatial_graph import PointRTree
+
+        if self._frame_attr_key is None:
+            attr_keys = [DEFAULT_ATTR_KEYS.NODE_ID, self._bbox_attr_key]
+        else:
+            attr_keys = [DEFAULT_ATTR_KEYS.NODE_ID, self._frame_attr_key, self._bbox_attr_key]
+
+        nodes_df = self._graph.node_attrs(attr_keys=attr_keys)
+        node_ids = np.ascontiguousarray(nodes_df[DEFAULT_ATTR_KEYS.NODE_ID].to_numpy(), dtype=np.int64).copy()
+
+        if nodes_df.is_empty():
+            self._node_rtree = None
+            return
+
+        bboxes = self._bboxes_to_array(nodes_df[self._bbox_attr_key])
+        if bboxes.shape[1] % 2 != 0:
+            raise ValueError(f"Bounding box coordinates must have even number of dimensions, got {bboxes.shape[1]}")
+
+        num_dims = bboxes.shape[1] // 2
+        if self._frame_attr_key is None:
+            self._ndims = num_dims
+            positions_min = np.ascontiguousarray(bboxes[:, :num_dims], dtype=np.float32)
+            positions_max = np.ascontiguousarray(bboxes[:, num_dims:], dtype=np.float32)
+        else:
+            frames = nodes_df[self._frame_attr_key].to_numpy()
+            self._ndims = num_dims + 1
+            positions_min = np.ascontiguousarray(
+                np.hstack((frames[:, np.newaxis], bboxes[:, :num_dims])),
+                dtype=np.float32,
+            )
+            positions_max = np.ascontiguousarray(
+                np.hstack((frames[:, np.newaxis], bboxes[:, num_dims:])),
+                dtype=np.float32,
+            )
+
+        self._node_rtree = PointRTree(
+            item_dtype="int64",
+            coord_dtype="float32",
+            dims=self._ndims,
+        )
+        self._node_rtree.insert_bb_items(node_ids, positions_min, positions_max)
+
+    def _on_node_attrs_updated(self, node_ids: Sequence[int], attr_keys: Sequence[str]) -> None:
+        """
+        Refresh index when updates affect spatial coordinates.
+
+        BBox updates can change both min/max bounds and potentially the frame axis,
+        so we rebuild from current graph state to keep the index consistent.
+        """
+        changed = set(attr_keys)
+        if self._bbox_attr_key in changed or (self._frame_attr_key is not None and self._frame_attr_key in changed):
+            self._rebuild_index()
 
     def _attrs_to_bb_window(self, attrs: dict[str, Any]) -> tuple[np.ndarray, np.ndarray]:
         """

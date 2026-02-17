@@ -1755,7 +1755,16 @@ class SQLGraph(BaseGraph):
         if "t" in attrs:
             raise ValueError("Node attribute 't' cannot be updated.")
 
+        emit_signal = is_signal_on(self.node_attrs_updated)
+        if node_ids is None and emit_signal:
+            node_ids = self.node_ids()
+        elif node_ids is not None:
+            node_ids = list(node_ids)
+
         self._update_table(self.Node, node_ids, DEFAULT_ATTR_KEYS.NODE_ID, attrs)
+
+        if emit_signal:
+            self.node_attrs_updated.emit_fast(list(node_ids), tuple(attrs.keys()))
 
     def update_edge_attrs(
         self,

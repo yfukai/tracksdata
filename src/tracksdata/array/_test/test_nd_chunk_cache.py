@@ -116,3 +116,22 @@ def test_nd_chunk_cache_correctly_slice(array_nd_chunk_cache, volume_slicing):
     # First request → triggers chunk computations
     vol1 = cache.get(1, volume_slicing)
     np.testing.assert_array_equal(vol1, np_array[1][volume_slicing])
+
+
+def test_nd_chunk_cache_invalidate_region(array_nd_chunk_cache):
+    cache, np_array = array_nd_chunk_cache
+
+    _ = cache.get(1, (slice(0, 100), slice(0, 100), slice(0, 100)))
+    cache.invalidate(1, (slice(10, 20), slice(10, 20), slice(10, 20)))
+
+    updated = cache.get(1, (slice(10, 20), slice(10, 20), slice(10, 20)))
+    np.testing.assert_array_equal(updated, np_array[1][10:20, 10:20, 10:20])
+
+
+def test_nd_chunk_cache_clear(array_nd_chunk_cache):
+    cache, _ = array_nd_chunk_cache
+
+    _ = cache.get(1, (slice(0, 10), slice(0, 10), slice(0, 10)))
+    assert len(cache._store) == 1
+    cache.clear()
+    assert len(cache._store) == 0

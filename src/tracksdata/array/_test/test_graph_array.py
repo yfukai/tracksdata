@@ -378,3 +378,91 @@ def test_graph_array_raise_error_on_non_scalar_attr_key(graph_backend: BaseGraph
 
     with pytest.raises(ValueError, match="Attribute values for key 'label' must be scalar"):
         GraphArrayView(graph=graph_backend, shape=(10, 100, 100), attr_key="label")
+
+
+def test_graph_array_updates_after_add_and_remove(graph_backend: BaseGraph) -> None:
+    graph_backend.add_node_attr_key("label", dtype=pl.Int64)
+    graph_backend.add_node_attr_key(DEFAULT_ATTR_KEYS.MASK, pl.Object)
+    graph_backend.add_node_attr_key(DEFAULT_ATTR_KEYS.BBOX, pl.Array(pl.Int64, 4))
+
+    base_mask = Mask(np.array([[True]], dtype=bool), bbox=np.array([10, 20, 11, 21]))
+    graph_backend.add_node(
+        {
+            DEFAULT_ATTR_KEYS.T: 0,
+            "label": 1,
+            DEFAULT_ATTR_KEYS.MASK: base_mask,
+            DEFAULT_ATTR_KEYS.BBOX: base_mask.bbox,
+        }
+    )
+
+    array_view = GraphArrayView(graph=graph_backend, shape=(10, 100, 100), attr_key="label")
+    _ = np.asarray(array_view[0])  # populate cache
+
+    new_mask = Mask(np.array([[True]], dtype=bool), bbox=np.array([30, 40, 31, 41]))
+    new_node_id = graph_backend.add_node(
+        {
+            DEFAULT_ATTR_KEYS.T: 0,
+            "label": 7,
+            DEFAULT_ATTR_KEYS.MASK: new_mask,
+            DEFAULT_ATTR_KEYS.BBOX: new_mask.bbox,
+        }
+    )
+
+    assert np.asarray(array_view[0])[30, 40] == 7
+
+    graph_backend.remove_node(new_node_id)
+    assert np.asarray(array_view[0])[30, 40] == 0
+
+
+def test_graph_array_updates_after_node_attr_update(graph_backend: BaseGraph) -> None:
+    graph_backend.add_node_attr_key("label", dtype=pl.Int64)
+    graph_backend.add_node_attr_key(DEFAULT_ATTR_KEYS.MASK, pl.Object)
+    graph_backend.add_node_attr_key(DEFAULT_ATTR_KEYS.BBOX, pl.Array(pl.Int64, 4))
+
+    mask = Mask(np.array([[True]], dtype=bool), bbox=np.array([10, 20, 11, 21]))
+    node_id = graph_backend.add_node(
+        {
+            DEFAULT_ATTR_KEYS.T: 0,
+            "label": 1,
+            DEFAULT_ATTR_KEYS.MASK: mask,
+            DEFAULT_ATTR_KEYS.BBOX: mask.bbox,
+        }
+    )
+
+    array_view = GraphArrayView(graph=graph_backend, shape=(10, 100, 100), attr_key="label")
+    _ = np.asarray(array_view[0])  # populate cache
+
+    graph_backend.update_node_attrs(node_ids=[node_id], attrs={"label": 9})
+    assert np.asarray(array_view[0])[10, 20] == 9
+
+
+def test_graph_array_updates_after_bbox_and_mask_update(graph_backend: BaseGraph) -> None:
+    graph_backend.add_node_attr_key("label", dtype=pl.Int64)
+    graph_backend.add_node_attr_key(DEFAULT_ATTR_KEYS.MASK, pl.Object)
+    graph_backend.add_node_attr_key(DEFAULT_ATTR_KEYS.BBOX, pl.Array(pl.Int64, 4))
+
+    mask = Mask(np.array([[True]], dtype=bool), bbox=np.array([10, 20, 11, 21]))
+    node_id = graph_backend.add_node(
+        {
+            DEFAULT_ATTR_KEYS.T: 0,
+            "label": 3,
+            DEFAULT_ATTR_KEYS.MASK: mask,
+            DEFAULT_ATTR_KEYS.BBOX: mask.bbox,
+        }
+    )
+
+    array_view = GraphArrayView(graph=graph_backend, shape=(10, 100, 100), attr_key="label")
+    _ = np.asarray(array_view[0])  # populate cache
+
+    moved_mask = Mask(np.array([[True]], dtype=bool), bbox=np.array([30, 40, 31, 41]))
+    graph_backend.update_node_attrs(
+        node_ids=[node_id],
+        attrs={
+            DEFAULT_ATTR_KEYS.BBOX: [moved_mask.bbox],
+            DEFAULT_ATTR_KEYS.MASK: [moved_mask],
+        },
+    )
+
+    refreshed = np.asarray(array_view[0])
+    assert refreshed[10, 20] == 0
+    assert refreshed[30, 40] == 3

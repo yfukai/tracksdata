@@ -114,6 +114,13 @@ class NDChunkCache:
         """Return inclusive chunk-index bounds for every axis."""
         return tuple((s.start // cs, (s.stop - 1) // cs) for s, cs in zip(slices, self.chunk_shape, strict=True))
 
+    def _chunk_slice(self, chunk_idx: tuple[int, ...]) -> tuple[slice, ...]:
+        """Return the absolute volume slice for a chunk index."""
+        return tuple(
+            slice(ci * cs, min((ci + 1) * cs, fs))
+            for ci, cs, fs in zip(chunk_idx, self.chunk_shape, self.shape, strict=True)
+        )
+
     def get(self, time: int, volume_slicing: tuple[slice | int | Sequence[int], ...]) -> np.ndarray:
         """
         Retrieve data for `time` and arbitrary dimensional slices.
@@ -146,13 +153,57 @@ class NDChunkCache:
                 continue  # already filled
 
             # Absolute slice covering this chunk
-            chunk_slc = tuple(
-                slice(ci * cs, min((ci + 1) * cs, fs))
-                for ci, cs, fs in zip(chunk_idx, self.chunk_shape, self.shape, strict=True)
-            )
+            chunk_slc = self._chunk_slice(chunk_idx)
             # Handle the case where chunk_slc exceeds volume_slices
             self.compute_func(time, chunk_slc, store_entry.buffer)
             store_entry.ready[chunk_idx] = True
 
         # Return view on the big buffer
         return store_entry.buffer[volume_slicing]
+
+    def clear(self) -> None:
+        """Clear all cached buffers."""
+        self._store.clear()
+
+    def invalidate(
+        self,
+        time: int,
+        volume_slicing: tuple[slice | int | Sequence[int], ...] | None = None,
+    ) -> None:
+        """
+        Invalidate cached data for one time point or one region.
+
+        Parameters
+        ----------
+        time : int
+            Time point to invalidate.
+        volume_slicing : tuple[slice | int | Sequence[int], ...] | None
+            If provided, only chunks overlapping this region are invalidated.
+            If None, the full buffer for `time` is removed from cache.
+        """
+        if time not in self._store:
+            return
+
+        if volume_slicing is None:
+            del self._store[time]
+            return
+
+        if len(volume_slicing) != self.ndim:
+            raise ValueError("Number of slices must equal dimensionality")
+
+        normalized_slices: list[slice] = []
+        for slc, size in zip(volume_slicing, self.shape, strict=True):
+            slc = _to_slice(slc)
+            start = 0 if slc.start is None else max(0, min(size, slc.start))
+            stop = size if slc.stop is None else max(0, min(size, slc.stop))
+            if stop <= start:
+                return
+            normalized_slices.append(slice(start, stop))
+
+        store_entry = self._store[time]
+        bounds = self._chunk_bounds(tuple(normalized_slices))
+        chunk_ranges = [range(lo, hi + 1) for lo, hi in bounds]
+        for chunk_idx in itertools.product(*chunk_ranges):
+            chunk_slc = self._chunk_slice(chunk_idx)
+            store_entry.buffer[chunk_slc] = 0
+            store_entry.ready[chunk_idx] = False
