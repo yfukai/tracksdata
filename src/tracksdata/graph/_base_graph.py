@@ -47,20 +47,27 @@ class MetadataView(dict[str, Any]):
 
     _MISSING = object()
 
-    def __init__(self, graph: "BaseGraph", data: dict[str, Any]) -> None:
+    def __init__(
+        self,
+        graph: "BaseGraph",
+        data: dict[str, Any],
+        *,
+        is_public: bool = True,
+    ) -> None:
         super().__init__(data)
         self._graph = graph
+        self._is_public = is_public
 
     def __setitem__(self, key: str, value: Any) -> None:
-        self._graph._set_public_metadata(**{key: value})
+        self._graph._set_public_metadata(is_public=self._is_public, **{key: value})
         super().__setitem__(key, value)
 
     def __delitem__(self, key: str) -> None:
-        self._graph._remove_public_metadata(key)
+        self._graph._remove_public_metadata(key, is_public=self._is_public)
         super().__delitem__(key)
 
     def pop(self, key: str, default: Any = _MISSING) -> Any:
-        self._graph._validate_public_metadata_key(key)
+        self._graph._validate_metadata_key(key, is_public=self._is_public)
 
         if key not in self:
             if default is self._MISSING:
@@ -68,32 +75,32 @@ class MetadataView(dict[str, Any]):
             return default
 
         value = super().__getitem__(key)
-        self._graph._remove_metadata(key)
+        self._graph._remove_public_metadata(key, is_public=self._is_public)
         super().pop(key, None)
         return value
 
     def popitem(self) -> tuple[str, Any]:
         key, value = super().popitem()
-        self._graph._remove_metadata(key)
+        self._graph._remove_public_metadata(key, is_public=self._is_public)
         return key, value
 
     def clear(self) -> None:
         keys = list(self.keys())
         for key in keys:
-            self._graph._remove_metadata(key)
+            self._graph._remove_public_metadata(key, is_public=self._is_public)
         super().clear()
 
     def setdefault(self, key: str, default: Any = None) -> Any:
         if key in self:
             return super().__getitem__(key)
-        self._graph._set_public_metadata(**{key: default})
+        self._graph._set_public_metadata(is_public=self._is_public, **{key: default})
         super().__setitem__(key, default)
         return default
 
     def update(self, *args, **kwargs) -> None:
         updates = dict(*args, **kwargs)
         if updates:
-            self._graph._set_public_metadata(**updates)
+            self._graph._set_public_metadata(is_public=self._is_public, **updates)
         super().update(updates)
 
 
@@ -1244,9 +1251,7 @@ class BaseGraph(abc.ABC):
 
         graph = cls(**kwargs)
         graph.metadata.update(other.metadata)
-        private_metadata = other._private_metadata()
-        if private_metadata:
-            graph._update_metadata(**private_metadata)
+        graph._private_metadata.update(other._private_metadata)
 
         current_node_attr_schemas = graph._node_attr_schemas()
         for k, v in other._node_attr_schemas().items():
@@ -1904,32 +1909,44 @@ class BaseGraph(abc.ABC):
         return MetadataView(
             graph=self,
             data={k: v for k, v in self._metadata().items() if not self._is_private_metadata_key(k)},
+            is_public=True,
+        )
+
+    @property
+    def _private_metadata(self) -> MetadataView:
+        return MetadataView(
+            graph=self,
+            data={k: v for k, v in self._metadata().items() if self._is_private_metadata_key(k)},
+            is_public=False,
         )
 
     @classmethod
     def _is_private_metadata_key(cls, key: str) -> bool:
         return key.startswith(cls._PRIVATE_METADATA_PREFIX)
 
-    def _validate_public_metadata_key(self, key: str) -> None:
+    def _validate_metadata_key(self, key: str, *, is_public: bool) -> None:
         if not isinstance(key, str):
             raise TypeError(f"Metadata key must be a string. Got {type(key)}.")
-        if self._is_private_metadata_key(key):
+        is_private_key = self._is_private_metadata_key(key)
+        if is_public and is_private_key:
             raise ValueError(f"Metadata key '{key}' is reserved for internal use.")
+        if not is_public and not is_private_key:
+            raise ValueError(
+                f"Metadata key '{key}' is not private. Private metadata keys must start with "
+                f"'{self._PRIVATE_METADATA_PREFIX}'."
+            )
 
-    def _validate_public_metadata_keys(self, keys: Sequence[str]) -> None:
+    def _validate_metadata_keys(self, keys: Sequence[str], *, is_public: bool) -> None:
         for key in keys:
-            self._validate_public_metadata_key(key)
+            self._validate_metadata_key(key, is_public=is_public)
 
-    def _set_public_metadata(self, **kwargs) -> None:
-        self._validate_public_metadata_keys(kwargs.keys())
+    def _set_public_metadata(self, is_public: bool = True, **kwargs) -> None:
+        self._validate_metadata_keys(kwargs.keys(), is_public=is_public)
         self._update_metadata(**kwargs)
 
-    def _remove_public_metadata(self, key: str) -> None:
-        self._validate_public_metadata_key(key)
+    def _remove_public_metadata(self, key: str, *, is_public: bool = True) -> None:
+        self._validate_metadata_key(key, is_public=is_public)
         self._remove_metadata(key)
-
-    def _private_metadata(self) -> dict[str, Any]:
-        return {k: v for k, v in self._metadata().items() if self._is_private_metadata_key(k)}
 
     @abc.abstractmethod
     def _metadata(self) -> dict[str, Any]:

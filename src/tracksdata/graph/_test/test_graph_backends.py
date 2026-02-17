@@ -2514,7 +2514,7 @@ def test_metadata_multiple_dtypes(graph_backend: BaseGraph) -> None:
 def test_private_metadata_is_hidden_from_public_apis(graph_backend: BaseGraph) -> None:
     private_key = "__private_dtype_map"
 
-    graph_backend._update_metadata(**{private_key: {"x": "float64"}})
+    graph_backend._private_metadata.update(**{private_key: {"x": "float64"}})
     graph_backend.metadata.update(shape=[1, 2, 3])
 
     public_metadata = graph_backend.metadata
@@ -2527,8 +2527,11 @@ def test_private_metadata_is_hidden_from_public_apis(graph_backend: BaseGraph) -
     with pytest.raises(ValueError, match="reserved for internal use"):
         graph_backend.metadata.pop(private_key, None)
 
-    # Internal APIs can still remove private keys.
-    graph_backend._remove_metadata(private_key)
+    with pytest.raises(ValueError, match="is not private"):
+        graph_backend._private_metadata.update(shape=[1, 2, 3])
+
+    # Private metadata view can remove private keys.
+    graph_backend._private_metadata.pop(private_key, None)
     assert private_key not in graph_backend._metadata()
 
 
