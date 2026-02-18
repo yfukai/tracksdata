@@ -1523,6 +1523,23 @@ def test_from_other_preserves_schema_roundtrip(target_cls: type[BaseGraph], targ
     assert graph3.edge_attrs().schema == graph.edge_attrs().schema
 
 
+@pytest.mark.xfail(reason="This is because of the lack of support of shape-less pl.Array in write_ipc of polars.")
+def test_from_other_with_array_no_shape():
+    """Test that from_other raises an error when trying to copy array attributes without shape information."""
+    graph = RustWorkXGraph()
+    graph.add_node_attr_key("array_attr", pl.Array)
+    graph.add_node({"t": 0, "array_attr": np.array([1.0, 2.0, 3.0], dtype=np.float32)})
+
+    # This should raise an error because the schema does not include shape information
+    graph2 = SQLGraph.from_other(
+        graph, drivername="sqlite", database=":memory:", engine_kwargs={"connect_args": {"check_same_thread": False}}
+    )
+    assert graph2.num_nodes() == graph.num_nodes()
+    assert set(graph2.node_attr_keys()) == set(graph.node_attr_keys())
+    assert graph2._node_attr_schemas() == graph._node_attr_schemas()
+    assert graph2.node_attrs().schema == graph.node_attrs().schema
+
+
 @pytest.mark.parametrize(
     ("target_cls", "target_kwargs"),
     [

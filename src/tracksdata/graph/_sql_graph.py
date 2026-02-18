@@ -590,13 +590,7 @@ class SQLGraph(BaseGraph):
 
         schemas: dict[str, AttrSchema] = {}
         for key, encoded_schema in section.items():
-            try:
-                schemas[key] = deserialize_attr_schema(encoded_schema, key=key)
-            except Exception:
-                LOG.warning(
-                    "Failed to deserialize SQL schema metadata for key '%s'. Falling back to table inference.",
-                    key,
-                )
+            schemas[key] = deserialize_attr_schema(encoded_schema, key=key)
 
         return schemas
 
