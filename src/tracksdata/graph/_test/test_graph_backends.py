@@ -1,3 +1,4 @@
+import datetime as dt
 from pathlib import Path
 from typing import Any
 
@@ -1493,7 +1494,7 @@ def test_from_other_preserves_schema_roundtrip(target_cls: type[BaseGraph], targ
             "attr_UInt32": np.uint32(10),
             "attr_UInt64": np.uint64(11),
             "attr_Date": pl.date(2024, 1, 1),
-            "attr_Datetime": pl.datetime(2024, 1, 1, 12, 0, 0),
+            "attr_Datetime": dt.datetime(2024, 1, 1, 12, 0, 0),
             "attr_Boolean": True,
             "attr_Array(Float32, shape=(3,))": np.array([1.0, 2.0, 3.0], dtype=np.float32),
             "attr_List(Int32)": [1, 2, 3],

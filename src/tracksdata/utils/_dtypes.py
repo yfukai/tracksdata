@@ -478,65 +478,47 @@ def sqlalchemy_type_to_polars_dtype(sa_type: TypeEngine) -> pl.DataType:
     return pl.Object
 
 
-def serialize_polars_dtype(dtype: pl.DataType) -> str:
-    """
-    Serializes a Polars dtype to a safe, cross-platform base64 string
-    using the Arrow IPC format.
-    """
-    # Wrap the dtype in an empty DataFrame schema
-    # We use an empty DataFrame so no actual data is processed, only metadata.
-    dummy_df = pl.DataFrame(schema={"dummy": dtype})
-    # Write to Arrow IPC (binary buffer)
-    # IPC is stable across versions/platforms unlike internal serialization.
-    buffer = io.BytesIO()
-    dummy_df.write_ipc(buffer)
-    # Encode binary to a standard string
-    return base64.b64encode(buffer.getvalue()).decode("utf-8")
+def _normalize_default_for_dtype(default_value: Any, dtype: pl.DataType) -> Any:
+    if isinstance(dtype, pl.Array | pl.List) and isinstance(default_value, np.ndarray):
+        return default_value.tolist()
+    return default_value
 
 
-def deserialize_polars_dtype(encoded_dtype: str) -> pl.DataType:
-    """
-    Recovers a Polars dtype from a base64 string.
-    """
-    # Decode string back to binary
-    data = base64.b64decode(encoded_dtype)
-    # Read the IPC buffer
-    buffer = io.BytesIO(data)
-    restored_df = pl.read_ipc(buffer)
-    # Extract the dtype from the schema
-    return restored_df.schema["dummy"]
+def _normalize_deserialized_default(default_value: Any, dtype: pl.DataType) -> Any:
+    if isinstance(dtype, pl.Array):
+        if isinstance(default_value, pl.Series):
+            default_value = default_value.to_list()
+        numpy_dtype = polars_dtype_to_numpy_dtype(dtype.inner, allow_sequence=True)
+        return np.asarray(default_value, dtype=numpy_dtype).reshape(dtype.shape)
+
+    if isinstance(dtype, pl.List):
+        if isinstance(default_value, pl.Series):
+            return default_value.to_list()
+        if isinstance(default_value, np.ndarray):
+            return default_value.tolist()
+
+    return default_value
 
 
-_ATTR_SCHEMA_DTYPE_COL = "__attr_schema_dtype__"
-_ATTR_SCHEMA_DEFAULT_COL = "__attr_schema_default__"
-_ATTR_SCHEMA_DTYPE_PICKLE_COL = "__attr_schema_dtype_pickle__"
+_ATTR_SCHEMA_VALUE_COL = "__attr_schema_value__"
+_ATTR_SCHEMA_FALLBACK_COL = "__attr_schema_fallback__"
 
 
 def serialize_attr_schema(schema: AttrSchema) -> str:
     """
     Serialize an AttrSchema into a base64-encoded Arrow IPC payload.
 
-    The payload stores dtype metadata and the default value in the same
-    DataFrame serialization so schema roundtrip can restore both fields.
+    The primary format stores schema.default_value in the first row of a
+    single dummy column whose dtype is schema.dtype. This keeps dtype and
+    default value in one Arrow IPC payload.
     """
-    default_payload = dumps(schema.default_value)
-    dtype_payload = dumps(schema.dtype)
+    normalized_default = _normalize_default_for_dtype(schema.default_value, schema.dtype)
     df = pl.DataFrame(
         {
-            _ATTR_SCHEMA_DTYPE_COL: pl.Series(
-                _ATTR_SCHEMA_DTYPE_COL,
-                values=[None],
+            _ATTR_SCHEMA_VALUE_COL: pl.Series(
+                _ATTR_SCHEMA_VALUE_COL,
+                values=[normalized_default],
                 dtype=schema.dtype,
-            ),
-            _ATTR_SCHEMA_DEFAULT_COL: pl.Series(
-                _ATTR_SCHEMA_DEFAULT_COL,
-                values=[default_payload],
-                dtype=pl.Binary,
-            ),
-            _ATTR_SCHEMA_DTYPE_PICKLE_COL: pl.Series(
-                _ATTR_SCHEMA_DTYPE_PICKLE_COL,
-                values=[dtype_payload],
-                dtype=pl.Binary,
             ),
         }
     )
@@ -545,23 +527,14 @@ def serialize_attr_schema(schema: AttrSchema) -> str:
     try:
         df.write_ipc(buffer)
     except Exception:
-        # Fallback for dtypes that cannot be represented in Arrow IPC schema
-        # (e.g., pl.Object). Keep everything in one DataFrame payload.
+        # Some dtypes (e.g. pl.Object) cannot roundtrip through Arrow IPC schema.
+        # Store pickled (dtype, default) in the first row of a binary dummy column.
+        fallback_payload = dumps((schema.dtype, schema.default_value))
         fallback_df = pl.DataFrame(
             {
-                _ATTR_SCHEMA_DTYPE_COL: pl.Series(
-                    _ATTR_SCHEMA_DTYPE_COL,
-                    values=[None],
-                    dtype=pl.Binary,
-                ),
-                _ATTR_SCHEMA_DEFAULT_COL: pl.Series(
-                    _ATTR_SCHEMA_DEFAULT_COL,
-                    values=[default_payload],
-                    dtype=pl.Binary,
-                ),
-                _ATTR_SCHEMA_DTYPE_PICKLE_COL: pl.Series(
-                    _ATTR_SCHEMA_DTYPE_PICKLE_COL,
-                    values=[dtype_payload],
+                _ATTR_SCHEMA_FALLBACK_COL: pl.Series(
+                    _ATTR_SCHEMA_FALLBACK_COL,
+                    values=[fallback_payload],
                     dtype=pl.Binary,
                 ),
             }
@@ -580,21 +553,21 @@ def deserialize_attr_schema(encoded_schema: str, *, key: str) -> AttrSchema:
     buffer = io.BytesIO(data)
     restored_df = pl.read_ipc(buffer)
 
-    if _ATTR_SCHEMA_DTYPE_PICKLE_COL in restored_df.columns:
-        dtype_pickle = restored_df[_ATTR_SCHEMA_DTYPE_PICKLE_COL][0]
+    if _ATTR_SCHEMA_VALUE_COL in restored_df.columns:
+        dtype = restored_df.schema[_ATTR_SCHEMA_VALUE_COL]
+        default_value = restored_df[_ATTR_SCHEMA_VALUE_COL][0]
+    elif _ATTR_SCHEMA_FALLBACK_COL in restored_df.columns:
+        fallback_payload = restored_df[_ATTR_SCHEMA_FALLBACK_COL][0]
+        if fallback_payload is None:
+            raise ValueError("Fallback schema payload is missing.")
+        dtype, default_value = loads(fallback_payload)
     else:
-        dtype_pickle = None
-
-    if dtype_pickle is not None:
-        dtype = loads(dtype_pickle)
-    else:
-        dtype = restored_df.schema[_ATTR_SCHEMA_DTYPE_COL]
+        raise ValueError("Unrecognized attr schema payload format.")
 
     if not pl.datatypes.is_polars_dtype(dtype):
         raise TypeError(f"Decoded value is not a polars dtype: {type(dtype)}")
 
-    default_payload = restored_df[_ATTR_SCHEMA_DEFAULT_COL][0]
-    default_value = loads(default_payload) if default_payload is not None else None
+    default_value = _normalize_deserialized_default(default_value, dtype)
     return AttrSchema(key=key, dtype=dtype, default_value=default_value)
 
 

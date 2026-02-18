@@ -1,5 +1,6 @@
 import base64
 import binascii
+import io
 
 import numpy as np
 import polars as pl
@@ -8,9 +9,7 @@ import pytest
 from tracksdata.utils._dtypes import (
     AttrSchema,
     deserialize_attr_schema,
-    deserialize_polars_dtype,
     serialize_attr_schema,
-    serialize_polars_dtype,
 )
 
 
@@ -28,28 +27,29 @@ from tracksdata.utils._dtypes import (
         pl.Datetime("us", "UTC"),
     ],
 )
-def test_serialize_deserialize_polars_dtype_roundtrip(dtype: pl.DataType) -> None:
-    encoded = serialize_polars_dtype(dtype)
+def test_serialize_deserialize_attr_schema_dtype_roundtrip(dtype: pl.DataType) -> None:
+    schema = AttrSchema(key="dummy", dtype=dtype)
+    encoded = serialize_attr_schema(schema)
 
     assert isinstance(encoded, str)
     assert encoded
     assert base64.b64decode(encoded)
 
-    restored_dtype = deserialize_polars_dtype(encoded)
+    restored = deserialize_attr_schema(encoded, key=schema.key)
 
-    assert restored_dtype == dtype
+    assert restored == schema
 
 
-def test_deserialize_polars_dtype_invalid_base64_raises() -> None:
+def test_deserialize_attr_schema_invalid_base64_raises() -> None:
     with pytest.raises(binascii.Error):
-        deserialize_polars_dtype("not-base64")
+        deserialize_attr_schema("not-base64", key="dummy")
 
 
-def test_deserialize_polars_dtype_non_ipc_payload_raises() -> None:
+def test_deserialize_attr_schema_non_ipc_payload_raises() -> None:
     encoded = base64.b64encode(b"not-arrow-ipc").decode("utf-8")
 
     with pytest.raises((OSError, pl.exceptions.PolarsError)):
-        deserialize_polars_dtype(encoded)
+        deserialize_attr_schema(encoded, key="dummy")
 
 
 @pytest.mark.parametrize(
@@ -68,3 +68,16 @@ def test_serialize_deserialize_attr_schema_roundtrip(schema: AttrSchema) -> None
     encoded = serialize_attr_schema(schema)
     restored = deserialize_attr_schema(encoded, key=schema.key)
     assert restored == schema
+
+
+def test_serialize_attr_schema_stores_default_in_dummy_row() -> None:
+    schema = AttrSchema(key="score", dtype=pl.Float64, default_value=1.25)
+    encoded = serialize_attr_schema(schema)
+
+    payload = base64.b64decode(encoded)
+    df = pl.read_ipc(io.BytesIO(payload))
+
+    assert "__attr_schema_value__" in df.columns
+    assert df.schema["__attr_schema_value__"] == pl.Float64
+    assert df["__attr_schema_value__"][0] == 1.25
+    assert "__attr_schema_dtype_pickle__" not in df.columns
