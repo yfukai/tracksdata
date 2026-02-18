@@ -1,7 +1,6 @@
 import abc
 import functools
 import operator
-import warnings
 from collections.abc import Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, TypeVar, overload
@@ -22,9 +21,7 @@ from tracksdata.utils._cache import cache_method
 from tracksdata.utils._dtypes import (
     AttrSchema,
     column_to_numpy,
-    deserialize_polars_dtype,
     polars_dtype_to_numpy_dtype,
-    serialize_polars_dtype,
 )
 from tracksdata.utils._logging import LOG
 from tracksdata.utils._multiprocessing import multiprocessing_apply
@@ -113,7 +110,6 @@ class BaseGraph(abc.ABC):
     """
 
     _PRIVATE_METADATA_PREFIX = "__private_"
-    _PRIVATE_DTYPE_MAP_KEY = "__private_dtype_map"
 
     node_added = Signal(int)
     node_removed = Signal(int)
@@ -1255,7 +1251,7 @@ class BaseGraph(abc.ABC):
 
         graph = cls(**kwargs)
         graph.metadata.update(other.metadata)
-        graph._private_metadata.update(other._private_metadata)
+        graph._private_metadata.update(other._private_metadata_for_copy())
 
         current_node_attr_schemas = graph._node_attr_schemas()
         for k, v in other._node_attr_schemas().items():
@@ -1951,68 +1947,13 @@ class BaseGraph(abc.ABC):
         self._validate_metadata_key(key, is_public=is_public)
         self._remove_metadata(key)
 
-    def _get_private_dtype_map(self) -> dict[str, dict[str, str]]:
-        dtype_map = self._private_metadata.get(self._PRIVATE_DTYPE_MAP_KEY, {})
-        if not isinstance(dtype_map, dict):
-            return {"node": {}, "edge": {}}
+    def _private_metadata_for_copy(self) -> dict[str, Any]:
+        """
+        Return private metadata entries that should be propagated by `from_other`.
 
-        node_dtype_map = dtype_map.get("node", {})
-        edge_dtype_map = dtype_map.get("edge", {})
-        if not isinstance(node_dtype_map, dict):
-            node_dtype_map = {}
-        if not isinstance(edge_dtype_map, dict):
-            edge_dtype_map = {}
-
-        return {"node": dict(node_dtype_map), "edge": dict(edge_dtype_map)}
-
-    def _set_private_dtype_map(self, dtype_map: dict[str, dict[str, str]]) -> None:
-        self._private_metadata.update(
-            **{
-                self._PRIVATE_DTYPE_MAP_KEY: {
-                    "node": dict(dtype_map.get("node", {})),
-                    "edge": dict(dtype_map.get("edge", {})),
-                }
-            }
-        )
-
-    def _set_attr_dtype_metadata(self, *, key: str, dtype: pl.DataType, is_node: bool) -> None:
-        dtype_map = self._get_private_dtype_map()
-        map_key = "node" if is_node else "edge"
-        dtype_map[map_key][key] = serialize_polars_dtype(dtype)
-        self._set_private_dtype_map(dtype_map)
-
-    def _remove_attr_dtype_metadata(self, *, key: str, is_node: bool) -> None:
-        dtype_map = self._get_private_dtype_map()
-        map_key = "node" if is_node else "edge"
-        dtype_map[map_key].pop(key, None)
-        self._set_private_dtype_map(dtype_map)
-
-    def _attr_dtype_from_metadata(self, *, key: str, is_node: bool) -> pl.DataType | None:
-        dtype_map = self._get_private_dtype_map()
-        map_key = "node" if is_node else "edge"
-        encoded_dtype = dtype_map[map_key].get(key)
-        if not isinstance(encoded_dtype, str):
-            return None
-
-        try:
-            return deserialize_polars_dtype(encoded_dtype)
-        except Exception:
-            warnings.warn(
-                f"Initializing schemas from existing database tables for the key {key}. "
-                "This is a fallback mechanism when loading existing graphs, and may not "
-                "perfectly restore the original schemas. "
-                "This method is deprecated and will be removed in the major release. ",
-                UserWarning,
-                stacklevel=2,
-            )
-            return None
-
-    def _sync_attr_dtype_metadata(self) -> None:
-        dtype_map = {
-            "node": {key: serialize_polars_dtype(schema.dtype) for key, schema in self._node_attr_schemas().items()},
-            "edge": {key: serialize_polars_dtype(schema.dtype) for key, schema in self._edge_attr_schemas().items()},
-        }
-        self._set_private_dtype_map(dtype_map)
+        Backends can override this to exclude backend-specific private metadata.
+        """
+        return dict(self._private_metadata)
 
     @abc.abstractmethod
     def _metadata(self) -> dict[str, Any]:

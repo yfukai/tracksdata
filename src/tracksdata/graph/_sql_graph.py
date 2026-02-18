@@ -20,8 +20,10 @@ from tracksdata.utils._cache import cache_method
 from tracksdata.utils._dataframe import unpack_array_attrs, unpickle_bytes_columns
 from tracksdata.utils._dtypes import (
     AttrSchema,
+    deserialize_attr_schema,
     polars_dtype_to_sqlalchemy_type,
     process_attr_key_args,
+    serialize_attr_schema,
     sqlalchemy_type_to_polars_dtype,
 )
 from tracksdata.utils._logging import LOG
@@ -441,6 +443,7 @@ class SQLGraph(BaseGraph):
     """
 
     node_id_time_multiplier: int = 1_000_000_000
+    _PRIVATE_SQL_SCHEMA_STORE_KEY = "__private_sql_attr_schema_store"
     Base: type[DeclarativeBase]
     Node: type[DeclarativeBase]
     Edge: type[DeclarativeBase]
@@ -469,8 +472,6 @@ class SQLGraph(BaseGraph):
 
         # Create unique classes for this instance
         self._define_schema(overwrite=overwrite)
-        self.__node_attr_schemas: dict[str, AttrSchema] = {}
-        self.__edge_attr_schemas: dict[str, AttrSchema] = {}
 
         if overwrite:
             self.Base.metadata.drop_all(self._engine)
@@ -479,7 +480,6 @@ class SQLGraph(BaseGraph):
 
         # Initialize schemas from existing table columns
         self._init_schemas_from_tables()
-        self._sync_attr_dtype_metadata()
 
         self._max_id_per_time = {}
         self._update_max_id_per_time()
@@ -552,43 +552,109 @@ class SQLGraph(BaseGraph):
         self.Overlap = Overlap
         self.Metadata = Metadata
 
+    @classmethod
+    def _empty_attr_schema_store(cls) -> dict[str, dict[str, str]]:
+        return {"node": {}, "edge": {}}
+
+    def _attr_schema_store(self) -> dict[str, dict[str, str]]:
+        store = self._private_metadata.get(self._PRIVATE_SQL_SCHEMA_STORE_KEY, {})
+        if not isinstance(store, dict):
+            return self._empty_attr_schema_store()
+
+        normalized = self._empty_attr_schema_store()
+        for section_key in ("node", "edge"):
+            section = store.get(section_key, {})
+            if not isinstance(section, dict):
+                continue
+            for key, encoded_schema in section.items():
+                if isinstance(encoded_schema, str):
+                    normalized[section_key][key] = encoded_schema
+
+        return normalized
+
+    def _set_attr_schema_store(self, store: dict[str, dict[str, str]]) -> None:
+        normalized = self._empty_attr_schema_store()
+        for section_key in ("node", "edge"):
+            section = store.get(section_key, {})
+            if not isinstance(section, dict):
+                continue
+            for key, encoded_schema in section.items():
+                if isinstance(encoded_schema, str):
+                    normalized[section_key][key] = encoded_schema
+
+        self._private_metadata.update(**{self._PRIVATE_SQL_SCHEMA_STORE_KEY: normalized})
+
+    def _get_attr_schemas_from_store(self, *, is_node: bool) -> dict[str, AttrSchema]:
+        section_key = "node" if is_node else "edge"
+        section = self._attr_schema_store()[section_key]
+
+        schemas: dict[str, AttrSchema] = {}
+        for key, encoded_schema in section.items():
+            try:
+                schemas[key] = deserialize_attr_schema(encoded_schema, key=key)
+            except Exception:
+                LOG.warning(
+                    "Failed to deserialize SQL schema metadata for key '%s'. Falling back to table inference.",
+                    key,
+                )
+
+        return schemas
+
+    def _set_attr_schemas_to_store(self, *, is_node: bool, schemas: dict[str, AttrSchema]) -> None:
+        section_key = "node" if is_node else "edge"
+        store = self._attr_schema_store()
+        store[section_key] = {key: serialize_attr_schema(schema) for key, schema in schemas.items()}
+        self._set_attr_schema_store(store)
+
+    @property
+    def __node_attr_schemas(self) -> dict[str, AttrSchema]:
+        return self._get_attr_schemas_from_store(is_node=True)
+
+    @__node_attr_schemas.setter
+    def __node_attr_schemas(self, schemas: dict[str, AttrSchema]) -> None:
+        self._set_attr_schemas_to_store(is_node=True, schemas=schemas)
+
+    @property
+    def __edge_attr_schemas(self) -> dict[str, AttrSchema]:
+        return self._get_attr_schemas_from_store(is_node=False)
+
+    @__edge_attr_schemas.setter
+    def __edge_attr_schemas(self, schemas: dict[str, AttrSchema]) -> None:
+        self._set_attr_schemas_to_store(is_node=False, schemas=schemas)
+
     def _init_schemas_from_tables(self) -> None:
         """
         Initialize AttrSchema objects from existing database table columns.
         This is used when loading an existing graph from the database.
         """
-
         node_column_names = list(self.Node.__table__.columns.keys())
         preferred_node_order = [DEFAULT_ATTR_KEYS.T, DEFAULT_ATTR_KEYS.NODE_ID]
         ordered_node_columns = [name for name in preferred_node_order if name in node_column_names]
         ordered_node_columns.extend(name for name in node_column_names if name not in preferred_node_order)
 
-        # Initialize node schemas from Node table columns
+        node_schemas = {k: v for k, v in self.__node_attr_schemas.items() if k in ordered_node_columns}
         for column_name in ordered_node_columns:
-            if column_name not in self.__node_attr_schemas:
-                pl_dtype = self._attr_dtype_from_metadata(key=column_name, is_node=True)
-                if pl_dtype is None:
-                    column = self.Node.__table__.columns[column_name]
-                    pl_dtype = sqlalchemy_type_to_polars_dtype(column.type)
-                # AttrSchema.__post_init__ will infer the default_value
-                self.__node_attr_schemas[column_name] = AttrSchema(
-                    key=column_name,
-                    dtype=pl_dtype,
-                )
+            if column_name in node_schemas:
+                continue
+            column = self.Node.__table__.columns[column_name]
+            node_schemas[column_name] = AttrSchema(
+                key=column_name,
+                dtype=sqlalchemy_type_to_polars_dtype(column.type),
+            )
+        self.__node_attr_schemas = node_schemas
 
         # Initialize edge schemas from Edge table columns
+        edge_column_names = list(self.Edge.__table__.columns.keys())
+        edge_schemas = {k: v for k, v in self.__edge_attr_schemas.items() if k in edge_column_names}
         for column_name in self.Edge.__table__.columns.keys():
-            # Skip internal edge columns
-            if column_name not in self.__edge_attr_schemas:
-                pl_dtype = self._attr_dtype_from_metadata(key=column_name, is_node=False)
-                if pl_dtype is None:
-                    column = self.Edge.__table__.columns[column_name]
-                    pl_dtype = sqlalchemy_type_to_polars_dtype(column.type)
-                # AttrSchema.__post_init__ will infer the default_value
-                self.__edge_attr_schemas[column_name] = AttrSchema(
-                    key=column_name,
-                    dtype=pl_dtype,
-                )
+            if column_name in edge_schemas:
+                continue
+            column = self.Edge.__table__.columns[column_name]
+            edge_schemas[column_name] = AttrSchema(
+                key=column_name,
+                dtype=sqlalchemy_type_to_polars_dtype(column.type),
+            )
+        self.__edge_attr_schemas = edge_schemas
 
     def _restore_pickled_column_types(self, table: sa.Table) -> None:
         for column in table.columns:
@@ -1648,15 +1714,14 @@ class SQLGraph(BaseGraph):
         dtype: pl.DataType | None = None,
         default_value: Any = None,
     ) -> None:
+        node_schemas = self.__node_attr_schemas
         # Process arguments and create validated schema
-        schema = process_attr_key_args(key_or_schema, dtype, default_value, self.__node_attr_schemas)
-
-        # Store schema
-        self.__node_attr_schemas[schema.key] = schema
+        schema = process_attr_key_args(key_or_schema, dtype, default_value, node_schemas)
 
         # Add column to database
         self._add_new_column(self.Node, schema)
-        self._set_attr_dtype_metadata(key=schema.key, dtype=schema.dtype, is_node=True)
+        node_schemas[schema.key] = schema
+        self.__node_attr_schemas = node_schemas
 
     def remove_node_attr_key(self, key: str) -> None:
         if key not in self.node_attr_keys():
@@ -1665,9 +1730,10 @@ class SQLGraph(BaseGraph):
         if key in (DEFAULT_ATTR_KEYS.NODE_ID, DEFAULT_ATTR_KEYS.T):
             raise ValueError(f"Cannot remove required node attribute key {key}")
 
+        node_schemas = self.__node_attr_schemas
         self._drop_column(self.Node, key)
-        self.__node_attr_schemas.pop(key, None)
-        self._remove_attr_dtype_metadata(key=key, is_node=True)
+        node_schemas.pop(key, None)
+        self.__node_attr_schemas = node_schemas
 
     def add_edge_attr_key(
         self,
@@ -1675,23 +1741,23 @@ class SQLGraph(BaseGraph):
         dtype: pl.DataType | None = None,
         default_value: Any = None,
     ) -> None:
+        edge_schemas = self.__edge_attr_schemas
         # Process arguments and create validated schema
-        schema = process_attr_key_args(key_or_schema, dtype, default_value, self.__edge_attr_schemas)
-
-        # Store schema
-        self.__edge_attr_schemas[schema.key] = schema
+        schema = process_attr_key_args(key_or_schema, dtype, default_value, edge_schemas)
 
         # Add column to database
         self._add_new_column(self.Edge, schema)
-        self._set_attr_dtype_metadata(key=schema.key, dtype=schema.dtype, is_node=False)
+        edge_schemas[schema.key] = schema
+        self.__edge_attr_schemas = edge_schemas
 
     def remove_edge_attr_key(self, key: str) -> None:
         if key not in self.edge_attr_keys():
             raise ValueError(f"Edge attribute key {key} does not exist")
 
+        edge_schemas = self.__edge_attr_schemas
         self._drop_column(self.Edge, key)
-        self.__edge_attr_schemas.pop(key, None)
-        self._remove_attr_dtype_metadata(key=key, is_node=False)
+        edge_schemas.pop(key, None)
+        self.__edge_attr_schemas = edge_schemas
 
     def num_edges(self) -> int:
         with Session(self._engine) as session:
@@ -2031,6 +2097,11 @@ class SQLGraph(BaseGraph):
         with Session(self._engine) as session:
             result = session.query(self.Metadata).all()
             return {row.key: row.value for row in result}
+
+    def _private_metadata_for_copy(self) -> dict[str, Any]:
+        private_metadata = super()._private_metadata_for_copy()
+        private_metadata.pop(self._PRIVATE_SQL_SCHEMA_STORE_KEY, None)
+        return private_metadata
 
     def _update_metadata(self, **kwargs) -> None:
         with Session(self._engine) as session:

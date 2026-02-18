@@ -343,7 +343,7 @@ class RustWorkXGraph(BaseGraph):
         self._time_to_nodes: dict[int, list[int]] = {}
         self.__node_attr_schemas: dict[str, AttrSchema] = {}
         self.__edge_attr_schemas: dict[str, AttrSchema] = {}
-        self._overlaps: list[list[int, 2]] = []
+        self._overlaps: list[list[int]] = []
 
         # Add default node attributes with inferred schemas
         self.__node_attr_schemas[DEFAULT_ATTR_KEYS.T] = AttrSchema(
@@ -400,13 +400,11 @@ class RustWorkXGraph(BaseGraph):
                 for key, value in first_node_attrs.items():
                     if key == DEFAULT_ATTR_KEYS.NODE_ID:
                         continue
-                    dtype = self._attr_dtype_from_metadata(key=key, is_node=True)
-                    if dtype is None:
-                        try:
-                            dtype = pl.Series([value]).dtype
-                        except (ValueError, TypeError):
-                            # If polars can't infer dtype (e.g., for complex objects), use Object
-                            dtype = pl.Object
+                    try:
+                        dtype = pl.Series([value]).dtype
+                    except (ValueError, TypeError):
+                        # If polars can't infer dtype (e.g., for complex objects), use Object
+                        dtype = pl.Object
                     self.__node_attr_schemas[key] = AttrSchema(key=key, dtype=dtype)
 
             # Process edges: set edge IDs and infer schemas
@@ -424,16 +422,12 @@ class RustWorkXGraph(BaseGraph):
                     # TODO: check if EDGE_SOURCE and EDGE_TARGET should be also ignored or in the schema
                     if key == DEFAULT_ATTR_KEYS.EDGE_ID:
                         continue
-                    dtype = self._attr_dtype_from_metadata(key=key, is_node=False)
-                    if dtype is None:
-                        try:
-                            dtype = pl.Series([value]).dtype
-                        except (ValueError, TypeError):
-                            # If polars can't infer dtype (e.g., for complex objects), use Object
-                            dtype = pl.Object
+                    try:
+                        dtype = pl.Series([value]).dtype
+                    except (ValueError, TypeError):
+                        # If polars can't infer dtype (e.g., for complex objects), use Object
+                        dtype = pl.Object
                     self.__edge_attr_schemas[key] = AttrSchema(key=key, dtype=dtype)
-
-        self._sync_attr_dtype_metadata()
 
     def _node_attr_schemas(self) -> dict[str, AttrSchema]:
         return self.__node_attr_schemas
@@ -992,7 +986,6 @@ class RustWorkXGraph(BaseGraph):
 
         # Store schema
         self.__node_attr_schemas[schema.key] = schema
-        self._set_attr_dtype_metadata(key=schema.key, dtype=schema.dtype, is_node=True)
 
     def remove_node_attr_key(self, key: str) -> None:
         """
@@ -1005,7 +998,6 @@ class RustWorkXGraph(BaseGraph):
             raise ValueError(f"Cannot remove required node attribute key {key}")
 
         del self.__node_attr_schemas[key]
-        self._remove_attr_dtype_metadata(key=key, is_node=True)
         for node_attr in self.rx_graph.nodes():
             node_attr.pop(key, None)
 
@@ -1034,7 +1026,6 @@ class RustWorkXGraph(BaseGraph):
 
         # Store schema
         self.__edge_attr_schemas[schema.key] = schema
-        self._set_attr_dtype_metadata(key=schema.key, dtype=schema.dtype, is_node=False)
 
     def remove_edge_attr_key(self, key: str) -> None:
         """
@@ -1044,7 +1035,6 @@ class RustWorkXGraph(BaseGraph):
             raise ValueError(f"Edge attribute key {key} does not exist")
 
         del self.__edge_attr_schemas[key]
-        self._remove_attr_dtype_metadata(key=key, is_node=False)
         for edge_attr in self.rx_graph.edges():
             edge_attr.pop(key, None)
 

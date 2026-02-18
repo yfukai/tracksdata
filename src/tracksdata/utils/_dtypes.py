@@ -507,6 +507,97 @@ def deserialize_polars_dtype(encoded_dtype: str) -> pl.DataType:
     return restored_df.schema["dummy"]
 
 
+_ATTR_SCHEMA_DTYPE_COL = "__attr_schema_dtype__"
+_ATTR_SCHEMA_DEFAULT_COL = "__attr_schema_default__"
+_ATTR_SCHEMA_DTYPE_PICKLE_COL = "__attr_schema_dtype_pickle__"
+
+
+def serialize_attr_schema(schema: AttrSchema) -> str:
+    """
+    Serialize an AttrSchema into a base64-encoded Arrow IPC payload.
+
+    The payload stores dtype metadata and the default value in the same
+    DataFrame serialization so schema roundtrip can restore both fields.
+    """
+    default_payload = dumps(schema.default_value)
+    dtype_payload = dumps(schema.dtype)
+    df = pl.DataFrame(
+        {
+            _ATTR_SCHEMA_DTYPE_COL: pl.Series(
+                _ATTR_SCHEMA_DTYPE_COL,
+                values=[None],
+                dtype=schema.dtype,
+            ),
+            _ATTR_SCHEMA_DEFAULT_COL: pl.Series(
+                _ATTR_SCHEMA_DEFAULT_COL,
+                values=[default_payload],
+                dtype=pl.Binary,
+            ),
+            _ATTR_SCHEMA_DTYPE_PICKLE_COL: pl.Series(
+                _ATTR_SCHEMA_DTYPE_PICKLE_COL,
+                values=[dtype_payload],
+                dtype=pl.Binary,
+            ),
+        }
+    )
+
+    buffer = io.BytesIO()
+    try:
+        df.write_ipc(buffer)
+    except Exception:
+        # Fallback for dtypes that cannot be represented in Arrow IPC schema
+        # (e.g., pl.Object). Keep everything in one DataFrame payload.
+        fallback_df = pl.DataFrame(
+            {
+                _ATTR_SCHEMA_DTYPE_COL: pl.Series(
+                    _ATTR_SCHEMA_DTYPE_COL,
+                    values=[None],
+                    dtype=pl.Binary,
+                ),
+                _ATTR_SCHEMA_DEFAULT_COL: pl.Series(
+                    _ATTR_SCHEMA_DEFAULT_COL,
+                    values=[default_payload],
+                    dtype=pl.Binary,
+                ),
+                _ATTR_SCHEMA_DTYPE_PICKLE_COL: pl.Series(
+                    _ATTR_SCHEMA_DTYPE_PICKLE_COL,
+                    values=[dtype_payload],
+                    dtype=pl.Binary,
+                ),
+            }
+        )
+        buffer = io.BytesIO()
+        fallback_df.write_ipc(buffer)
+
+    return base64.b64encode(buffer.getvalue()).decode("utf-8")
+
+
+def deserialize_attr_schema(encoded_schema: str, *, key: str) -> AttrSchema:
+    """
+    Deserialize an AttrSchema previously encoded by `serialize_attr_schema`.
+    """
+    data = base64.b64decode(encoded_schema)
+    buffer = io.BytesIO(data)
+    restored_df = pl.read_ipc(buffer)
+
+    if _ATTR_SCHEMA_DTYPE_PICKLE_COL in restored_df.columns:
+        dtype_pickle = restored_df[_ATTR_SCHEMA_DTYPE_PICKLE_COL][0]
+    else:
+        dtype_pickle = None
+
+    if dtype_pickle is not None:
+        dtype = loads(dtype_pickle)
+    else:
+        dtype = restored_df.schema[_ATTR_SCHEMA_DTYPE_COL]
+
+    if not pl.datatypes.is_polars_dtype(dtype):
+        raise TypeError(f"Decoded value is not a polars dtype: {type(dtype)}")
+
+    default_payload = restored_df[_ATTR_SCHEMA_DEFAULT_COL][0]
+    default_value = loads(default_payload) if default_payload is not None else None
+    return AttrSchema(key=key, dtype=dtype, default_value=default_value)
+
+
 def validate_default_value_dtype_compatibility(default_value: Any, dtype: pl.DataType) -> None:
     """
     Validate that a default value is compatible with a polars dtype.

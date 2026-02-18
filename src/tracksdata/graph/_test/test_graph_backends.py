@@ -1704,6 +1704,70 @@ def test_sql_graph_max_id_restored_per_timepoint(tmp_path: Path) -> None:
     assert next_id == first_id + 1
 
 
+def test_sql_graph_schema_defaults_survive_reload(tmp_path: Path) -> None:
+    """Reloading a SQLGraph should preserve dtype and default schema metadata."""
+    db_path = tmp_path / "schema_defaults.db"
+    graph = SQLGraph("sqlite", str(db_path))
+
+    node_array_default = np.array([1.0, 2.0, 3.0], dtype=np.float32)
+    node_object_default = {"nested": [1, 2, 3]}
+    edge_score_default = 0.25
+
+    graph.add_node_attr_key("node_array_default", pl.Array(pl.Float32, 3), node_array_default)
+    graph.add_node_attr_key("node_object_default", pl.Object, node_object_default)
+    graph.add_edge_attr_key("edge_score_default", pl.Float32, edge_score_default)
+    graph._engine.dispose()
+
+    reloaded = SQLGraph("sqlite", str(db_path))
+
+    node_schemas = reloaded._node_attr_schemas()
+    edge_schemas = reloaded._edge_attr_schemas()
+    np.testing.assert_array_equal(node_schemas["node_array_default"].default_value, node_array_default)
+    assert node_schemas["node_array_default"].dtype == pl.Array(pl.Float32, 3)
+    assert node_schemas["node_object_default"].default_value == node_object_default
+    assert node_schemas["node_object_default"].dtype == pl.Object
+    assert edge_schemas["edge_score_default"].default_value == edge_score_default
+    assert edge_schemas["edge_score_default"].dtype == pl.Float32
+
+
+def test_sql_schema_metadata_not_copied_to_in_memory_graphs() -> None:
+    """SQL-private schema metadata should not leak into in-memory backends via from_other."""
+    sql_graph = SQLGraph("sqlite", ":memory:")
+    sql_graph.add_node_attr_key("node_array_default", pl.Array(pl.Float32, 3), np.array([1.0, 2.0, 3.0], np.float32))
+    sql_graph.add_node_attr_key("node_object_default", pl.Object, {"payload": [1, 2, 3]})
+    sql_graph.add_edge_attr_key("edge_score_default", pl.Float32, 0.25)
+
+    n1 = sql_graph.add_node(
+        {
+            "t": 0,
+            "node_array_default": np.array([1.0, 1.0, 1.0], dtype=np.float32),
+            "node_object_default": {"payload": [10]},
+        }
+    )
+    n2 = sql_graph.add_node(
+        {
+            "t": 1,
+            "node_array_default": np.array([2.0, 2.0, 2.0], dtype=np.float32),
+            "node_object_default": {"payload": [20]},
+        }
+    )
+    sql_graph.add_edge(n1, n2, {"edge_score_default": 0.75})
+
+    assert SQLGraph._PRIVATE_SQL_SCHEMA_STORE_KEY in sql_graph._private_metadata
+
+    rx_graph = RustWorkXGraph.from_other(sql_graph)
+    assert SQLGraph._PRIVATE_SQL_SCHEMA_STORE_KEY not in rx_graph._metadata()
+
+    sql_graph_roundtrip = SQLGraph.from_other(
+        rx_graph,
+        drivername="sqlite",
+        database=":memory:",
+        engine_kwargs={"connect_args": {"check_same_thread": False}},
+    )
+    assert sql_graph_roundtrip._node_attr_schemas() == sql_graph._node_attr_schemas()
+    assert sql_graph_roundtrip._edge_attr_schemas() == sql_graph._edge_attr_schemas()
+
+
 def test_compute_overlaps_invalid_threshold(graph_backend: BaseGraph) -> None:
     """Test compute_overlaps with invalid threshold values."""
     with pytest.raises(ValueError, match=r"iou_threshold must be between 0.0 and 1\.0"):
