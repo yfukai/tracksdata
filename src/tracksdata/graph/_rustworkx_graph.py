@@ -1218,7 +1218,8 @@ class RustWorkXGraph(BaseGraph):
         if node_ids is None:
             node_ids = self.node_ids()
 
-        old_attrs_by_id = {node_id: dict(self._graph[node_id]) for node_id in node_ids}
+        emit_node_updated = is_signal_on(self.node_updated)
+        old_attrs_by_id = {node_id: dict(self._graph[node_id]) for node_id in node_ids} if emit_node_updated else None
 
         for key, value in attrs.items():
             if key not in self.node_attr_keys():
@@ -1234,7 +1235,7 @@ class RustWorkXGraph(BaseGraph):
             for node_id, v in zip(node_ids, value, strict=False):
                 self._graph[node_id][key] = v
 
-        if is_signal_on(self.node_updated):
+        if emit_node_updated and old_attrs_by_id is not None:
             for node_id in node_ids:
                 self.node_updated.emit(node_id, old_attrs_by_id[node_id], dict(self._graph[node_id]))
 
@@ -1944,19 +1945,28 @@ class IndexedRXGraph(MappedGraphMixin, RustWorkXGraph):
         node_ids : Sequence[int] | None
             The node ids to update.
         """
-        external_node_ids = self.node_ids() if node_ids is None else list(node_ids)
-        old_attrs_by_id = {node_id: dict(self._graph[self._map_to_local(node_id)]) for node_id in external_node_ids}
+        external_node_ids = self.node_ids() if node_ids is None else [int(node_id) for node_id in node_ids]
         local_node_ids = self._map_to_local(external_node_ids)
+
+        emit_node_updated = is_signal_on(self.node_updated)
+        old_attrs_by_id = (
+            {
+                external_node_id: dict(self._graph[local_node_id])
+                for external_node_id, local_node_id in zip(external_node_ids, local_node_ids, strict=True)
+            }
+            if emit_node_updated
+            else None
+        )
 
         with self.node_updated.blocked():
             super().update_node_attrs(attrs=attrs, node_ids=local_node_ids)
 
-        if is_signal_on(self.node_updated):
-            for node_id in external_node_ids:
+        if emit_node_updated and old_attrs_by_id is not None:
+            for external_node_id, local_node_id in zip(external_node_ids, local_node_ids, strict=True):
                 self.node_updated.emit(
-                    node_id,
-                    old_attrs_by_id[node_id],
-                    dict(self._graph[self._map_to_local(node_id)]),
+                    external_node_id,
+                    old_attrs_by_id[external_node_id],
+                    dict(self._graph[local_node_id]),
                 )
 
     def remove_node(self, node_id: int) -> None:
