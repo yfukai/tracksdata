@@ -1,6 +1,6 @@
 from collections.abc import Sequence
 from copy import copy
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
@@ -200,6 +200,9 @@ class GraphArrayView(BaseReadOnlyArray):
             frame_attr_key=DEFAULT_ATTR_KEYS.T,
             bbox_attr_key=DEFAULT_ATTR_KEYS.BBOX,
         )
+        self.graph.node_added.connect(self._on_node_added)
+        self.graph.node_removed.connect(self._on_node_removed)
+        self.graph.node_updated.connect(self._on_node_updated)
 
     @property
     def shape(self) -> tuple[int, ...]:
@@ -351,3 +354,89 @@ class GraphArrayView(BaseReadOnlyArray):
         for mask, value in zip(df[DEFAULT_ATTR_KEYS.MASK], df[self._attr_key], strict=True):
             mask: Mask
             mask.paint_buffer(buffer, value, offset=self._offset)
+
+    def _offset_to_array(self, ndim: int) -> np.ndarray:
+        """Normalize `offset` to a vector for each spatial axis."""
+        if np.isscalar(self._offset):
+            return np.full(ndim, int(self._offset), dtype=np.int64)
+
+        offset = np.asarray(self._offset, dtype=np.int64).reshape(-1)
+        if len(offset) != ndim:
+            raise ValueError(f"`offset` must have length {ndim}, got {len(offset)}")
+        return offset
+
+    def _bbox_to_slices(self, bbox: Any) -> tuple[slice, ...] | None:
+        """
+        Convert a bbox to clipped spatial slices in array coordinates.
+
+        Returns `None` when the bbox does not overlap the current array volume.
+        """
+        bbox = np.asarray(bbox, dtype=np.int64).reshape(-1)
+        ndim = len(self.original_shape) - 1
+        if len(bbox) != 2 * ndim:
+            raise ValueError(f"`bbox` must have length {2 * ndim}, got {len(bbox)}")
+
+        offset = self._offset_to_array(ndim)
+        start = bbox[:ndim] + offset
+        stop = bbox[ndim:] + offset
+
+        shape = np.asarray(self.original_shape[1:], dtype=np.int64)
+        start = np.clip(start, 0, shape)
+        stop = np.clip(stop, 0, shape)
+
+        if np.any(stop <= start):
+            return None
+
+        return tuple(slice(int(s), int(e)) for s, e in zip(start, stop, strict=True))
+
+    def _invalidate_from_attrs(self, attrs: object) -> None:
+        """
+        Invalidate cache region touched by node attributes.
+
+        Falls back to larger invalidation windows when metadata is incomplete.
+        """
+        if not isinstance(attrs, dict):
+            self._cache.invalidate()
+            return
+
+        time_value = attrs.get(DEFAULT_ATTR_KEYS.T)
+        if time_value is None:
+            self._cache.invalidate()
+            return
+
+        try:
+            time = int(np.asarray(time_value).item())
+        except (TypeError, ValueError):
+            self._cache.invalidate()
+            return
+
+        if not (0 <= time < self.original_shape[0]):
+            return
+
+        if DEFAULT_ATTR_KEYS.BBOX not in attrs:
+            self._cache.invalidate(time=time)
+            return
+
+        try:
+            slices = self._bbox_to_slices(attrs[DEFAULT_ATTR_KEYS.BBOX])
+        except (TypeError, ValueError):
+            self._cache.invalidate(time=time)
+            return
+
+        if slices is None:
+            return
+
+        self._cache.invalidate(time=time, volume_slicing=slices)
+
+    def _on_node_added(self, node_id: int, new_attrs: object) -> None:
+        del node_id
+        self._invalidate_from_attrs(new_attrs)
+
+    def _on_node_removed(self, node_id: int, old_attrs: object) -> None:
+        del node_id
+        self._invalidate_from_attrs(old_attrs)
+
+    def _on_node_updated(self, node_id: int, old_attrs: object, new_attrs: object) -> None:
+        del node_id
+        self._invalidate_from_attrs(old_attrs)
+        self._invalidate_from_attrs(new_attrs)
