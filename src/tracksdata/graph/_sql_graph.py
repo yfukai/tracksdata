@@ -479,9 +479,6 @@ class SQLGraph(BaseGraph):
 
         self.Base.metadata.create_all(self._engine)
 
-        # Initialize schemas from existing table columns
-        self._init_schemas_from_tables()
-
         self._max_id_per_time = {}
         self._update_max_id_per_time()
 
@@ -553,60 +550,94 @@ class SQLGraph(BaseGraph):
         self.Overlap = Overlap
         self.Metadata = Metadata
 
+    @staticmethod
+    def _default_node_attr_schemas() -> dict[str, AttrSchema]:
+        return {
+            DEFAULT_ATTR_KEYS.T: AttrSchema(key=DEFAULT_ATTR_KEYS.T, dtype=pl.Int32),
+            DEFAULT_ATTR_KEYS.NODE_ID: AttrSchema(key=DEFAULT_ATTR_KEYS.NODE_ID, dtype=pl.Int64),
+        }
+
+    @staticmethod
+    def _default_edge_attr_schemas() -> dict[str, AttrSchema]:
+        return {
+            DEFAULT_ATTR_KEYS.EDGE_ID: AttrSchema(key=DEFAULT_ATTR_KEYS.EDGE_ID, dtype=pl.Int32),
+            DEFAULT_ATTR_KEYS.EDGE_SOURCE: AttrSchema(key=DEFAULT_ATTR_KEYS.EDGE_SOURCE, dtype=pl.Int64),
+            DEFAULT_ATTR_KEYS.EDGE_TARGET: AttrSchema(key=DEFAULT_ATTR_KEYS.EDGE_TARGET, dtype=pl.Int64),
+        }
+
+    def _attr_schemas_from_metadata(
+        self,
+        *,
+        table_class: type[DeclarativeBase],
+        metadata_key: str,
+        default_schemas: dict[str, AttrSchema],
+        preferred_order: Sequence[str],
+    ) -> dict[str, AttrSchema]:
+        encoded_schemas = self._private_metadata.get(metadata_key, {})
+        schemas = default_schemas.copy()
+        schemas.update(
+            {key: deserialize_attr_schema(encoded_schema, key=key) for key, encoded_schema in encoded_schemas.items()}
+        )
+
+        # Legacy databases may not have schema metadata for all columns.
+        for column_name, column in table_class.__table__.columns.items():
+            if column_name not in schemas:
+                schemas[column_name] = AttrSchema(
+                    key=column_name,
+                    dtype=sqlalchemy_type_to_polars_dtype(column.type),
+                )
+
+        ordered_keys = [key for key in preferred_order if key in schemas]
+        ordered_keys.extend(key for key in table_class.__table__.columns.keys() if key not in ordered_keys)
+        ordered_keys.extend(key for key in schemas if key not in ordered_keys)
+        return {key: schemas[key] for key in ordered_keys}
+
+    def _attr_schemas_for_table(self, table_class: type[DeclarativeBase]) -> dict[str, AttrSchema]:
+        if table_class.__tablename__ == self.Node.__tablename__:
+            return self._node_attr_schemas()
+        return self._edge_attr_schemas()
+
+    @staticmethod
+    def _is_pickled_sql_type(column_type: TypeEngine) -> bool:
+        return isinstance(column_type, sa.PickleType | sa.LargeBinary)
 
     @property
     def __node_attr_schemas(self) -> dict[str, AttrSchema]:
-        encoded_schemas = self._private_metadata.get(self._PRIVATE_SQL_NODE_SCHEMA_STORE_KEY, {})
-        return {key: deserialize_attr_schema(encoded_schema, key=key) for key, encoded_schema in encoded_schemas.items()}
+        return self._attr_schemas_from_metadata(
+            table_class=self.Node,
+            metadata_key=self._PRIVATE_SQL_NODE_SCHEMA_STORE_KEY,
+            default_schemas=self._default_node_attr_schemas(),
+            preferred_order=[DEFAULT_ATTR_KEYS.T, DEFAULT_ATTR_KEYS.NODE_ID],
+        )
 
     @__node_attr_schemas.setter
     def __node_attr_schemas(self, schemas: dict[str, AttrSchema]) -> None:
+        merged_schemas = self._default_node_attr_schemas()
+        merged_schemas.update(schemas)
+        schemas = merged_schemas
         encoded_schemas = {key: serialize_attr_schema(schema) for key, schema in schemas.items()}
         self._private_metadata[self._PRIVATE_SQL_NODE_SCHEMA_STORE_KEY] = encoded_schemas
 
     @property
     def __edge_attr_schemas(self) -> dict[str, AttrSchema]:
-        encoded_schemas = self._private_metadata.get(self._PRIVATE_SQL_EDGE_SCHEMA_STORE_KEY, {})
-        return {key: deserialize_attr_schema(encoded_schema, key=key) for key, encoded_schema in encoded_schemas.items()}
+        return self._attr_schemas_from_metadata(
+            table_class=self.Edge,
+            metadata_key=self._PRIVATE_SQL_EDGE_SCHEMA_STORE_KEY,
+            default_schemas=self._default_edge_attr_schemas(),
+            preferred_order=[
+                DEFAULT_ATTR_KEYS.EDGE_ID,
+                DEFAULT_ATTR_KEYS.EDGE_SOURCE,
+                DEFAULT_ATTR_KEYS.EDGE_TARGET,
+            ],
+        )
 
     @__edge_attr_schemas.setter
     def __edge_attr_schemas(self, schemas: dict[str, AttrSchema]) -> None:
+        merged_schemas = self._default_edge_attr_schemas()
+        merged_schemas.update(schemas)
+        schemas = merged_schemas
         encoded_schemas = {key: serialize_attr_schema(schema) for key, schema in schemas.items()}
         self._private_metadata[self._PRIVATE_SQL_EDGE_SCHEMA_STORE_KEY] = encoded_schemas
-
-    def _init_schemas_from_tables(self) -> None:
-        """
-        Initialize AttrSchema objects from existing database table columns.
-        This is used when loading an existing graph from the database.
-        """
-        node_column_names = list(self.Node.__table__.columns.keys())
-        preferred_node_order = [DEFAULT_ATTR_KEYS.T, DEFAULT_ATTR_KEYS.NODE_ID]
-        ordered_node_columns = [name for name in preferred_node_order if name in node_column_names]
-        ordered_node_columns.extend(name for name in node_column_names if name not in preferred_node_order)
-
-        node_schemas = {k: v for k, v in self.__node_attr_schemas.items() if k in ordered_node_columns}
-        for column_name in ordered_node_columns:
-            if column_name in node_schemas:
-                continue
-            column = self.Node.__table__.columns[column_name]
-            node_schemas[column_name] = AttrSchema(
-                key=column_name,
-                dtype=sqlalchemy_type_to_polars_dtype(column.type),
-            )
-        self.__node_attr_schemas = node_schemas
-
-        # Initialize edge schemas from Edge table columns
-        edge_column_names = list(self.Edge.__table__.columns.keys())
-        edge_schemas = {k: v for k, v in self.__edge_attr_schemas.items() if k in edge_column_names}
-        for column_name in self.Edge.__table__.columns.keys():
-            if column_name in edge_schemas:
-                continue
-            column = self.Edge.__table__.columns[column_name]
-            edge_schemas[column_name] = AttrSchema(
-                key=column_name,
-                dtype=sqlalchemy_type_to_polars_dtype(column.type),
-            )
-        self.__edge_attr_schemas = edge_schemas
 
     def _restore_pickled_column_types(self, table: sa.Table) -> None:
         for column in table.columns:
@@ -614,11 +645,7 @@ class SQLGraph(BaseGraph):
                 column.type = sa.PickleType()
 
     def _polars_schema_override(self, table_class: type[DeclarativeBase]) -> SchemaDict:
-        # Get the appropriate schema dict based on table class
-        if table_class.__tablename__ == self.Node.__tablename__:
-            schemas = self._node_attr_schemas()
-        else:
-            schemas = self._edge_attr_schemas()
+        schemas = self._attr_schemas_for_table(table_class)
 
         # Return schema overrides for columns safely represented in SQL.
         # Pickled columns are unpickled and casted in a second pass.
@@ -627,21 +654,19 @@ class SQLGraph(BaseGraph):
             for key, schema in schemas.items()
             if (
                 key in table_class.__table__.columns
-                and not isinstance(table_class.__table__.columns[key].type, sa.PickleType | sa.LargeBinary)
-                and not (schema.dtype == pl.Object or isinstance(schema.dtype, pl.Array | pl.List))
+                and not self._is_pickled_sql_type(table_class.__table__.columns[key].type)
             )
         }
 
     def _cast_array_columns(self, table_class: type[DeclarativeBase], df: pl.DataFrame) -> pl.DataFrame:
-        # Get the appropriate schema dict based on table class
-        if table_class.__tablename__ == self.Node.__tablename__:
-            schemas = self._node_attr_schemas()
-        else:
-            schemas = self._edge_attr_schemas()
+        schemas = self._attr_schemas_for_table(table_class)
 
         casts: list[pl.Series] = []
         for key, schema in schemas.items():
-            if key not in df.columns:
+            if key not in df.columns or key not in table_class.__table__.columns:
+                continue
+
+            if not self._is_pickled_sql_type(table_class.__table__.columns[key].type):
                 continue
 
             try:
