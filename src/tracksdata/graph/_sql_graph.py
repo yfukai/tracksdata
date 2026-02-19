@@ -443,7 +443,8 @@ class SQLGraph(BaseGraph):
     """
 
     node_id_time_multiplier: int = 1_000_000_000
-    _PRIVATE_SQL_SCHEMA_STORE_KEY = "__private_sql_attr_schema_store"
+    _PRIVATE_SQL_NODE_SCHEMA_STORE_KEY = "__private_sql_node_attr_schema_store"
+    _PRIVATE_SQL_EDGE_SCHEMA_STORE_KEY = "__private_sql_edge_attr_schema_store"
     Base: type[DeclarativeBase]
     Node: type[DeclarativeBase]
     Edge: type[DeclarativeBase]
@@ -552,69 +553,26 @@ class SQLGraph(BaseGraph):
         self.Overlap = Overlap
         self.Metadata = Metadata
 
-    @classmethod
-    def _empty_attr_schema_store(cls) -> dict[str, dict[str, str]]:
-        return {"node": {}, "edge": {}}
-
-    def _attr_schema_store(self) -> dict[str, dict[str, str]]:
-        store = self._private_metadata.get(self._PRIVATE_SQL_SCHEMA_STORE_KEY, {})
-        if not isinstance(store, dict):
-            return self._empty_attr_schema_store()
-
-        normalized = self._empty_attr_schema_store()
-        for section_key in ("node", "edge"):
-            section = store.get(section_key, {})
-            if not isinstance(section, dict):
-                continue
-            for key, encoded_schema in section.items():
-                if isinstance(encoded_schema, str):
-                    normalized[section_key][key] = encoded_schema
-
-        return normalized
-
-    def _set_attr_schema_store(self, store: dict[str, dict[str, str]]) -> None:
-        normalized = self._empty_attr_schema_store()
-        for section_key in ("node", "edge"):
-            section = store.get(section_key, {})
-            if not isinstance(section, dict):
-                continue
-            for key, encoded_schema in section.items():
-                if isinstance(encoded_schema, str):
-                    normalized[section_key][key] = encoded_schema
-
-        self._private_metadata.update(**{self._PRIVATE_SQL_SCHEMA_STORE_KEY: normalized})
-
-    def _get_attr_schemas_from_store(self, *, is_node: bool) -> dict[str, AttrSchema]:
-        section_key = "node" if is_node else "edge"
-        section = self._attr_schema_store()[section_key]
-
-        schemas: dict[str, AttrSchema] = {}
-        for key, encoded_schema in section.items():
-            schemas[key] = deserialize_attr_schema(encoded_schema, key=key)
-
-        return schemas
-
-    def _set_attr_schemas_to_store(self, *, is_node: bool, schemas: dict[str, AttrSchema]) -> None:
-        section_key = "node" if is_node else "edge"
-        store = self._attr_schema_store()
-        store[section_key] = {key: serialize_attr_schema(schema) for key, schema in schemas.items()}
-        self._set_attr_schema_store(store)
 
     @property
     def __node_attr_schemas(self) -> dict[str, AttrSchema]:
-        return self._get_attr_schemas_from_store(is_node=True)
+        encoded_schemas = self._private_metadata.get(self._PRIVATE_SQL_NODE_SCHEMA_STORE_KEY, {})
+        return {key: deserialize_attr_schema(encoded_schema, key=key) for key, encoded_schema in encoded_schemas.items()}
 
     @__node_attr_schemas.setter
     def __node_attr_schemas(self, schemas: dict[str, AttrSchema]) -> None:
-        self._set_attr_schemas_to_store(is_node=True, schemas=schemas)
+        encoded_schemas = {key: serialize_attr_schema(schema) for key, schema in schemas.items()}
+        self._private_metadata[self._PRIVATE_SQL_NODE_SCHEMA_STORE_KEY] = encoded_schemas
 
     @property
     def __edge_attr_schemas(self) -> dict[str, AttrSchema]:
-        return self._get_attr_schemas_from_store(is_node=False)
+        encoded_schemas = self._private_metadata.get(self._PRIVATE_SQL_EDGE_SCHEMA_STORE_KEY, {})
+        return {key: deserialize_attr_schema(encoded_schema, key=key) for key, encoded_schema in encoded_schemas.items()}
 
     @__edge_attr_schemas.setter
     def __edge_attr_schemas(self, schemas: dict[str, AttrSchema]) -> None:
-        self._set_attr_schemas_to_store(is_node=False, schemas=schemas)
+        encoded_schemas = {key: serialize_attr_schema(schema) for key, schema in schemas.items()}
+        self._private_metadata[self._PRIVATE_SQL_EDGE_SCHEMA_STORE_KEY] = encoded_schemas
 
     def _init_schemas_from_tables(self) -> None:
         """
@@ -2094,7 +2052,8 @@ class SQLGraph(BaseGraph):
 
     def _private_metadata_for_copy(self) -> dict[str, Any]:
         private_metadata = super()._private_metadata_for_copy()
-        private_metadata.pop(self._PRIVATE_SQL_SCHEMA_STORE_KEY, None)
+        private_metadata.pop(self._PRIVATE_SQL_NODE_SCHEMA_STORE_KEY, None)
+        private_metadata.pop(self._PRIVATE_SQL_EDGE_SCHEMA_STORE_KEY, None)
         return private_metadata
 
     def _update_metadata(self, **kwargs) -> None:

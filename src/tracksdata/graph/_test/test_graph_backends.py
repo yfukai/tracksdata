@@ -1771,10 +1771,12 @@ def test_sql_schema_metadata_not_copied_to_in_memory_graphs() -> None:
     )
     sql_graph.add_edge(n1, n2, {"edge_score_default": 0.75})
 
-    assert SQLGraph._PRIVATE_SQL_SCHEMA_STORE_KEY in sql_graph._private_metadata
+    assert SQLGraph._PRIVATE_SQL_NODE_SCHEMA_STORE_KEY in sql_graph._private_metadata
+    assert SQLGraph._PRIVATE_SQL_EDGE_SCHEMA_STORE_KEY in sql_graph._private_metadata
 
     rx_graph = RustWorkXGraph.from_other(sql_graph)
-    assert SQLGraph._PRIVATE_SQL_SCHEMA_STORE_KEY not in rx_graph._metadata()
+    assert SQLGraph._PRIVATE_SQL_NODE_SCHEMA_STORE_KEY not in rx_graph._metadata()
+    assert SQLGraph._PRIVATE_SQL_EDGE_SCHEMA_STORE_KEY not in rx_graph._metadata()
 
     sql_graph_roundtrip = SQLGraph.from_other(
         rx_graph,
