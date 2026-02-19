@@ -355,7 +355,7 @@ class GraphArrayView(BaseReadOnlyArray):
             mask: Mask
             mask.paint_buffer(buffer, value, offset=self._offset)
 
-    def _offset_to_array(self, ndim: int) -> np.ndarray:
+    def _offset_as_array(self, ndim: int) -> np.ndarray:
         """Normalize `offset` to a vector for each spatial axis."""
         if np.isscalar(self._offset):
             return np.full(ndim, int(self._offset), dtype=np.int64)
@@ -376,7 +376,7 @@ class GraphArrayView(BaseReadOnlyArray):
         if len(bbox) != 2 * ndim:
             raise ValueError(f"`bbox` must have length {2 * ndim}, got {len(bbox)}")
 
-        offset = self._offset_to_array(ndim)
+        offset = self._offset_as_array(ndim)
         start = bbox[:ndim] + offset
         stop = bbox[ndim:] + offset
 
@@ -389,54 +389,41 @@ class GraphArrayView(BaseReadOnlyArray):
 
         return tuple(slice(int(s), int(e)) for s, e in zip(start, stop, strict=True))
 
-    def _invalidate_from_attrs(self, attrs: object) -> None:
+    def _invalidate_from_attrs(self, attrs: dict) -> None:
         """
         Invalidate cache region touched by node attributes.
 
         Falls back to larger invalidation windows when metadata is incomplete.
         """
-        if not isinstance(attrs, dict):
-            self._cache.invalidate()
-            return
 
         time_value = attrs.get(DEFAULT_ATTR_KEYS.T)
         if time_value is None:
-            self._cache.invalidate()
-            return
+            raise ValueError(f"Node attributes must contain '{DEFAULT_ATTR_KEYS.T}' key for cache invalidation.")
+        if DEFAULT_ATTR_KEYS.BBOX not in attrs:
+            raise ValueError(f"Node attributes must contain '{DEFAULT_ATTR_KEYS.BBOX}' key for cache invalidation.")
 
         try:
             time = int(np.asarray(time_value).item())
-        except (TypeError, ValueError):
-            self._cache.invalidate()
-            return
-
+        except (TypeError, ValueError) as e:
+            raise ValueError(
+                f"Time attribute value must be a scalar integer, got {time_value} of type {type(time_value)}"
+            ) from e
         if not (0 <= time < self.original_shape[0]):
             return
 
-        if DEFAULT_ATTR_KEYS.BBOX not in attrs:
-            self._cache.invalidate(time=time)
-            return
+        slices = self._bbox_to_slices(attrs[DEFAULT_ATTR_KEYS.BBOX])
+        if slices is not None:
+            self._cache.invalidate(time=time, volume_slicing=slices)
 
-        try:
-            slices = self._bbox_to_slices(attrs[DEFAULT_ATTR_KEYS.BBOX])
-        except (TypeError, ValueError):
-            self._cache.invalidate(time=time)
-            return
-
-        if slices is None:
-            return
-
-        self._cache.invalidate(time=time, volume_slicing=slices)
-
-    def _on_node_added(self, node_id: int, new_attrs: object) -> None:
+    def _on_node_added(self, node_id: int, new_attrs: dict) -> None:
         del node_id
         self._invalidate_from_attrs(new_attrs)
 
-    def _on_node_removed(self, node_id: int, old_attrs: object) -> None:
+    def _on_node_removed(self, node_id: int, old_attrs: dict) -> None:
         del node_id
         self._invalidate_from_attrs(old_attrs)
 
-    def _on_node_updated(self, node_id: int, old_attrs: object, new_attrs: object) -> None:
+    def _on_node_updated(self, node_id: int, old_attrs: dict, new_attrs: dict) -> None:
         del node_id
         self._invalidate_from_attrs(old_attrs)
         self._invalidate_from_attrs(new_attrs)
