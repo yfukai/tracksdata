@@ -211,10 +211,6 @@ class SpatialFilter:
         from spatial_graph import PointRTree
 
         if self._df_filter._node_rtree is None:
-            if self._graph.num_nodes() == 0:
-                raise ValueError(
-                    "Failed initializing SpatialFilter RTree from empty graph. It must be initialized beforehand"
-                )
             self._df_filter._node_rtree = PointRTree(
                 item_dtype="int64",
                 coord_dtype="float32",
@@ -433,8 +429,6 @@ class BBoxSpatialFilter:
         from spatial_graph import PointRTree
 
         if self._node_rtree is None:
-            if self._graph.num_nodes() == 0:
-                raise ValueError("Spatial filter is not initialized")
             bbox = new_attrs[self._bbox_attr_key]
             if len(bbox) % 2 != 0:
                 raise ValueError(f"Bounding box coordinates must have even number of dimensions, got {len(bbox)}")

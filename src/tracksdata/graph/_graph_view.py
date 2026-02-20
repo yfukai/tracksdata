@@ -1,5 +1,5 @@
 from collections.abc import Callable, Sequence
-from typing import Any, Literal, overload
+from typing import Any, Literal, cast, overload
 
 import bidict
 import polars as pl
@@ -400,8 +400,10 @@ class GraphView(MappedGraphMixin, RustWorkXGraph):
         else:
             self._out_of_sync = True
 
-        self._root.node_added.emit(parent_node_id, attrs)
-        self.node_added.emit(parent_node_id, attrs)
+        if is_signal_on(self._root.node_added):
+            self._root.node_added.emit(parent_node_id, attrs)
+        if is_signal_on(self.node_added):
+            self.node_added.emit(parent_node_id, attrs)
 
         return parent_node_id
 
@@ -446,11 +448,11 @@ class GraphView(MappedGraphMixin, RustWorkXGraph):
         if node_id not in self._external_to_local:
             raise ValueError(f"Node {node_id} does not exist in the graph.")
 
-        old_attrs = self.nodes[node_id].to_dict()
+        if is_signal_on(self.node_removed):
+            old_attrs = self.nodes[node_id].to_dict()
 
         # Remove from root graph first, because removing bounding box requires node attrs
         self._root.remove_node(node_id)
-        self.node_removed.emit(node_id, old_attrs)
 
         if self.sync:
             # Get the local node ID and remove from local graph
@@ -475,6 +477,9 @@ class GraphView(MappedGraphMixin, RustWorkXGraph):
                     del self._edge_map_to_root[edge_id]
         else:
             self._out_of_sync = True
+
+        if is_signal_on(self.node_removed):
+            self.node_removed.emit(node_id, old_attrs)
 
     def add_edge(
         self,
@@ -657,7 +662,9 @@ class GraphView(MappedGraphMixin, RustWorkXGraph):
         else:
             node_ids = list(node_ids)
 
-        old_attrs_by_id = {node_id: self._root.nodes[node_id].to_dict() for node_id in node_ids}
+        if is_signal_on(self.node_updated):
+            old_attrs_by_id = self._root.filter(node_ids=node_ids).node_attrs()
+            old_attrs_by_id = {row[DEFAULT_ATTR_KEYS.NODE_ID]: row for row in old_attrs_by_id.to_dicts()}
 
         self._root.update_node_attrs(
             node_ids=node_ids,
@@ -676,6 +683,7 @@ class GraphView(MappedGraphMixin, RustWorkXGraph):
 
         if is_signal_on(self.node_updated):
             for node_id in node_ids:
+                old_attrs_by_id = cast(dict[int, dict[str, Any]], old_attrs_by_id)  # for mypy
                 self.node_updated.emit(
                     node_id,
                     old_attrs_by_id[node_id],

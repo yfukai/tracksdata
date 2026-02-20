@@ -714,7 +714,8 @@ class SQLGraph(BaseGraph):
         if index is None:
             self._max_id_per_time[time] = node_id
 
-        self.node_added.emit(node_id, attrs)
+        if is_signal_on(self.node_added):
+            self.node_added.emit(node_id, attrs)
 
         return node_id
 
@@ -810,9 +811,9 @@ class SQLGraph(BaseGraph):
             node = session.query(self.Node).filter(self.Node.node_id == node_id).first()
             if node is None:
                 raise ValueError(f"Node {node_id} does not exist in the graph.")
+
             if is_signal_on(self.node_removed):
                 old_attrs = {key: getattr(node, key) for key in self.node_attr_keys()}
-                self.node_removed.emit(node_id, old_attrs)
 
             # Remove all edges where this node is source or target
             session.query(self.Edge).filter(
@@ -827,6 +828,8 @@ class SQLGraph(BaseGraph):
             # Remove the node itself
             session.delete(node)
             session.commit()
+            if is_signal_on(self.node_removed):
+                self.node_removed.emit(node_id, old_attrs)
 
     def add_edge(
         self,
@@ -1760,19 +1763,21 @@ class SQLGraph(BaseGraph):
         updated_node_ids = self.node_ids() if node_ids is None else list(node_ids)
         if len(updated_node_ids) == 0:
             return
+
         attr_keys = self.node_attr_keys()
-        old_df = self.filter(node_ids=updated_node_ids).node_attrs(attr_keys=[DEFAULT_ATTR_KEYS.NODE_ID, *attr_keys])
-        old_attrs_by_id = {
-            row[DEFAULT_ATTR_KEYS.NODE_ID]: {key: row[key] for key in attr_keys} for row in old_df.rows(named=True)
-        }
+        if is_signal_on(self.node_updated):
+            old_df = self.filter(node_ids=updated_node_ids).node_attrs(
+                attr_keys=[DEFAULT_ATTR_KEYS.NODE_ID, *attr_keys]
+            )
+            old_attrs_by_id = {row[DEFAULT_ATTR_KEYS.NODE_ID]: dict(row) for row in old_df.rows(named=True)}
 
         self._update_table(self.Node, node_ids, DEFAULT_ATTR_KEYS.NODE_ID, attrs)
-        new_df = self.filter(node_ids=updated_node_ids).node_attrs(attr_keys=[DEFAULT_ATTR_KEYS.NODE_ID, *attr_keys])
-        new_attrs_by_id = {
-            row[DEFAULT_ATTR_KEYS.NODE_ID]: {key: row[key] for key in attr_keys} for row in new_df.rows(named=True)
-        }
 
         if is_signal_on(self.node_updated):
+            new_df = self.filter(node_ids=updated_node_ids).node_attrs(
+                attr_keys=[DEFAULT_ATTR_KEYS.NODE_ID, *attr_keys]
+            )
+            new_attrs_by_id = {row[DEFAULT_ATTR_KEYS.NODE_ID]: dict(row) for row in new_df.rows(named=True)}
             for node_id in updated_node_ids:
                 self.node_updated.emit(node_id, old_attrs_by_id[node_id], new_attrs_by_id[node_id])
 
