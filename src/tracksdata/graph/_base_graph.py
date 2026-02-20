@@ -1852,6 +1852,7 @@ class BaseGraph(abc.ABC):
             }
 
             td_metadata = self.metadata.copy()
+            td_metadata.update(self._private_metadata_for_copy())
             td_metadata.pop("geff", None)  # avoid geff being written multiple times
 
             geff_metadata = geff.GeffMetadata(
@@ -1919,6 +1920,13 @@ class BaseGraph(abc.ABC):
             data={k: v for k, v in self._metadata().items() if self._is_private_metadata_key(k)},
             is_public=False,
         )
+
+    def _private_metadata_for_copy(self) -> dict[str, Any]:
+        """
+        Return private metadata entries that should be propagated by `from_other` or `to_geff`.
+        Backends can override this to exclude backend-specific private metadata.
+        """
+        return dict(self._private_metadata)
 
     @classmethod
     def _is_private_metadata_key(cls, key: str) -> bool:
