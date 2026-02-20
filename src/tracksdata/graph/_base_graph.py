@@ -1251,7 +1251,7 @@ class BaseGraph(abc.ABC):
 
         graph = cls(**kwargs)
         graph.metadata.update(other.metadata)
-        graph._private_metadata.update(other._private_metadata)
+        graph._private_metadata.update(other._private_metadata_for_copy())
 
         current_node_attr_schemas = graph._node_attr_schemas()
         for k, v in other._node_attr_schemas().items():
