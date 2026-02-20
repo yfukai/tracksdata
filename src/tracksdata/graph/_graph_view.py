@@ -400,9 +400,8 @@ class GraphView(MappedGraphMixin, RustWorkXGraph):
         else:
             self._out_of_sync = True
 
-        new_attrs = dict(attrs)
-        self._root.node_added.emit(parent_node_id, dict(new_attrs))
-        self.node_added.emit(parent_node_id, dict(new_attrs))
+        self._root.node_added.emit(parent_node_id, attrs)
+        self.node_added.emit(parent_node_id, attrs)
 
         return parent_node_id
 
@@ -419,11 +418,11 @@ class GraphView(MappedGraphMixin, RustWorkXGraph):
 
         if is_signal_on(self._root.node_added):
             for node_id, node_attrs in zip(parent_node_ids, nodes, strict=True):
-                self._root.node_added.emit(node_id, dict(node_attrs))
+                self._root.node_added.emit(node_id, node_attrs)
 
         if is_signal_on(self.node_added):
             for node_id, node_attrs in zip(parent_node_ids, nodes, strict=True):
-                self.node_added.emit(node_id, dict(node_attrs))
+                self.node_added.emit(node_id, node_attrs)
 
         return parent_node_ids
 

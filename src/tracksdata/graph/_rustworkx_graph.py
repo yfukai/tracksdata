@@ -492,7 +492,7 @@ class RustWorkXGraph(BaseGraph):
 
         node_id = self.rx_graph.add_node(attrs)
         self._time_to_nodes.setdefault(attrs["t"], []).append(node_id)
-        self.node_added.emit(node_id, dict(attrs))
+        self.node_added.emit(node_id, attrs)
         return node_id
 
     def bulk_add_nodes(self, nodes: list[dict[str, Any]], indices: list[int] | None = None) -> list[int]:
@@ -524,7 +524,7 @@ class RustWorkXGraph(BaseGraph):
         # checking if it has connections to reduce overhead
         if is_signal_on(self.node_added):
             for node_id, node_attrs in zip(node_indices, nodes, strict=True):
-                self.node_added.emit(node_id, dict(node_attrs))
+                self.node_added.emit(node_id, node_attrs)
 
         return node_indices
 
@@ -1620,7 +1620,7 @@ class IndexedRXGraph(MappedGraphMixin, RustWorkXGraph):
             self._next_external_id = max(self._next_external_id, index + 1)
         # Add mapping using mixin
         self._add_id_mapping(node_id, index)
-        self.node_added.emit(index, dict(attrs))
+        self.node_added.emit(index, attrs)
         return index
 
     def bulk_add_nodes(
@@ -1667,7 +1667,7 @@ class IndexedRXGraph(MappedGraphMixin, RustWorkXGraph):
 
         if is_signal_on(self.node_added):
             for index, node_attrs in zip(indices, nodes, strict=True):
-                self.node_added.emit(index, dict(node_attrs))
+                self.node_added.emit(index, node_attrs)
 
         return indices
 
