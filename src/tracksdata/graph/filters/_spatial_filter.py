@@ -212,7 +212,8 @@ class SpatialFilter:
 
         if self._df_filter._node_rtree is None:
             if self._graph.num_nodes() == 0:
-                raise ValueError("Spatial filter is not initialized")
+                raise ValueError("Failed initializing SpatialFilter RTree from empty graph. "
+                                              "It must be initialized beforehand")
             self._df_filter._node_rtree = PointRTree(
                 item_dtype="int64",
                 coord_dtype="float32",
