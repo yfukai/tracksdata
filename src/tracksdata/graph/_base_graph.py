@@ -1852,6 +1852,7 @@ class BaseGraph(abc.ABC):
             }
 
             td_metadata = self.metadata.copy()
+            td_metadata.update(self._private_metadata)
             td_metadata.pop("geff", None)  # avoid geff being written multiple times
 
             geff_metadata = geff.GeffMetadata(
