@@ -229,6 +229,7 @@ class SpatialFilter:
         node_id: int,
         old_attrs: dict[str, Any],
     ) -> None:
+        # required by static type checking
         if self._df_filter._node_rtree is None:
             return
 
