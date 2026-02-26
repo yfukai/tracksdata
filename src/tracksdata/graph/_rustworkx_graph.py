@@ -96,8 +96,8 @@ def _create_filter_func(
     def _filter(attrs: dict[str, Any]) -> bool:
         for attr_op in attr_comps:
             value = attrs.get(attr_op.column, schema[attr_op.column].default_value)
-            if attr_op.field_path:
-                value = _extract_field_path(value, attr_op.field_path)
+            if attr_op.attr.field_path:
+                value = _extract_field_path(value, attr_op.attr.field_path)
             if not attr_op.op(value, attr_op.other):
                 return False
         return True

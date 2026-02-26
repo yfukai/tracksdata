@@ -128,7 +128,7 @@ def test_attr_comparison_struct_field() -> None:
     comp = NodeAttr("s").struct.field("x") == 1
     result = comp.to_attr().evaluate(df)
     assert comp.column == "s"
-    assert comp.field_path == ("x",)
+    assert comp.attr.field_path == ("x",)
     assert result.to_list() == [True, False, True]
 
 

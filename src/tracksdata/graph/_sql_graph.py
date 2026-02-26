@@ -89,10 +89,10 @@ def _resolve_attr_filter_column(
 ) -> Any:
     lhs = getattr(table, str(attr_filter.column))
 
-    if not attr_filter.field_path:
+    if not attr_filter.attr.field_path:
         return lhs
 
-    for field in attr_filter.field_path:
+    for field in attr_filter.attr.field_path:
         lhs = lhs[field]
 
     return _coerce_json_field_expr(lhs, _field_scalar_sample(attr_filter.other))

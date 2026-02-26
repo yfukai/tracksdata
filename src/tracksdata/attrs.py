@@ -130,7 +130,6 @@ class AttrComparison:
 
         self.attr = attr
         self.column = attr.root_column if attr.root_column is not None else columns[0]
-        self.field_path = attr.field_path
         self.op = op
 
         # casting numpy scalars to python scalars
@@ -145,8 +144,8 @@ class AttrComparison:
         self.other = other
 
     def __repr__(self) -> str:
-        if self.field_path:
-            column = ".".join([str(self.column), *self.field_path])
+        if self.attr.field_path:
+            column = ".".join([str(self.column), *self.attr.field_path])
         else:
             column = str(self.column)
         return f"{type(self.attr).__name__}({column}) {_OPS_MATH_SYMBOLS[self.op]} {self.other}"
@@ -252,6 +251,9 @@ class Attr:
     def __init__(self, value: ExprInput) -> None:
         self._inf_exprs = []  # expressions multiplied by +inf
         self._neg_inf_exprs = []  # expressions multiplied by -inf
+        # Path-tracking for backend filters:
+        # - root_column: top-level column used to store the value.
+        # - field_path: nested struct path from that root column.
         self._root_column: str | None = None
         self._field_path: tuple[str, ...] = ()
 
@@ -419,10 +421,29 @@ class Attr:
 
     @property
     def root_column(self) -> str | None:
+        """
+        Top-level column name from which this expression originates.
+
+        Examples
+        --------
+        `Attr("t").root_column == "t"`
+        `NodeAttr("measurements").struct.field("score").root_column == "measurements"`
+        """
         return self._root_column
 
     @property
     def field_path(self) -> tuple[str, ...]:
+        """
+        Nested struct-field path relative to [root_column][tracksdata.attrs.Attr.root_column].
+
+        Empty tuple means no nested access.
+
+        Examples
+        --------
+        `Attr("t").field_path == ()`
+        `NodeAttr("measurements").struct.field("score").field_path == ("score",)`
+        `NodeAttr("meta").struct.field("det").struct.field("conf").field_path == ("det", "conf")`
+        """
         return self._field_path
 
     @property
