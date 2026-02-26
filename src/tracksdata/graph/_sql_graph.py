@@ -52,10 +52,100 @@ def _data_numpy_to_native(data: dict[str, Any]) -> None:
             data[k] = v.item()
 
 
+def _coerce_json_field_expr(lhs: Any, dtype: pl.DataType | None) -> Any:
+    if dtype is None:
+        return lhs
+
+    dtype_base = dtype.base_type()
+
+    if dtype_base == pl.Boolean:
+        if hasattr(lhs, "as_boolean"):
+            return lhs.as_boolean()
+        return sa.cast(lhs, sa.Boolean)
+    if dtype_base in {pl.Int8, pl.Int16, pl.Int32, pl.Int64, pl.UInt8, pl.UInt16, pl.UInt32, pl.UInt64}:
+        if hasattr(lhs, "as_integer"):
+            return lhs.as_integer()
+        return sa.cast(lhs, sa.BigInteger)
+    if dtype_base in {pl.Float16, pl.Float32, pl.Float64}:
+        if hasattr(lhs, "as_float"):
+            return lhs.as_float()
+        return sa.cast(lhs, sa.Float)
+    if dtype_base in {pl.String, pl.Utf8}:
+        if hasattr(lhs, "as_string"):
+            return lhs.as_string()
+        return sa.cast(lhs, sa.String)
+    return lhs
+
+
+def _field_dtype_from_schema(
+    attr_filter: AttrComparison,
+    attr_schemas: dict[str, AttrSchema] | None,
+) -> pl.DataType | None:
+    if attr_schemas is None:
+        return None
+
+    schema = attr_schemas.get(str(attr_filter.column))
+    if schema is None:
+        return None
+
+    dtype = schema.dtype
+    for field in attr_filter.attr.field_path:
+        if not isinstance(dtype, pl.Struct):
+            return None
+
+        dtype = dtype.to_schema().get(field)
+        if dtype is None:
+            return None
+
+    return dtype
+
+
+def _resolve_attr_filter_column(
+    table: type[DeclarativeBase],
+    attr_filter: AttrComparison,
+    attr_schemas: dict[str, AttrSchema] | None = None,
+) -> Any:
+    lhs = getattr(table, str(attr_filter.column))
+
+    if not attr_filter.attr.field_path:
+        return lhs
+
+    for field in attr_filter.attr.field_path:
+        lhs = lhs[field]
+
+    field_dtype = _field_dtype_from_schema(attr_filter, attr_schemas)
+    return _coerce_json_field_expr(lhs, field_dtype)
+
+
+def _json_decode_safe_dtype(dtype: pl.DataType) -> pl.DataType:
+    """
+    Return a JSON-decodable dtype by replacing fixed-size arrays with lists recursively.
+    """
+    if isinstance(dtype, pl.Array):
+        return pl.List(_json_decode_safe_dtype(dtype.inner))
+
+    if isinstance(dtype, pl.List):
+        return pl.List(_json_decode_safe_dtype(dtype.inner))
+
+    if isinstance(dtype, pl.Struct):
+        return pl.Struct({key: _json_decode_safe_dtype(inner) for key, inner in dtype.to_schema().items()})
+
+    return dtype
+
+
+def _struct_json_decode_expr(column: str, target_dtype: pl.Struct) -> pl.Expr:
+    decode_dtype = _json_decode_safe_dtype(target_dtype)
+    decoded_expr = pl.when(pl.col(column).is_null()).then(None).otherwise(pl.col(column).str.json_decode(decode_dtype))
+    if decode_dtype != target_dtype:
+        decoded_expr = decoded_expr.cast(target_dtype)
+    return decoded_expr.alias(column)
+
+
 def _filter_query(
     query: sa.Select,
     table: type[DeclarativeBase],
     attr_filters: list[AttrComparison],
+    attr_schemas: dict[str, AttrSchema] | None = None,
 ) -> sa.Select:
     """
     Filter a query by a list of attribute filters.
@@ -68,6 +158,8 @@ def _filter_query(
         The table to filter.
     attr_filters : list[AttrComparison]
         The attribute filters to apply.
+    attr_schemas : dict[str, AttrSchema] | None, optional
+        Attribute schema map used to resolve nested struct field dtypes.
 
     Returns
     -------
@@ -76,7 +168,13 @@ def _filter_query(
     """
     LOG.info("Filter query:\n%s", attr_filters)
     query = query.filter(
-        *[attr_filter.op(getattr(table, str(attr_filter.column)), attr_filter.other) for attr_filter in attr_filters]
+        *[
+            attr_filter.op(
+                _resolve_attr_filter_column(table, attr_filter, attr_schemas=attr_schemas),
+                attr_filter.other,
+            )
+            for attr_filter in attr_filters
+        ]
     )
     return query
 
@@ -100,6 +198,8 @@ class SQLFilter(BaseFilter):
         self._node_query: sa.Select = sa.select(self._graph.Node)
         self._edge_query: sa.Select = sa.select(self._graph.Edge)
         node_filtered = False
+        node_attr_schemas = self._graph._node_attr_schemas()
+        edge_attr_schemas = self._graph._edge_attr_schemas()
 
         if node_ids is not None:
             if hasattr(node_ids, "tolist"):
@@ -119,7 +219,12 @@ class SQLFilter(BaseFilter):
         if self._node_attr_comps:
             node_filtered = True
             # filtering nodes by attributes
-            self._node_query = _filter_query(self._node_query, self._graph.Node, self._node_attr_comps)
+            self._node_query = _filter_query(
+                self._node_query,
+                self._graph.Node,
+                self._node_attr_comps,
+                attr_schemas=node_attr_schemas,
+            )
 
             # if both node and edge attributes are filtered
             # we need to select subset of edges that belong to the filtered nodes
@@ -135,17 +240,32 @@ class SQLFilter(BaseFilter):
                     SourceNode,
                     self._graph.Edge.source_id == SourceNode.node_id,
                 )
-                self._edge_query = _filter_query(self._edge_query, SourceNode, self._node_attr_comps)
+                self._edge_query = _filter_query(
+                    self._edge_query,
+                    SourceNode,
+                    self._node_attr_comps,
+                    attr_schemas=node_attr_schemas,
+                )
 
             if self._include_sources or include_none:
                 self._edge_query = self._edge_query.join(
                     TargetNode,
                     self._graph.Edge.target_id == TargetNode.node_id,
                 )
-                self._edge_query = _filter_query(self._edge_query, TargetNode, self._node_attr_comps)
+                self._edge_query = _filter_query(
+                    self._edge_query,
+                    TargetNode,
+                    self._node_attr_comps,
+                    attr_schemas=node_attr_schemas,
+                )
 
         if self._edge_attr_comps:
-            self._edge_query = _filter_query(self._edge_query, self._graph.Edge, self._edge_attr_comps)
+            self._edge_query = _filter_query(
+                self._edge_query,
+                self._graph.Edge,
+                self._edge_attr_comps,
+                attr_schemas=edge_attr_schemas,
+            )
 
             # we haven't filtered the nodes by attributes
             # so we only return the nodes that are in the edges
@@ -601,6 +721,10 @@ class SQLGraph(BaseGraph):
     def _is_pickled_sql_type(column_type: TypeEngine) -> bool:
         return isinstance(column_type, sa.PickleType | sa.LargeBinary)
 
+    @staticmethod
+    def _is_json_sql_type(column_type: TypeEngine) -> bool:
+        return isinstance(column_type, sa.JSON)
+
     @property
     def __node_attr_schemas(self) -> dict[str, AttrSchema]:
         return self._attr_schemas_from_metadata(
@@ -655,18 +779,30 @@ class SQLGraph(BaseGraph):
             if (
                 key in table_class.__table__.columns
                 and not self._is_pickled_sql_type(table_class.__table__.columns[key].type)
+                and not isinstance(schema.dtype, pl.Struct)
             )
         }
 
     def _cast_array_columns(self, table_class: type[DeclarativeBase], df: pl.DataFrame) -> pl.DataFrame:
         schemas = self._attr_schemas_for_table(table_class)
 
+        decode_exprs: list[pl.Expr] = []
         casts: list[pl.Series] = []
         for key, schema in schemas.items():
             if key not in df.columns or key not in table_class.__table__.columns:
                 continue
 
-            if not self._is_pickled_sql_type(table_class.__table__.columns[key].type):
+            column_type = table_class.__table__.columns[key].type
+            source_dtype = df.schema[key]
+
+            if isinstance(schema.dtype, pl.Struct) and self._is_json_sql_type(column_type):
+                if source_dtype == pl.String:
+                    decode_exprs.append(_struct_json_decode_expr(key, schema.dtype))
+                elif source_dtype != schema.dtype:
+                    casts.append(pl.Series(key, df[key].to_list(), dtype=schema.dtype))
+                continue
+
+            if not self._is_pickled_sql_type(column_type):
                 continue
 
             try:
@@ -675,6 +811,8 @@ class SQLGraph(BaseGraph):
                 # Keep original dtype when values cannot be casted to the target schema.
                 continue
 
+        if decode_exprs:
+            df = df.with_columns(decode_exprs)
         if casts:
             df = df.with_columns(casts)
         return df
