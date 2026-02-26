@@ -1251,7 +1251,7 @@ class BaseGraph(abc.ABC):
 
         graph = cls(**kwargs)
         graph.metadata.update(other.metadata)
-        graph._private_metadata.update(other._private_metadata)
+        graph._private_metadata.update(other._private_metadata_for_copy())
 
         current_node_attr_schemas = graph._node_attr_schemas()
         for k, v in other._node_attr_schemas().items():
@@ -1281,7 +1281,6 @@ class BaseGraph(abc.ABC):
         current_edge_attr_schemas = graph._edge_attr_schemas()
         for k, v in other._edge_attr_schemas().items():
             if k not in current_edge_attr_schemas:
-                print(f"Adding edge attribute key: {k} with dtype: {v.dtype} and default value: {v.default_value}")
                 graph.add_edge_attr_key(k, v.dtype, v.default_value)
 
         edge_attrs = edge_attrs.with_columns(
@@ -1948,6 +1947,14 @@ class BaseGraph(abc.ABC):
     def _remove_metadata_with_validation(self, key: str, *, is_public: bool = True) -> None:
         self._validate_metadata_key(key, is_public=is_public)
         self._remove_metadata(key)
+
+    def _private_metadata_for_copy(self) -> dict[str, Any]:
+        """
+        Return private metadata entries that should be propagated by `from_other`.
+
+        Backends can override this to exclude backend-specific private metadata.
+        """
+        return dict(self._private_metadata)
 
     @abc.abstractmethod
     def _metadata(self) -> dict[str, Any]:
