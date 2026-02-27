@@ -371,7 +371,7 @@ class RustWorkXGraph(BaseGraph):
 
             elif not isinstance(self._graph.attrs, dict):
                 LOG.warning(
-                    "previous attribute %s will be added to key 'old_attrs' of `graph.metadata()`",
+                    "previous attribute %s will be added to key 'old_attrs' of `graph.metadata`",
                     self._graph.attrs,
                 )
                 self._graph.attrs = {
@@ -492,7 +492,8 @@ class RustWorkXGraph(BaseGraph):
 
         node_id = self.rx_graph.add_node(attrs)
         self._time_to_nodes.setdefault(attrs["t"], []).append(node_id)
-        self.node_added.emit(node_id, dict(attrs))
+        if is_signal_on(self.node_added):
+            self.node_added.emit(node_id, attrs)
         return node_id
 
     def bulk_add_nodes(self, nodes: list[dict[str, Any]], indices: list[int] | None = None) -> list[int]:
@@ -524,7 +525,7 @@ class RustWorkXGraph(BaseGraph):
         # checking if it has connections to reduce overhead
         if is_signal_on(self.node_added):
             for node_id, node_attrs in zip(node_indices, nodes, strict=True):
-                self.node_added.emit(node_id, dict(node_attrs))
+                self.node_added.emit(node_id, node_attrs)
 
         return node_indices
 
@@ -548,8 +549,9 @@ class RustWorkXGraph(BaseGraph):
         if node_id not in self.rx_graph.node_indices():
             raise ValueError(f"Node {node_id} does not exist in the graph.")
 
-        old_attrs = dict(self.rx_graph[node_id])
-        self.node_removed.emit(node_id, old_attrs)
+        old_attrs = None
+        if is_signal_on(self.node_removed):
+            old_attrs = dict(self.rx_graph[node_id])
 
         # Get the time value before removing the node
         t = self.rx_graph[node_id]["t"]
@@ -566,6 +568,9 @@ class RustWorkXGraph(BaseGraph):
         # Remove from overlaps if present
         if self._overlaps is not None:
             self._overlaps = [overlap for overlap in self._overlaps if node_id != overlap[0] and node_id != overlap[1]]
+
+        if is_signal_on(self.node_removed):
+            self.node_removed.emit(node_id, old_attrs)
 
     def add_edge(
         self,
@@ -1218,8 +1223,8 @@ class RustWorkXGraph(BaseGraph):
         if node_ids is None:
             node_ids = self.node_ids()
 
-        emit_node_updated = is_signal_on(self.node_updated)
-        old_attrs_by_id = {node_id: dict(self._graph[node_id]) for node_id in node_ids} if emit_node_updated else None
+        if is_signal_on(self.node_updated):
+            old_attrs_by_id = {node_id: dict(self._graph[node_id]) for node_id in node_ids}
 
         for key, value in attrs.items():
             if key not in self.node_attr_keys():
@@ -1235,7 +1240,7 @@ class RustWorkXGraph(BaseGraph):
             for node_id, v in zip(node_ids, value, strict=False):
                 self._graph[node_id][key] = v
 
-        if emit_node_updated and old_attrs_by_id is not None:
+        if is_signal_on(self.node_updated):
             for node_id in node_ids:
                 self.node_updated.emit(node_id, old_attrs_by_id[node_id], dict(self._graph[node_id]))
 
@@ -1283,6 +1288,7 @@ class RustWorkXGraph(BaseGraph):
         tracklet_id_offset: int | None = None,
         node_ids: list[int] | None = None,
         return_id_update: bool = False,
+        allow_frame_skip: bool = False,
     ) -> rx.PyDiGraph | tuple[rx.PyDiGraph, pl.DataFrame]:
         # local import to avoid circular import
         from tracksdata.functional._rx import _assign_tracklet_ids
@@ -1297,6 +1303,7 @@ class RustWorkXGraph(BaseGraph):
                     reset=reset,
                     tracklet_id_offset=tracklet_id_offset,
                     return_id_update=return_id_update,
+                    allow_frame_skip=allow_frame_skip,
                 )
             )
         else:
@@ -1319,7 +1326,9 @@ class RustWorkXGraph(BaseGraph):
                     tracklet_id_offset = max(previous_id_df[output_key].max(), 0) + 1
 
             try:
-                track_node_ids, tracklet_ids, tracks_graph = _assign_tracklet_ids(self.rx_graph, tracklet_id_offset)
+                track_node_ids, tracklet_ids, tracks_graph = _assign_tracklet_ids(
+                    self.rx_graph, tracklet_id_offset, allow_frame_skip=allow_frame_skip
+                )
             except RuntimeError as e:
                 raise RuntimeError(
                     "Are you sure this graph is a valid lineage graph?\n"
@@ -1507,13 +1516,13 @@ class RustWorkXGraph(BaseGraph):
         """
         return self.rx_graph.get_edge_data(source_id, target_id)[DEFAULT_ATTR_KEYS.EDGE_ID]
 
-    def metadata(self) -> dict[str, Any]:
+    def _metadata(self) -> dict[str, Any]:
         return self._graph.attrs
 
-    def update_metadata(self, **kwargs) -> None:
+    def _update_metadata(self, **kwargs) -> None:
         self._graph.attrs.update(kwargs)
 
-    def remove_metadata(self, key: str) -> None:
+    def _remove_metadata(self, key: str) -> None:
         self._graph.attrs.pop(key, None)
 
     def edge_list(self) -> list[list[int, int]]:
@@ -1620,7 +1629,8 @@ class IndexedRXGraph(MappedGraphMixin, RustWorkXGraph):
             self._next_external_id = max(self._next_external_id, index + 1)
         # Add mapping using mixin
         self._add_id_mapping(node_id, index)
-        self.node_added.emit(index, dict(attrs))
+        if is_signal_on(self.node_added):
+            self.node_added.emit(index, attrs)
         return index
 
     def bulk_add_nodes(
@@ -1667,7 +1677,7 @@ class IndexedRXGraph(MappedGraphMixin, RustWorkXGraph):
 
         if is_signal_on(self.node_added):
             for index, node_attrs in zip(indices, nodes, strict=True):
-                self.node_added.emit(index, dict(node_attrs))
+                self.node_added.emit(index, node_attrs)
 
         return indices
 
@@ -1945,23 +1955,19 @@ class IndexedRXGraph(MappedGraphMixin, RustWorkXGraph):
         node_ids : Sequence[int] | None
             The node ids to update.
         """
-        external_node_ids = self.node_ids() if node_ids is None else [int(node_id) for node_id in node_ids]
+        external_node_ids = self.node_ids() if node_ids is None else node_ids
         local_node_ids = self._map_to_local(external_node_ids)
 
-        emit_node_updated = is_signal_on(self.node_updated)
-        old_attrs_by_id = (
-            {
+        if is_signal_on(self.node_updated):
+            old_attrs_by_id = {
                 external_node_id: dict(self._graph[local_node_id])
                 for external_node_id, local_node_id in zip(external_node_ids, local_node_ids, strict=True)
             }
-            if emit_node_updated
-            else None
-        )
 
         with self.node_updated.blocked():
             super().update_node_attrs(attrs=attrs, node_ids=local_node_ids)
 
-        if emit_node_updated and old_attrs_by_id is not None:
+        if is_signal_on(self.node_updated) and old_attrs_by_id is not None:
             for external_node_id, local_node_id in zip(external_node_ids, local_node_ids, strict=True):
                 self.node_updated.emit(
                     external_node_id,
@@ -1989,11 +1995,15 @@ class IndexedRXGraph(MappedGraphMixin, RustWorkXGraph):
         local_node_id = self._map_to_local(node_id)
         old_attrs = dict(self._graph[local_node_id])
 
-        self.node_removed.emit(node_id, old_attrs)
+        if is_signal_on(self.node_removed):
+            old_attrs = dict(self._graph[local_node_id])
+
         with self.node_removed.blocked():
             super().remove_node(local_node_id)
 
         self._remove_id_mapping(external_id=node_id)
+        if is_signal_on(self.node_removed):
+            self.node_removed.emit(node_id, old_attrs)
 
     def filter(
         self,

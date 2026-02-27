@@ -1359,7 +1359,7 @@ def test_from_other_with_edges(
 ) -> None:
     """Ensure from_other preserves structure across backend conversions."""
     # Create source graph with nodes, edges, and attributes
-    graph_backend.update_metadata(special_key="special_value")
+    graph_backend.metadata.update(special_key="special_value")
 
     graph_backend.add_node_attr_key("x", dtype=pl.Float64)
     graph_backend.add_edge_attr_key("weight", dtype=pl.Float64, default_value=-1)
@@ -1386,7 +1386,7 @@ def test_from_other_with_edges(
     assert set(new_graph.node_attr_keys()) == set(graph_backend.node_attr_keys())
     assert set(new_graph.edge_attr_keys()) == set(graph_backend.edge_attr_keys())
 
-    assert new_graph.metadata() == graph_backend.metadata()
+    assert new_graph.metadata == graph_backend.metadata
 
     assert new_graph._node_attr_schemas() == graph_backend._node_attr_schemas()
     assert new_graph._edge_attr_schemas() == graph_backend._edge_attr_schemas()
@@ -1761,6 +1761,25 @@ def test_assign_tracklet_ids(graph_backend: BaseGraph, return_id_updates: bool) 
     if return_id_updates:
         assert len(id_update_df) == 2
         _check_id_update_df(id_update_df, tracklet_ids, old_exists=True)
+
+
+def test_assign_tracklet_ids_allow_frame_skip(graph_backend: BaseGraph) -> None:
+    """Tracklets should stay connected across temporal gaps when allowed."""
+    first = graph_backend.add_node({DEFAULT_ATTR_KEYS.T: 0})
+    second = graph_backend.add_node({DEFAULT_ATTR_KEYS.T: 2})
+    graph_backend.add_edge(first, second, {})
+
+    default_tracks = graph_backend.assign_tracklet_ids()
+    default_ids = graph_backend.node_attrs(attr_keys=[DEFAULT_ATTR_KEYS.NODE_ID, DEFAULT_ATTR_KEYS.TRACKLET_ID])
+    assert len(set(default_ids[DEFAULT_ATTR_KEYS.TRACKLET_ID])) == 2
+    assert default_tracks.num_nodes() == 2
+    assert default_tracks.num_edges() == 1
+
+    merged_tracks = graph_backend.assign_tracklet_ids(allow_frame_skip=True)
+    merged_ids = graph_backend.node_attrs(attr_keys=[DEFAULT_ATTR_KEYS.NODE_ID, DEFAULT_ATTR_KEYS.TRACKLET_ID])
+    assert len(set(merged_ids[DEFAULT_ATTR_KEYS.TRACKLET_ID])) == 1
+    assert merged_tracks.num_nodes() == 1
+    assert merged_tracks.num_edges() == 0
 
 
 def _compare_tracklet_id_assignments(expected_node_sets, graph_backend: BaseGraph):
@@ -2322,7 +2341,7 @@ def _fill_mock_geff_graph(graph_backend: BaseGraph) -> None:
 
     graph_backend.add_edge_attr_key("weight", pl.Float16)
 
-    graph_backend.update_metadata(
+    graph_backend.metadata.update(
         shape=[1, 25, 25],
         path="path/to/image.ome.zarr",
     )
@@ -2383,11 +2402,11 @@ def test_geff_roundtrip(graph_backend: BaseGraph) -> None:
 
     geff_graph, _ = IndexedRXGraph.from_geff(output_store)
 
-    assert "geff" in geff_graph.metadata()
+    assert "geff" in geff_graph.metadata
 
     # geff metadata was not stored in original graph
-    geff_graph.metadata().pop("geff")
-    assert geff_graph.metadata() == graph_backend.metadata()
+    geff_graph.metadata.pop("geff")
+    assert geff_graph.metadata == graph_backend.metadata
 
     assert geff_graph.num_nodes() == 3
     assert geff_graph.num_edges() == 2
@@ -2442,11 +2461,11 @@ def test_geff_with_keymapping(graph_backend: BaseGraph) -> None:
         edge_attr_key_map={"weight": "weight_new"},
     )
 
-    assert "geff" in geff_graph.metadata()
+    assert "geff" in geff_graph.metadata
 
     # geff metadata was not stored in original graph
-    geff_graph.metadata().pop("geff")
-    assert geff_graph.metadata() == graph_backend.metadata()
+    geff_graph.metadata.pop("geff")
+    assert geff_graph.metadata == graph_backend.metadata
 
     assert geff_graph.num_nodes() == 3
     assert geff_graph.num_edges() == 2
@@ -2483,32 +2502,56 @@ def test_metadata_multiple_dtypes(graph_backend: BaseGraph) -> None:
     }
 
     # Update metadata with all test values
-    graph_backend.update_metadata(**test_metadata)
+    graph_backend.metadata.update(**test_metadata)
 
     # Retrieve and verify
-    retrieved = graph_backend.metadata()
+    retrieved = graph_backend.metadata
 
     for key, expected_value in test_metadata.items():
         assert key in retrieved, f"Key '{key}' not found in metadata"
         assert retrieved[key] == expected_value, f"Value mismatch for '{key}': {retrieved[key]} != {expected_value}"
 
     # Test updating existing keys
-    graph_backend.update_metadata(string="updated_value", new_key="new_value")
-    retrieved = graph_backend.metadata()
+    graph_backend.metadata.update(string="updated_value", new_key="new_value")
+    retrieved = graph_backend.metadata
 
     assert retrieved["string"] == "updated_value"
     assert retrieved["new_key"] == "new_value"
     assert retrieved["integer"] == 42  # Other values unchanged
 
     # Testing removing metadata
-    graph_backend.remove_metadata("string")
-    retrieved = graph_backend.metadata()
+    graph_backend.metadata.pop("string", None)
+    retrieved = graph_backend.metadata
     assert "string" not in retrieved
 
-    graph_backend.remove_metadata("mixed_list")
-    retrieved = graph_backend.metadata()
+    graph_backend.metadata.pop("mixed_list", None)
+    retrieved = graph_backend.metadata
     assert "string" not in retrieved
     assert "mixed_list" not in retrieved
+
+
+def test_private_metadata_is_hidden_from_public_apis(graph_backend: BaseGraph) -> None:
+    private_key = "__private_dtype_map"
+
+    graph_backend._private_metadata.update(**{private_key: {"x": "float64"}})
+    graph_backend.metadata.update(shape=[1, 2, 3])
+
+    public_metadata = graph_backend.metadata
+    assert private_key not in public_metadata
+    assert public_metadata["shape"] == [1, 2, 3]
+
+    with pytest.raises(ValueError, match="reserved for internal use"):
+        graph_backend.metadata.update(**{private_key: {"x": "int64"}})
+
+    with pytest.raises(ValueError, match="reserved for internal use"):
+        graph_backend.metadata.pop(private_key, None)
+
+    with pytest.raises(ValueError, match="is not private"):
+        graph_backend._private_metadata.update(shape=[1, 2, 3])
+
+    # Private metadata view can remove private keys.
+    graph_backend._private_metadata.pop(private_key, None)
+    assert private_key not in graph_backend._metadata()
 
 
 def test_pickle_roundtrip(graph_backend: BaseGraph) -> None:
@@ -2551,7 +2594,7 @@ def test_pickle_roundtrip(graph_backend: BaseGraph) -> None:
 
 
 @pytest.mark.slow
-def test_sql_graph_huge_update() -> None:
+def test_sql_graph_huge_dataset() -> None:
     # test is only executed if `--slow` is passed to pytest
     graph = SQLGraph("sqlite", ":memory:")
 
@@ -2573,6 +2616,9 @@ def test_sql_graph_huge_update() -> None:
         node_ids=graph.node_ids(),
     )
 
+    # testing if successors works with huge dataset
+    graph.successors(graph.node_ids())
+
 
 def test_to_traccuracy_graph(graph_backend: BaseGraph) -> None:
     pytest.importorskip("traccuracy")
@@ -2585,7 +2631,7 @@ def test_to_traccuracy_graph(graph_backend: BaseGraph) -> None:
     graph_backend.add_node_attr_key("y", pl.Float64)
     graph_backend.add_node_attr_key(DEFAULT_ATTR_KEYS.MASK, pl.Object)
     graph_backend.add_node_attr_key(DEFAULT_ATTR_KEYS.BBOX, pl.Array(pl.Int64, 4))
-    graph_backend.update_metadata(shape=[3, 25, 25])
+    graph_backend.metadata.update(shape=[3, 25, 25])
 
     # Create masks for first graph
     mask1_data = np.array([[True, True], [True, True]], dtype=bool)
