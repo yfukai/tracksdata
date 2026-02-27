@@ -111,8 +111,9 @@ class BaseGraph(abc.ABC):
 
     _PRIVATE_METADATA_PREFIX = "__private_"
 
-    node_added = Signal(int)
-    node_removed = Signal(int)
+    node_added = Signal(int, object)
+    node_removed = Signal(int, object)
+    node_updated = Signal(int, object, object)
 
     def __init__(self) -> None:
         self._cache = {}
@@ -1518,6 +1519,7 @@ class BaseGraph(abc.ABC):
         tracklet_id_offset: int | None = None,
         node_ids: list[int] | None = None,
         return_id_update: Literal[False] = False,
+        allow_frame_skip: bool = False,
     ) -> rx.PyDiGraph: ...
     @overload
     def assign_tracklet_ids(
@@ -1527,6 +1529,7 @@ class BaseGraph(abc.ABC):
         tracklet_id_offset: int | None = None,
         node_ids: list[int] | None = None,
         return_id_update: Literal[True] = True,
+        allow_frame_skip: bool = False,
     ) -> tuple[rx.PyDiGraph, pl.DataFrame]: ...
 
     @abc.abstractmethod
@@ -1537,6 +1540,7 @@ class BaseGraph(abc.ABC):
         tracklet_id_offset: int | None = None,
         node_ids: list[int] | None = None,
         return_id_update: bool = False,
+        allow_frame_skip: bool = False,
     ) -> rx.PyDiGraph | tuple[rx.PyDiGraph, pl.DataFrame]:
         """
         Compute and assign track ids to nodes.
@@ -1554,6 +1558,8 @@ class BaseGraph(abc.ABC):
             The node ids to assign track ids to. If None, all nodes are used.
         return_id_update : bool
             Whether to return a DataFrame with the updated node ids and their previous and assigned track ids.
+        allow_frame_skip : bool
+            If True, do not split tracklets when an edge spans multiple frames.
 
         Returns
         -------
