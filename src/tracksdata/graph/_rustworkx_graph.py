@@ -1951,7 +1951,7 @@ class IndexedRXGraph(MappedGraphMixin, RustWorkXGraph):
         node_ids : Sequence[int] | None
             The node ids to update.
         """
-        external_node_ids = self.node_ids() if node_ids is None else [int(node_id) for node_id in node_ids]
+        external_node_ids = self.node_ids() if node_ids is None else node_ids
         local_node_ids = self._map_to_local(external_node_ids)
 
         if is_signal_on(self.node_updated):
