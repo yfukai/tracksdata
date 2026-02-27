@@ -1777,7 +1777,7 @@ class SQLGraph(BaseGraph):
             new_df = self.filter(node_ids=updated_node_ids).node_attrs(
                 attr_keys=[DEFAULT_ATTR_KEYS.NODE_ID, *attr_keys]
             )
-            new_attrs_by_id = {row[DEFAULT_ATTR_KEYS.NODE_ID]: dict(row) for row in new_df.rows(named=True)}
+            new_attrs_by_id = {row[DEFAULT_ATTR_KEYS.NODE_ID]: row for row in new_df.rows(named=True)}
             for node_id in updated_node_ids:
                 self.node_updated.emit(node_id, old_attrs_by_id[node_id], new_attrs_by_id[node_id])
 
