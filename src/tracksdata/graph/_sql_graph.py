@@ -1123,12 +1123,20 @@ class SQLGraph(BaseGraph):
             else:
                 return node_df
         else:
-            neighbors_dict = {node_id: group for (node_id,), group in node_df.group_by(node_key)}
-            for node_id in node_ids:
-                neighbors_dict.setdefault(node_id, pl.DataFrame(schema=node_df.schema))
             if not return_attrs:
-                return {node_id: df[DEFAULT_ATTR_KEYS.NODE_ID].to_list() for node_id, df in neighbors_dict.items()}
+                neighbors_dict = {
+                    node_id: [neighbor_id for (neighbor_id,) in neighbors]
+                    for node_id, neighbors in node_df.select(node_key, DEFAULT_ATTR_KEYS.NODE_ID)
+                    .rows_by_key(node_key)
+                    .items()
+                }
+                for node_id in node_ids:
+                    neighbors_dict.setdefault(node_id, [])
+                return neighbors_dict
             else:
+                neighbors_dict = {node_id: group for (node_id,), group in node_df.group_by(node_key)}
+                for node_id in node_ids:
+                    neighbors_dict.setdefault(node_id, pl.DataFrame(schema=node_df.schema))
                 return neighbors_dict
 
     def successors(
@@ -1829,11 +1837,13 @@ class SQLGraph(BaseGraph):
             old_df = self.filter(node_ids=updated_node_ids).node_attrs(
                 attr_keys=[DEFAULT_ATTR_KEYS.NODE_ID, *attr_keys]
             )
-            old_attrs_by_id = {row[DEFAULT_ATTR_KEYS.NODE_ID]: row for row in old_df.rows(named=True)}
+            old_attrs_by_id = old_df.rows_by_key(
+                key=DEFAULT_ATTR_KEYS.NODE_ID, named=True, unique=True, include_key=True
+            )
 
         self._update_table(self.Node, node_ids, DEFAULT_ATTR_KEYS.NODE_ID, attrs)
         new_df = self.filter(node_ids=updated_node_ids).node_attrs(attr_keys=[DEFAULT_ATTR_KEYS.NODE_ID, *attr_keys])
-        new_attrs_by_id = new_df.rows_by_key(key=DEFAULT_ATTR_KEYS.NODE_ID, named=True, unique=True)
+        new_attrs_by_id = new_df.rows_by_key(key=DEFAULT_ATTR_KEYS.NODE_ID, named=True, unique=True, include_key=True)
 
         if is_signal_on(self.node_updated):
             for node_id in updated_node_ids:
@@ -1843,7 +1853,9 @@ class SQLGraph(BaseGraph):
             new_df = self.filter(node_ids=updated_node_ids).node_attrs(
                 attr_keys=[DEFAULT_ATTR_KEYS.NODE_ID, *attr_keys]
             )
-            new_attrs_by_id = {row[DEFAULT_ATTR_KEYS.NODE_ID]: row for row in new_df.rows(named=True)}
+            new_attrs_by_id = new_df.rows_by_key(
+                key=DEFAULT_ATTR_KEYS.NODE_ID, named=True, unique=True, include_key=True
+            )
             for node_id in updated_node_ids:
                 self.node_updated.emit(node_id, old_attrs_by_id[node_id], new_attrs_by_id[node_id])
 

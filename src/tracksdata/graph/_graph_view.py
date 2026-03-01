@@ -664,7 +664,9 @@ class GraphView(MappedGraphMixin, RustWorkXGraph):
 
         if is_signal_on(self.node_updated):
             old_attrs_by_id = self._root.filter(node_ids=node_ids).node_attrs()
-            old_attrs_by_id = {row[DEFAULT_ATTR_KEYS.NODE_ID]: row for row in old_attrs_by_id.to_dicts()}
+            old_attrs_by_id = old_attrs_by_id.rows_by_key(
+                key=DEFAULT_ATTR_KEYS.NODE_ID, named=True, unique=True, include_key=True
+            )
 
         self._root.update_node_attrs(
             node_ids=node_ids,
