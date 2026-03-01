@@ -1993,7 +1993,7 @@ class IndexedRXGraph(MappedGraphMixin, RustWorkXGraph):
             raise ValueError(f"Node {node_id} does not exist in the graph.")
 
         local_node_id = self._map_to_local(node_id)
-        old_attrs = dict(self._graph[local_node_id])
+        old_attrs = self._graph[local_node_id]
 
         if is_signal_on(self.node_removed):
             old_attrs = dict(self._graph[local_node_id])
