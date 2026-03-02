@@ -592,7 +592,7 @@ class SQLGraph(BaseGraph):
                 )
 
         result = {}
-        
+
         # return dictionary in preferred order
         for source in (
             preferred_order,
@@ -602,7 +602,7 @@ class SQLGraph(BaseGraph):
             for key in source:
                 if key in schemas:
                     result.setdefault(key, schemas[key])
-        
+
         return result
 
     def _attr_schemas_for_table(self, table_class: type[DeclarativeBase]) -> dict[str, AttrSchema]:
