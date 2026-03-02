@@ -1167,11 +1167,7 @@ class RustWorkXGraph(BaseGraph):
 
         source, target, data = zip(*edge_map.values(), strict=False)
 
-        columns = {key: [] for key in attr_keys}
-
-        for row in data:
-            for key in attr_keys:
-                columns[key].append(row.get(key))
+        columns = {key: [row.get(key) for row in data] for key in attr_keys}
 
         columns[DEFAULT_ATTR_KEYS.EDGE_SOURCE] = source
         columns[DEFAULT_ATTR_KEYS.EDGE_TARGET] = target
@@ -1988,6 +1984,7 @@ class IndexedRXGraph(MappedGraphMixin, RustWorkXGraph):
             raise ValueError(f"Node {node_id} does not exist in the graph.")
 
         local_node_id = self._map_to_local(node_id)
+        old_attrs = self._graph[local_node_id]
 
         if is_signal_on(self.node_removed):
             old_attrs = dict(self._graph[local_node_id])
