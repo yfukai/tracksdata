@@ -678,8 +678,15 @@ class SQLGraph(BaseGraph):
 
             try:
                 casts.append(pl.Series(key, df[key].to_list(), dtype=schema.dtype))
-            except Exception:
+            except Exception as e:
                 # Keep original dtype when values cannot be casted to the target schema.
+                LOG.warning(
+                    "Failed to cast column '%s' to %s (current dtype: %s). Error: %s",
+                    key,
+                    schema.dtype,
+                    df[key].dtype,
+                    e,
+                )
                 continue
 
         if casts:

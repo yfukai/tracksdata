@@ -1,6 +1,10 @@
+import logging
+
 import cloudpickle
 import polars as pl
 import polars.selectors as cs
+
+LOG = logging.getLogger(__name__)
 
 
 def unpack_array_attrs(df: pl.DataFrame) -> pl.DataFrame:
@@ -48,6 +52,6 @@ def unpickle_bytes_columns(df: pl.DataFrame) -> pl.DataFrame:
         if isinstance(dtype, pl.Object):
             try:
                 df = df.with_columns(pl.Series(df[col].to_list()).alias(col))
-            except Exception:
-                pass
+            except Exception as e:
+                LOG.warning("Failed to infer dtype for column '%s' after unpickling. Error: %s", col, e)
     return df
