@@ -11,7 +11,7 @@ import polars as pl
 import rustworkx as rx
 from geff.core_io import construct_var_len_props, write_arrays
 from geff_spec import Axis, GeffMetadata, PropMetadata
-from numpy.typing import ArrayLike
+from numpy.typing import ArrayLike, DTypeLike
 from psygnal import Signal
 from zarr.storage import StoreLike
 
@@ -110,10 +110,9 @@ class BaseGraph(abc.ABC):
     """
 
     _PRIVATE_METADATA_PREFIX = "__private_"
-
-    node_added = Signal(int, object)
-    node_removed = Signal(int, object)
-    node_updated = Signal(int, object, object)
+    node_added = Signal(int, dict)
+    node_removed = Signal(int, dict)
+    node_updated = Signal(int, dict, dict)
 
     def __init__(self) -> None:
         self._cache = {}
@@ -1004,6 +1003,7 @@ class BaseGraph(abc.ABC):
         shape: tuple[int, ...] | None = None,
         tracklet_id_key: str = DEFAULT_ATTR_KEYS.TRACKLET_ID,
         overwrite: bool = False,
+        dtype: None | DTypeLike = None,
     ) -> None:
         """
         Save the graph to a CTC ground truth directory.
@@ -1019,6 +1019,8 @@ class BaseGraph(abc.ABC):
             The attribute key to use for the track IDs.
         overwrite : bool
             Whether to overwrite the output directory if it exists.
+        dtype : None | DTypeLike
+            Dtype to save segmentation images.
 
         Examples
         --------
@@ -1042,6 +1044,7 @@ class BaseGraph(abc.ABC):
             output_dir=output_dir,
             tracklet_id_key=tracklet_id_key,
             overwrite=overwrite,
+            dtype=dtype,
         )
 
     @classmethod
@@ -1109,6 +1112,12 @@ class BaseGraph(abc.ABC):
     def out_degree(self, node_ids: list[int] | int | None = None) -> list[int] | int:
         """
         Get the out-degree of a list of nodes.
+        """
+
+    @abc.abstractmethod
+    def dividing_nodes(self) -> list[int]:
+        """
+        Get the node ids of dividing nodes.
         """
 
     def match(

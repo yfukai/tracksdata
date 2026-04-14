@@ -68,6 +68,20 @@ def _maybe_fill_null(s: pl.Series, schema: AttrSchema) -> pl.Series:
     return s
 
 
+def _list_to_pl_series(key: str, values: list[Any], schema: AttrSchema) -> pl.Series:
+    if isinstance(schema.dtype, pl.Array):
+        try:
+            values = np.asarray(values)
+        except ValueError:
+            # catches when it fails with None in `values`
+            pass
+    else:
+        values = values
+    s = pl.Series(name=key, values=values, dtype=schema.dtype)
+    s = _maybe_fill_null(s, schema)
+    return s
+
+
 def _create_filter_func(
     attr_comps: Sequence[AttrComparison],
     schema: dict[str, AttrSchema],
@@ -210,9 +224,7 @@ class RXFilter(BaseFilter):
 
         for k in data.keys():
             schema = self._graph._edge_attr_schemas()[k]
-            s = pl.Series(name=k, values=data[k], dtype=schema.dtype)
-            s = _maybe_fill_null(s, schema)
-            data[k] = s
+            data[k] = _list_to_pl_series(k, data[k], schema)
 
         data[DEFAULT_ATTR_KEYS.EDGE_SOURCE] = pl.Series(
             name=DEFAULT_ATTR_KEYS.EDGE_SOURCE, values=sources, dtype=pl.Int64
@@ -1130,9 +1142,7 @@ class RustWorkXGraph(BaseGraph):
 
         for key in attr_keys:
             schema = node_attr_schemas[key]
-            s = pl.Series(name=key, values=columns[key], dtype=schema.dtype)
-            s = _maybe_fill_null(s, schema)
-            columns[key] = s
+            columns[key] = _list_to_pl_series(key, columns[key], schema)
 
         # Create DataFrame and set node_id as index in one shot
         df = pl.DataFrame(columns)
@@ -1188,20 +1198,15 @@ class RustWorkXGraph(BaseGraph):
 
         source, target, data = zip(*edge_map.values(), strict=False)
 
-        columns = {key: [] for key in attr_keys}
-
-        for row in data:
-            for key in attr_keys:
-                columns[key].append(row.get(key))
+        columns = {key: [row.get(key) for row in data] for key in attr_keys}
 
         columns[DEFAULT_ATTR_KEYS.EDGE_SOURCE] = source
         columns[DEFAULT_ATTR_KEYS.EDGE_TARGET] = target
 
+        edge_attr_schemas = self._edge_attr_schemas()
         for key in attr_keys:
-            schema = self._edge_attr_schemas()[key]
-            s = pl.Series(name=key, values=columns[key], dtype=schema.dtype)
-            s = _maybe_fill_null(s, schema)
-            columns[key] = s
+            schema = edge_attr_schemas[key]
+            columns[key] = _list_to_pl_series(key, columns[key], schema)
 
         df = pl.DataFrame(columns)
         if unpack:
@@ -1422,6 +1427,13 @@ class RustWorkXGraph(BaseGraph):
         if isinstance(node_ids, int):
             return rx_graph.out_degree(node_ids)
         return [rx_graph.out_degree(node_id) for node_id in node_ids]
+
+    def dividing_nodes(self) -> list[int]:
+        """
+        Get the node ids of dividing nodes (nodes with out-degree == 2).
+        """
+        rx_graph = self.rx_graph
+        return [int(i) for i in rx_graph.node_indices() if rx_graph.out_degree(i) == 2]
 
     def contract_nodes(
         self,
@@ -1829,6 +1841,12 @@ class IndexedRXGraph(MappedGraphMixin, RustWorkXGraph):
         node_ids = self._get_local_ids() if node_ids is None else self._map_to_local(node_ids)
         return super().out_degree(node_ids)
 
+    def dividing_nodes(self) -> list[int]:
+        """
+        Get the node ids of dividing nodes (nodes with out-degree == 2).
+        """
+        return self._map_to_external(super().dividing_nodes())
+
     def add_edge(
         self,
         source_id: int,
@@ -2009,6 +2027,7 @@ class IndexedRXGraph(MappedGraphMixin, RustWorkXGraph):
             raise ValueError(f"Node {node_id} does not exist in the graph.")
 
         local_node_id = self._map_to_local(node_id)
+        old_attrs = self._graph[local_node_id]
 
         if is_signal_on(self.node_removed):
             old_attrs = dict(self._graph[local_node_id])

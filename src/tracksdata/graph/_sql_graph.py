@@ -536,6 +536,8 @@ class SQLGraph(BaseGraph):
 
         self._max_id_per_time = {}
         self._update_max_id_per_time()
+        self._node_attr_schemas_cache: dict | None = None
+        self._edge_attr_schemas_cache: dict | None = None
 
     def supports_custom_indices(self) -> bool:
         return True
@@ -664,12 +666,14 @@ class SQLGraph(BaseGraph):
 
     @property
     def __node_attr_schemas(self) -> dict[str, AttrSchema]:
-        return self._attr_schemas_from_metadata(
-            table_class=self.Node,
-            metadata_key=self._PRIVATE_SQL_NODE_SCHEMA_STORE_KEY,
-            default_schemas=self._default_node_attr_schemas(),
-            preferred_order=[DEFAULT_ATTR_KEYS.T, DEFAULT_ATTR_KEYS.NODE_ID],
-        )
+        if self._node_attr_schemas_cache is None:
+            self._node_attr_schemas_cache = self._attr_schemas_from_metadata(
+                table_class=self.Node,
+                metadata_key=self._PRIVATE_SQL_NODE_SCHEMA_STORE_KEY,
+                default_schemas=self._default_node_attr_schemas(),
+                preferred_order=[DEFAULT_ATTR_KEYS.T, DEFAULT_ATTR_KEYS.NODE_ID],
+            )
+        return self._node_attr_schemas_cache
 
     @__node_attr_schemas.setter
     def __node_attr_schemas(self, schemas: dict[str, AttrSchema]) -> None:
@@ -678,19 +682,22 @@ class SQLGraph(BaseGraph):
         schemas = merged_schemas
         encoded_schemas = {key: serialize_attr_schema(schema) for key, schema in schemas.items()}
         self._private_metadata[self._PRIVATE_SQL_NODE_SCHEMA_STORE_KEY] = encoded_schemas
+        self._node_attr_schemas_cache = None
 
     @property
     def __edge_attr_schemas(self) -> dict[str, AttrSchema]:
-        return self._attr_schemas_from_metadata(
-            table_class=self.Edge,
-            metadata_key=self._PRIVATE_SQL_EDGE_SCHEMA_STORE_KEY,
-            default_schemas=self._default_edge_attr_schemas(),
-            preferred_order=[
-                DEFAULT_ATTR_KEYS.EDGE_ID,
-                DEFAULT_ATTR_KEYS.EDGE_SOURCE,
-                DEFAULT_ATTR_KEYS.EDGE_TARGET,
-            ],
-        )
+        if self._edge_attr_schemas_cache is None:
+            self._edge_attr_schemas_cache = self._attr_schemas_from_metadata(
+                table_class=self.Edge,
+                metadata_key=self._PRIVATE_SQL_EDGE_SCHEMA_STORE_KEY,
+                default_schemas=self._default_edge_attr_schemas(),
+                preferred_order=[
+                    DEFAULT_ATTR_KEYS.EDGE_ID,
+                    DEFAULT_ATTR_KEYS.EDGE_SOURCE,
+                    DEFAULT_ATTR_KEYS.EDGE_TARGET,
+                ],
+            )
+        return self._edge_attr_schemas_cache
 
     @__edge_attr_schemas.setter
     def __edge_attr_schemas(self, schemas: dict[str, AttrSchema]) -> None:
@@ -699,6 +706,7 @@ class SQLGraph(BaseGraph):
         schemas = merged_schemas
         encoded_schemas = {key: serialize_attr_schema(schema) for key, schema in schemas.items()}
         self._private_metadata[self._PRIVATE_SQL_EDGE_SCHEMA_STORE_KEY] = encoded_schemas
+        self._edge_attr_schemas_cache = None
 
     def _restore_pickled_column_types(self, table: sa.Table) -> None:
         for column in table.columns:
@@ -1011,6 +1019,8 @@ class SQLGraph(BaseGraph):
             node = session.query(self.Node).filter(self.Node.node_id == node_id).first()
             if node is None:
                 raise ValueError(f"Node {node_id} does not exist in the graph.")
+            old_attrs = {key: getattr(node, key) for key in self.node_attr_keys()}
+            self.node_removed.emit(node_id, old_attrs)
 
             if is_signal_on(self.node_removed):
                 attr_keys = self.node_attr_keys()
@@ -1325,12 +1335,20 @@ class SQLGraph(BaseGraph):
             else:
                 return node_df
         else:
-            neighbors_dict = {node_id: group for (node_id,), group in node_df.group_by(node_key)}
-            for node_id in node_ids:
-                neighbors_dict.setdefault(node_id, pl.DataFrame(schema=node_df.schema))
             if not return_attrs:
-                return {node_id: df[DEFAULT_ATTR_KEYS.NODE_ID].to_list() for node_id, df in neighbors_dict.items()}
+                neighbors_dict = {
+                    node_id: [neighbor_id for (neighbor_id,) in neighbors]
+                    for node_id, neighbors in node_df.select(node_key, DEFAULT_ATTR_KEYS.NODE_ID)
+                    .rows_by_key(node_key)
+                    .items()
+                }
+                for node_id in node_ids:
+                    neighbors_dict.setdefault(node_id, [])
+                return neighbors_dict
             else:
+                neighbors_dict = {node_id: group for (node_id,), group in node_df.group_by(node_key)}
+                for node_id in node_ids:
+                    neighbors_dict.setdefault(node_id, pl.DataFrame(schema=node_df.schema))
                 return neighbors_dict
 
     def successors(
@@ -1551,9 +1569,7 @@ class SQLGraph(BaseGraph):
 
         if unpack:
             edges_df = unpack_array_attrs(edges_df)
-        elif attr_keys is not None:
-            edges_df = edges_df.select([pl.col(c) for c in attr_keys if c in edges_df.columns])
-        else:
+        elif attr_keys is None:
             edges_df = edges_df.select([pl.col(c) for c in self._edge_attr_schemas() if c in edges_df.columns])
 
         return edges_df
@@ -1871,7 +1887,6 @@ class SQLGraph(BaseGraph):
         )
 
     def _drop_column(self, table_class: type[DeclarativeBase], key: str) -> None:
-        """Drop a single physical column from *table_class*."""
         identifier_preparer = self._engine.dialect.identifier_preparer
         quoted_table_name = identifier_preparer.format_table(table_class.__table__)
         quoted_column_name = identifier_preparer.quote(key)
@@ -2103,7 +2118,9 @@ class SQLGraph(BaseGraph):
             old_df = self.filter(node_ids=updated_node_ids).node_attrs(
                 attr_keys=[DEFAULT_ATTR_KEYS.NODE_ID, *attr_keys]
             )
-            old_attrs_by_id = {row[DEFAULT_ATTR_KEYS.NODE_ID]: row for row in old_df.rows(named=True)}
+            old_attrs_by_id = old_df.rows_by_key(
+                key=DEFAULT_ATTR_KEYS.NODE_ID, named=True, unique=True, include_key=True
+            )
 
         self._update_table(self.Node, node_ids, DEFAULT_ATTR_KEYS.NODE_ID, attrs)
 
@@ -2111,7 +2128,19 @@ class SQLGraph(BaseGraph):
             new_df = self.filter(node_ids=updated_node_ids).node_attrs(
                 attr_keys=[DEFAULT_ATTR_KEYS.NODE_ID, *attr_keys]
             )
-            new_attrs_by_id = {row[DEFAULT_ATTR_KEYS.NODE_ID]: row for row in new_df.rows(named=True)}
+            new_attrs_by_id = new_df.rows_by_key(
+                key=DEFAULT_ATTR_KEYS.NODE_ID, named=True, unique=True, include_key=True
+            )
+
+            for node_id in updated_node_ids:
+                self.node_updated.emit(node_id, old_attrs_by_id[node_id], new_attrs_by_id[node_id])
+
+            new_df = self.filter(node_ids=updated_node_ids).node_attrs(
+                attr_keys=[DEFAULT_ATTR_KEYS.NODE_ID, *attr_keys]
+            )
+            new_attrs_by_id = new_df.rows_by_key(
+                key=DEFAULT_ATTR_KEYS.NODE_ID, named=True, unique=True, include_key=True
+            )
             for node_id in updated_node_ids:
                 self.node_updated.emit(node_id, old_attrs_by_id[node_id], new_attrs_by_id[node_id])
 
@@ -2190,6 +2219,15 @@ class SQLGraph(BaseGraph):
         Get the out-degree of a list of nodes.
         """
         return self._get_degree(node_ids, DEFAULT_ATTR_KEYS.EDGE_SOURCE)
+
+    def dividing_nodes(self) -> list[int]:
+        """
+        Get the node ids of dividing nodes (nodes with out-degree == 2).
+        """
+        edge_key_col = getattr(self.Edge, DEFAULT_ATTR_KEYS.EDGE_SOURCE)
+        stmt = sa.select(edge_key_col).group_by(edge_key_col).having(sa.func.count() == 2)
+        with Session(self._engine) as session:
+            return [int(row[0]) for row in session.execute(stmt).all()]
 
     def __getstate__(self) -> dict:
         data_dict = self.__dict__.copy()
