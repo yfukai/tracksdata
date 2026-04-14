@@ -266,19 +266,19 @@ class SQLFilter(BaseFilter):
                 schema_overrides=self._graph._polars_schema_override(self._graph.Node),
             )
 
-        if attr_keys is not None:
-            nodes_attrs = nodes_attrs.select(attr_keys)
-
         nodes_attrs = unpickle_bytes_columns(nodes_attrs)
         nodes_attrs = self._graph._cast_array_columns(self._graph.Node, nodes_attrs)
+
+        if attr_keys is not None:
+            nodes_attrs = nodes_attrs.select(attr_keys)
 
         if unpack:
             nodes_attrs = unpack_array_attrs(nodes_attrs)
 
         return nodes_attrs
 
-    @staticmethod
     def _query_from_attr_keys(
+        self,
         query: sa.Select,
         table: type[DeclarativeBase],
         attr_keys: list[str] | None = None,
@@ -292,14 +292,23 @@ class SQLFilter(BaseFilter):
 
             LOG.info("Query attr_keys: %s", attr_keys)
 
+            schemas = self._graph._attr_schemas_for_table(table)
+            flat_names: list[str] = []
+            for key in attr_keys:
+                schema = schemas.get(key)
+                if schema is not None and isinstance(schema.dtype, pl.Struct):
+                    flat_names.extend(fc for fc, _ in flatten_struct_dtype(key, schema.dtype))
+                else:
+                    flat_names.append(key)
+
             if isinstance(query, sa.CompoundSelect):
                 union_query = query.alias("u")
                 query = sa.select(
-                    *[getattr(union_query.c, key) for key in attr_keys],
+                    *[getattr(union_query.c, name) for name in flat_names],
                 )
             else:
                 query = query.with_only_columns(
-                    *[getattr(table, key) for key in attr_keys],
+                    *[getattr(table, name) for name in flat_names],
                 )
 
         LOG.info("Query after attr_keys selection:\n%s", query)
@@ -889,10 +898,10 @@ class SQLGraph(BaseGraph):
         else:
             node_id = index
 
-        attrs = self._flatten_attrs_for_write(attrs, self._node_attr_schemas())
+        write_attrs = self._flatten_attrs_for_write(attrs, self._node_attr_schemas())
         node = self.Node(
             node_id=node_id,
-            **attrs,
+            **write_attrs,
         )
 
         with Session(self._engine) as session:
@@ -969,8 +978,8 @@ class SQLGraph(BaseGraph):
             node_ids.append(node_id)
 
         node_schemas = self._node_attr_schemas()
-        nodes = [self._flatten_attrs_for_write(node, node_schemas) for node in nodes]
-        self._chunked_sa_write(Session.bulk_insert_mappings, nodes, self.Node)
+        write_nodes = [self._flatten_attrs_for_write(node, node_schemas) for node in nodes]
+        self._chunked_sa_write(Session.bulk_insert_mappings, write_nodes, self.Node)
 
         if is_signal_on(self.node_added):
             for node_id, node_attrs in zip(node_ids, nodes, strict=True):
@@ -1004,7 +1013,10 @@ class SQLGraph(BaseGraph):
                 raise ValueError(f"Node {node_id} does not exist in the graph.")
 
             if is_signal_on(self.node_removed):
-                old_attrs = {key: getattr(node, key) for key in self.node_attr_keys()}
+                attr_keys = self.node_attr_keys()
+                old_df = self.filter(node_ids=[node_id]).node_attrs(attr_keys=attr_keys)
+                old_row = old_df.row(0, named=True)
+                old_attrs = {key: old_row[key] for key in attr_keys}
 
             # Remove all edges where this node is source or target
             session.query(self.Edge).filter(
@@ -1628,13 +1640,19 @@ class SQLGraph(BaseGraph):
         if len(attr_keys) == 0:
             raise ValueError("attr_keys must contain at least one column name")
 
-        missing = [key for key in attr_keys if key not in table_class.__table__.columns]
+        schemas = self._attr_schemas_for_table(table_class)
+        physical_names: list[str] = []
+        for key in attr_keys:
+            schema = schemas.get(key)
+            if schema is not None and isinstance(schema.dtype, pl.Struct):
+                physical_names.extend(fc for fc, _ in flatten_struct_dtype(key, schema.dtype))
+            else:
+                physical_names.append(key)
+
+        missing = [name for name in physical_names if name not in table_class.__table__.columns]
         if missing:
             raise ValueError(f"Columns {missing} do not exist on table {table_class.__tablename__}")
-        resolved_columns = [getattr(table_class, key) for key in attr_keys]
-
-        if isinstance(attr_keys, str):
-            attr_keys = [attr_keys]
+        resolved_columns = [getattr(table_class, name) for name in physical_names]
 
         cols_fragment = "_".join(attr_keys)
         name = f"ix_{table_class.__tablename__.lower()}_{cols_fragment}"
