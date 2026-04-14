@@ -1,3 +1,4 @@
+import itertools
 import re
 from collections.abc import Callable
 from contextlib import contextmanager
@@ -1302,3 +1303,39 @@ def test_edge_list(graph_backend: BaseGraph, use_subgraph: bool) -> None:
         )
     )
     assert edge_list == expected_edge_list
+
+
+def test_sql_graph_filter_large_node_ids(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Filtering with more ids than SQLite's variable limit must not raise.
+
+    Reproduces the ``OperationalError: too many SQL variables`` failure by
+    forcing the scratch-table code path via a tiny chunk size.
+    """
+    graph = SQLGraph("sqlite", str(tmp_path / "scratch.db"))
+
+    n_nodes = 40
+    node_ids: list[int] = []
+    for t in range(n_nodes):
+        node_ids.append(graph.add_node({DEFAULT_ATTR_KEYS.T: t}))
+    for src, tgt in itertools.pairwise(node_ids):
+        graph.add_edge(src, tgt, {})
+    graph.add_overlap(node_ids[0], node_ids[1])
+    graph.add_overlap(node_ids[2], node_ids[3])
+
+    # Force scratch-table path: all three call sites gate on this size.
+    monkeypatch.setattr(SQLGraph, "_sql_chunk_size", lambda self: 4)
+
+    filtered = graph.filter(node_ids=node_ids)
+    # Confirm the scratch-table code path was taken rather than raw IN (...).
+    assert filtered._scratch_tables
+    subgraph = filtered.subgraph()
+    assert subgraph.num_nodes() == n_nodes
+    assert subgraph.num_edges() == n_nodes - 1
+
+    in_deg = graph.in_degree(node_ids)
+    out_deg = graph.out_degree(node_ids)
+    assert sum(in_deg) == n_nodes - 1
+    assert sum(out_deg) == n_nodes - 1
+
+    overlaps = graph.overlaps(node_ids)
+    assert sorted(map(tuple, overlaps)) == sorted([(node_ids[0], node_ids[1]), (node_ids[2], node_ids[3])])
