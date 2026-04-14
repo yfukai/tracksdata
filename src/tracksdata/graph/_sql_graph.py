@@ -266,11 +266,11 @@ class SQLFilter(BaseFilter):
                 schema_overrides=self._graph._polars_schema_override(self._graph.Node),
             )
 
-        nodes_attrs = unpickle_bytes_columns(nodes_attrs)
-        nodes_attrs = self._graph._cast_array_columns(self._graph.Node, nodes_attrs)
-
         if attr_keys is not None:
             nodes_attrs = nodes_attrs.select(attr_keys)
+
+        nodes_attrs = unpickle_bytes_columns(nodes_attrs)
+        nodes_attrs = self._graph._cast_columns(self._graph.Node, nodes_attrs)
 
         if unpack:
             nodes_attrs = unpack_array_attrs(nodes_attrs)
@@ -336,7 +336,7 @@ class SQLFilter(BaseFilter):
             )
 
         edges_df = unpickle_bytes_columns(edges_df)
-        edges_df = self._graph._cast_array_columns(self._graph.Edge, edges_df)
+        edges_df = self._graph._cast_columns(self._graph.Edge, edges_df)
 
         if unpack:
             edges_df = unpack_array_attrs(edges_df)
@@ -747,7 +747,7 @@ class SQLGraph(BaseGraph):
                 fields.append(pl.col(flat_col).alias(field_name))
         return pl.struct(fields)
 
-    def _cast_array_columns(self, table_class: type[DeclarativeBase], df: pl.DataFrame) -> pl.DataFrame:
+    def _cast_columns(self, table_class: type[DeclarativeBase], df: pl.DataFrame) -> pl.DataFrame:
         """Cast pickled columns to their target dtype and reconstruct struct columns."""
         schemas = self._attr_schemas_for_table(table_class)
         table_cols = table_class.__table__.columns
@@ -1327,7 +1327,7 @@ class SQLGraph(BaseGraph):
                     self.Node,
                 )
             node_df = unpickle_bytes_columns(node_df)
-            node_df = self._cast_array_columns(self.Node, node_df)
+            node_df = self._cast_columns(self.Node, node_df)
 
         if single_node:
             if not return_attrs:
@@ -1520,7 +1520,7 @@ class SQLGraph(BaseGraph):
                 schema_overrides=self._polars_schema_override(self.Node),
             )
             nodes_df = unpickle_bytes_columns(nodes_df)
-            nodes_df = self._cast_array_columns(self.Node, nodes_df)
+            nodes_df = self._cast_columns(self.Node, nodes_df)
 
         # Select using logical keys (struct columns are now reconstructed).
         if attr_keys is not None:
@@ -1546,11 +1546,12 @@ class SQLGraph(BaseGraph):
             query = sa.select(self.Edge)
 
             if attr_keys is not None:
-                attr_keys = list(dict.fromkeys(attr_keys))
+                attr_keys = set(attr_keys)
                 # we always return the source and target id by default
-                for id_key in [DEFAULT_ATTR_KEYS.EDGE_ID, DEFAULT_ATTR_KEYS.EDGE_SOURCE, DEFAULT_ATTR_KEYS.EDGE_TARGET]:
-                    if id_key not in attr_keys:
-                        attr_keys.append(id_key)
+                attr_keys.add(DEFAULT_ATTR_KEYS.EDGE_ID)
+                attr_keys.add(DEFAULT_ATTR_KEYS.EDGE_SOURCE)
+                attr_keys.add(DEFAULT_ATTR_KEYS.EDGE_TARGET)
+                attr_keys = list(attr_keys)
 
                 LOG.info("Edge attribute keys: %s", attr_keys)
 
@@ -1565,7 +1566,7 @@ class SQLGraph(BaseGraph):
                 schema_overrides=self._polars_schema_override(self.Edge),
             )
             edges_df = unpickle_bytes_columns(edges_df)
-            edges_df = self._cast_array_columns(self.Edge, edges_df)
+            edges_df = self._cast_columns(self.Edge, edges_df)
 
         if unpack:
             edges_df = unpack_array_attrs(edges_df)
