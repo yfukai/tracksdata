@@ -58,6 +58,9 @@ def _data_numpy_to_native(data: dict[str, Any]) -> None:
             data[k] = v.item()
 
 
+# Module-level (not methods) so they can be registered with ``weakref.finalize``
+# without holding a bound reference to the owning object, which would prevent
+# it from ever being collected.
 def _drop_scratch_tables(engine: sa.Engine, tables: list[sa.Table]) -> None:
     """Drop scratch tables, swallowing errors (e.g. at interpreter shutdown)."""
     for table in tables:
@@ -79,7 +82,7 @@ class _SqlIdSet:
     ``occurrences`` is the maximum number of times the id set will be expanded
     in a single compiled statement (e.g. filtering both ``source_id`` and
     ``target_id`` of an edge table counts as 2). The scratch-table cutoff is
-    scaled by it so that ``len(ids) * occurrences`` stays safely under the
+    divided by it so that ``len(ids) * occurrences`` stays safely under the
     backend's bound-variable limit.
     """
 
@@ -185,12 +188,13 @@ class SQLFilter(BaseFilter):
         node_filtered = False
 
         if node_ids is not None:
-            # ``node_ids`` may be expanded in up to three places within a
-            # single compiled statement (Node.node_id, Edge.source_id,
-            # Edge.target_id — the node-attr-filter path at L159-L160 inlines
-            # the edge query as a subquery), so the scratch-table cutoff is
-            # scaled accordingly.
-            id_set = _SqlIdSet(self._graph, node_ids, occurrences=3)
+            # The id set is expanded once for Node.node_id, plus once each for
+            # Edge.target_id / Edge.source_id when those filters are not
+            # suppressed by ``include_targets`` / ``include_sources``. The
+            # scratch-table cutoff is divided accordingly so that the total
+            # number of bound variables stays under the backend's limit.
+            occurrences = 1 + (not self._include_targets) + (not self._include_sources)
+            id_set = _SqlIdSet(self._graph, node_ids, occurrences=occurrences)
             self._id_sets.append(id_set)
 
             self._node_query = self._node_query.filter(id_set.in_clause(self._graph.Node.node_id))
@@ -262,8 +266,12 @@ class SQLFilter(BaseFilter):
 
             self._node_query = sa.union(*nodes_query)
 
-        if any(id_set.uses_scratch_table for id_set in self._id_sets):
+        if self._uses_scratch_tables():
             weakref.finalize(self, _close_id_sets, self._id_sets)
+
+    def _uses_scratch_tables(self) -> bool:
+        """Whether any id set backing this filter materialized a scratch table."""
+        return any(id_set.uses_scratch_table for id_set in self._id_sets)
 
     @cache_method
     def node_ids(self) -> list[int]:
@@ -1884,8 +1892,6 @@ class SQLGraph(BaseGraph):
         ``col.in_(sa.select(table.c.id))``. The caller owns the returned table
         and is responsible for dropping it.
         """
-        if hasattr(ids, "tolist"):
-            ids = ids.tolist()
         unique_ids = list({int(v) for v in ids})
 
         name = f"_tracksdata_ids_{uuid.uuid4().hex}"

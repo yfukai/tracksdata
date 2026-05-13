@@ -1316,6 +1316,16 @@ def _build_chain_graph(graph: SQLGraph, n_nodes: int) -> list[int]:
     return node_ids
 
 
+def _scratch_table_count(graph: SQLGraph) -> int:
+    """Count leftover ``_tracksdata_ids_*`` scratch tables in a SQLite graph."""
+    import sqlalchemy as sa
+
+    with graph._engine.connect() as conn:
+        return conn.execute(
+            sa.text("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name LIKE '_tracksdata_ids_%'")
+        ).scalar()
+
+
 def test_sql_graph_filter_large_node_ids(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Filtering with more ids than SQLite's variable limit must not raise.
 
@@ -1329,20 +1339,27 @@ def test_sql_graph_filter_large_node_ids(tmp_path, monkeypatch: pytest.MonkeyPat
     # Force scratch-table path on every call site.
     monkeypatch.setattr(SQLGraph, "_sql_chunk_size", lambda self: 4)
 
+    # Context-manager paths (overlaps, _get_degree) must drop their scratch
+    # tables once the block exits — the count should return to baseline after
+    # each call regardless of whether the scratch path fired inside.
+    assert _scratch_table_count(graph) == 0
+    in_deg = graph.in_degree(node_ids)
+    assert _scratch_table_count(graph) == 0
+    out_deg = graph.out_degree(node_ids)
+    assert _scratch_table_count(graph) == 0
+    overlaps = graph.overlaps(node_ids)
+    assert _scratch_table_count(graph) == 0
+
+    assert sum(in_deg) == n_nodes - 1
+    assert sum(out_deg) == n_nodes - 1
+    assert sorted(map(tuple, overlaps)) == sorted([(node_ids[0], node_ids[1]), (node_ids[2], node_ids[3])])
+
     filtered = graph.filter(node_ids=node_ids)
     # Confirm the scratch-table code path was taken rather than raw IN (...).
-    assert filtered._id_sets[0].uses_scratch_table
+    assert filtered._uses_scratch_tables()
     subgraph = filtered.subgraph()
     assert subgraph.num_nodes() == n_nodes
     assert subgraph.num_edges() == n_nodes - 1
-
-    in_deg = graph.in_degree(node_ids)
-    out_deg = graph.out_degree(node_ids)
-    assert sum(in_deg) == n_nodes - 1
-    assert sum(out_deg) == n_nodes - 1
-
-    overlaps = graph.overlaps(node_ids)
-    assert sorted(map(tuple, overlaps)) == sorted([(node_ids[0], node_ids[1]), (node_ids[2], node_ids[3])])
 
 
 def test_sql_graph_filter_borderline_node_ids(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -1362,7 +1379,7 @@ def test_sql_graph_filter_borderline_node_ids(tmp_path, monkeypatch: pytest.Monk
     filtered = graph.filter(node_ids=node_ids)
     # 5 ids fits under chunk_size=12 inline, but with occurrences=3 the
     # effective cutoff is 12 // 3 == 4, so scratch must kick in.
-    assert filtered._id_sets[0].uses_scratch_table
+    assert filtered._uses_scratch_tables()
     subgraph = filtered.subgraph()
     assert subgraph.num_nodes() == n_nodes
     assert subgraph.num_edges() == n_nodes - 1
