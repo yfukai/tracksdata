@@ -1353,13 +1353,21 @@ def _build_chain_graph(graph: SQLGraph, n_nodes: int) -> list[int]:
 
 
 def _scratch_table_count(graph: SQLGraph) -> int:
-    """Count leftover ``_tracksdata_ids_*`` scratch tables in a SQLite graph."""
+    """Count leftover ``_tracksdata_ids_*`` scratch tables in a SQLite graph.
+
+    Scratch tables are ``TEMPORARY`` and live in ``sqlite_temp_master`` on
+    the connection that created them; we also probe ``sqlite_master`` to
+    flag any regression that creates a permanent scratch table.
+    """
     import sqlalchemy as sa
 
+    total = 0
     with graph._engine.connect() as conn:
-        return conn.execute(
-            sa.text("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name LIKE '_tracksdata_ids_%'")
-        ).scalar()
+        for view in ("sqlite_master", "sqlite_temp_master"):
+            total += conn.execute(
+                sa.text(f"SELECT COUNT(*) FROM {view} WHERE type='table' AND name LIKE '_tracksdata_ids_%'")
+            ).scalar()
+    return total
 
 
 def test_sql_graph_filter_large_node_ids(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:

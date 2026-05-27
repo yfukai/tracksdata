@@ -60,26 +60,48 @@ def _data_numpy_to_native(data: dict[str, Any]) -> None:
             data[k] = v.item()
 
 
-# Module-level (not methods) so they can be registered with ``weakref.finalize``
-# without holding a bound reference to the owning object, which would prevent
-# it from ever being collected.
-def _drop_scratch_tables(engine: sa.Engine, tables: list[sa.Table]) -> None:
-    """Drop scratch tables, swallowing errors (e.g. at interpreter shutdown)."""
-    for table in tables:
+# Module-level helper (not a method) so it can be registered with
+# ``weakref.finalize`` without holding a bound reference to the owning
+# object, which would prevent it from ever being collected.
+def _close_filter_conn(conn: "sa.Connection") -> None:
+    """Drop scratch tables on ``conn`` and release it to the pool.
+
+    SQLAlchemy's ``Connection.close()`` returns the underlying DB-API
+    connection to the pool *without* destroying it, so any ``TEMPORARY``
+    table created during the filter's lifetime would otherwise survive
+    into the next consumer of that pooled connection. Explicitly drop our
+    own scratch tables before releasing.
+    """
+    try:
         try:
-            table.drop(engine)
+            rows = conn.exec_driver_sql(
+                "SELECT name FROM sqlite_temp_master WHERE type='table' AND name LIKE '_tracksdata_ids_%'"
+            ).fetchall()
+            for (name,) in rows:
+                conn.exec_driver_sql(f'DROP TABLE IF EXISTS "{name}"')
+            # The pool's reset-on-return rolls back the implicit transaction
+            # SQLAlchemy wraps around exec_driver_sql, undoing the DROP. Commit
+            # explicitly so the table is gone before the connection is reused.
+            conn.commit()
         except Exception as exc:
-            LOG.debug("Failed to drop scratch table %s: %s", table.name, exc)
+            LOG.debug("Failed to drop pinned filter scratch tables: %s", exc)
+        conn.close()
+    except Exception as exc:
+        LOG.debug("Failed to close pinned filter connection: %s", exc)
 
 
 class _SqlIdSet:
     """A set of ids usable in SQL ``IN`` clauses without overflowing bind limits.
 
-    Small sets compile to inline ``col.in_([...])``; larger sets are materialized
-    into a per-instance scratch table and matched via ``col.in_(SELECT id FROM
-    scratch)``. The same ``_SqlIdSet`` may be reused against multiple columns —
-    each call to :meth:`in_clause` emits a fresh expression backed by the same
-    underlying ids.
+    Small sets compile to inline ``col.in_([...])``; larger sets are
+    materialized into a ``TEMPORARY`` scratch table on the supplied
+    ``conn`` and matched via ``col.in_(SELECT id FROM scratch)``. The same
+    ``_SqlIdSet`` may be reused against multiple columns — each call to
+    :meth:`in_clause` emits a fresh expression backed by the same underlying
+    ids.
+
+    The caller owns the lifetime of ``conn``: SQLite drops the scratch table
+    automatically when the connection closes.
 
     ``occurrences`` is the maximum number of times the id set will be expanded
     in a single compiled statement (e.g. filtering both ``source_id`` and
@@ -92,17 +114,22 @@ class _SqlIdSet:
         self,
         graph: "SQLGraph",
         ids: Sequence[int],
+        conn: "sa.Connection | None" = None,
         *,
         occurrences: int = 1,
     ) -> None:
         if hasattr(ids, "tolist"):
             ids = ids.tolist()
         self._ids: list[int] = list(ids)
-        self._graph = graph
 
         limit = max(1, graph._sql_chunk_size() // max(1, occurrences))
         if len(self._ids) > limit:
-            self._scratch: sa.Table | None = graph._create_id_scratch_table(self._ids)
+            if conn is None:
+                raise ValueError(
+                    "_SqlIdSet needs a connection to materialize a scratch table "
+                    f"(len(ids)={len(self._ids)} exceeds limit {limit})"
+                )
+            self._scratch: sa.Table | None = graph._create_id_scratch_table(conn, self._ids)
         else:
             self._scratch = None
 
@@ -118,25 +145,6 @@ class _SqlIdSet:
         if self._scratch is None:
             return column.in_(self._ids)
         return column.in_(sa.select(self._scratch.c.id))
-
-    def close(self) -> None:
-        if self._scratch is not None:
-            _drop_scratch_tables(self._graph._engine, [self._scratch])
-            self._scratch = None
-
-    def __enter__(self) -> "_SqlIdSet":
-        return self
-
-    def __exit__(self, *exc: object) -> None:
-        self.close()
-
-
-def _close_id_sets(id_sets: list[_SqlIdSet]) -> None:
-    for id_set in id_sets:
-        try:
-            id_set.close()
-        except Exception as exc:
-            LOG.debug("Failed to close _SqlIdSet: %s", exc)
 
 
 def _filter_query(
@@ -169,6 +177,23 @@ def _filter_query(
 
 
 class SQLFilter(BaseFilter):
+    """SQL-backed filter over an :class:`SQLGraph`.
+
+    When ``node_ids`` is larger than the backend's bound-variable budget
+    (after accounting for how many ``IN (...)`` clauses the list expands
+    into), this filter pins a single ``sa.Connection`` from the engine pool
+    for its lifetime and materializes the ids into a ``TEMPORARY`` table on
+    that connection. All subsequent queries (``node_ids``, ``edge_ids``,
+    ``node_attrs``, ``subgraph``, ...) reuse that pinned connection so the
+    scratch table stays visible. The connection is released — and the
+    scratch table dropped — when the filter is garbage-collected.
+
+    Holding many concurrent filters that each trigger the scratch path will
+    consume one pool connection apiece (default ``QueuePool`` is 5 + 10
+    overflow). Typical one-shot usage (``g.filter(...).subgraph()``) is
+    unaffected.
+    """
+
     def __init__(
         self,
         *attr_filters: AttrComparison,
@@ -182,7 +207,7 @@ class SQLFilter(BaseFilter):
         self._node_attr_comps, self._edge_attr_comps = split_attr_comps(attr_filters)
         self._include_targets = include_targets
         self._include_sources = include_sources
-        self._id_sets: list[_SqlIdSet] = []
+        self._scratch_conn: sa.Connection | None = None
 
         # creating initial query
         self._node_query: sa.Select = sa.select(self._graph.Node)
@@ -190,14 +215,25 @@ class SQLFilter(BaseFilter):
         node_filtered = False
 
         if node_ids is not None:
+            if hasattr(node_ids, "tolist"):
+                node_ids = node_ids.tolist()
+            else:
+                node_ids = list(node_ids)
+
             # The node_ids list is expanded in up to three IN(...) clauses
             # below (once on Node, plus once each on Edge.target_id /
             # Edge.source_id unless the corresponding ``include_*`` is set).
             # Account for that so the inline/scratch cutoff stays below the
             # backend's bound-variable limit for the compiled statement.
             occurrences = 1 + int(not self._include_targets) + int(not self._include_sources)
-            id_set = _SqlIdSet(self._graph, node_ids, occurrences=occurrences)
-            self._id_sets.append(id_set)
+            cutoff = max(1, self._graph._sql_chunk_size() // max(1, occurrences))
+
+            if len(node_ids) > cutoff:
+                # Pin a connection so the TEMPORARY scratch table stays
+                # visible across every Session opened by this filter.
+                self._scratch_conn = self._graph._engine.connect()
+                weakref.finalize(self, _close_filter_conn, self._scratch_conn)
+            id_set = _SqlIdSet(self._graph, node_ids, self._scratch_conn, occurrences=occurrences)
 
             self._node_query = self._node_query.filter(id_set.in_clause(self._graph.Node.node_id))
             if not self._include_targets:
@@ -268,22 +304,27 @@ class SQLFilter(BaseFilter):
 
             self._node_query = sa.union(*nodes_query)
 
-        # Drop scratch tables when this filter is collected. Only register a
-        # finalizer if something was actually allocated, so the common
-        # small-set case stays free of weakref bookkeeping.
-        if self._uses_scratch_tables():
-            weakref.finalize(self, _close_id_sets, self._id_sets)
-
     def _uses_scratch_tables(self) -> bool:
-        """Whether any id set backing this filter materialized a scratch table."""
-        return any(id_set.uses_scratch_table for id_set in self._id_sets)
+        """Whether this filter materialized a scratch table on a pinned connection."""
+        return self._scratch_conn is not None
+
+    def _session(self) -> Session:
+        """Open a Session bound to the pinned scratch connection if any.
+
+        Otherwise pull a fresh connection from the engine pool as usual.
+        Routing every query through this helper keeps the scratch
+        ``TEMPORARY`` table visible across the filter's lifetime.
+        """
+        if self._scratch_conn is not None:
+            return Session(bind=self._scratch_conn)
+        return Session(self._graph._engine)
 
     @cache_method
     def node_ids(self) -> list[int]:
         """
         Get the ids of the nodes resulting from the filter.
         """
-        with Session(self._graph._engine) as session:
+        with self._session() as session:
             if isinstance(self._node_query, sa.CompoundSelect):
                 return session.execute(self._node_query.options(load_only(self._graph.Node.node_id))).scalars().all()
             else:
@@ -294,7 +335,7 @@ class SQLFilter(BaseFilter):
         """
         Get the ids of the edges resulting from the filter.
         """
-        with Session(self._graph._engine) as session:
+        with self._session() as session:
             if isinstance(self._edge_query, sa.CompoundSelect):
                 return session.execute(self._edge_query.options(load_only(self._graph.Edge.edge_id))).scalars().all()
             else:
@@ -303,13 +344,13 @@ class SQLFilter(BaseFilter):
     @cache_method
     def num_nodes(self) -> int:
         count_query = sa.select(sa.func.count()).select_from(self._node_query.subquery())
-        with Session(self._graph._engine) as session:
+        with self._session() as session:
             return session.execute(count_query).scalar()
 
     @cache_method
     def num_edges(self) -> int:
         count_query = sa.select(sa.func.count()).select_from(self._edge_query.subquery())
-        with Session(self._graph._engine) as session:
+        with self._session() as session:
             return session.execute(count_query).scalar()
 
     @cache_method
@@ -325,7 +366,7 @@ class SQLFilter(BaseFilter):
             attr_keys=attr_keys,
         )
 
-        with Session(self._graph._engine) as session:
+        with self._session() as session:
             nodes_attrs = pl.read_database(
                 self._graph._raw_query(query),
                 connection=session.connection(),
@@ -385,7 +426,7 @@ class SQLFilter(BaseFilter):
             ],
         )
 
-        with Session(self._graph._engine) as session:
+        with self._session() as session:
             edges_df = pl.read_database(
                 self._graph._raw_query(query),
                 connection=session.connection(),
@@ -438,7 +479,7 @@ class SQLFilter(BaseFilter):
             ],
         )
 
-        with Session(self._graph._engine) as session:
+        with self._session() as session:
             node_query = session.execute(node_query)
             edge_query = session.execute(edge_query)
 
@@ -2037,63 +2078,32 @@ class SQLGraph(BaseGraph):
             chunks.append(data_df)
         return pl.concat(chunks)
 
-    def _create_id_scratch_table(
-        self,
-        ids: Sequence[int],
-        *,
-        bind: "sa.Connection | None" = None,
-        temp: bool = False,
-    ) -> sa.Table:
-        """Create a uniquely-named helper table holding ``ids``.
+    def _create_id_scratch_table(self, conn: "sa.Connection", ids: Sequence[int]) -> sa.Table:
+        """Create a uniquely-named ``TEMPORARY`` helper table holding ``ids``.
 
         Used to work around SQL bound-variable limits when filtering by large
         ``IN (...)`` lists: callers replace ``col.in_(ids)`` with
-        ``col.in_(sa.select(table.c.id))``.
-
-        Parameters
-        ----------
-        ids
-            Ids to materialize. Duplicates are dropped.
-        bind
-            Connection to create and populate the table on. If ``None``, a
-            short-lived transaction on ``self._engine`` is used. Pass an
-            explicit connection when another database has been ``ATTACH``-ed
-            and the scratch must live in the same session.
-        temp
-            If ``True``, create the table with the ``TEMPORARY`` prefix so
-            SQLite drops it automatically on connection close. Callers that
-            need cross-connection visibility (e.g. :class:`_SqlIdSet`, reused
-            across multiple sessions) must pass ``False`` and drop the table
-            explicitly.
+        ``col.in_(sa.select(table.c.id))``. The table is bound to ``conn``;
+        SQLite auto-drops it when that connection closes, so the caller only
+        needs to keep ``conn`` alive for as long as the table is referenced.
         """
         unique_ids = list({int(v) for v in ids})
 
-        prefix = "_td_selected_" if temp else "_tracksdata_ids_"
-        name = f"{prefix}{uuid.uuid4().hex}"
+        name = f"_tracksdata_ids_{uuid.uuid4().hex}"
         table = sa.Table(
             name,
             sa.MetaData(),
             sa.Column("id", sa.BigInteger, primary_key=True),
-            prefixes=["TEMPORARY"] if temp else [],
+            prefixes=["TEMPORARY"],
         )
 
+        table.create(conn)
         chunk_size = max(1, self._sql_chunk_size())
-
-        if bind is None:
-            table.create(self._engine)
-            with self._engine.begin() as conn:
-                for i in range(0, len(unique_ids), chunk_size):
-                    conn.execute(
-                        table.insert(),
-                        [{"id": v} for v in unique_ids[i : i + chunk_size]],
-                    )
-        else:
-            table.create(bind)
-            for i in range(0, len(unique_ids), chunk_size):
-                bind.execute(
-                    table.insert(),
-                    [{"id": v} for v in unique_ids[i : i + chunk_size]],
-                )
+        for i in range(0, len(unique_ids), chunk_size):
+            conn.execute(
+                table.insert(),
+                [{"id": v} for v in unique_ids[i : i + chunk_size]],
+            )
         return table
 
     def update_node_attrs(
@@ -2363,7 +2373,7 @@ class SQLGraph(BaseGraph):
                 else:
                     # Materialize the selection in a temp table so the row
                     # filter joins instead of using an oversized IN(...) clause.
-                    selected = source_root._create_id_scratch_table(source_node_ids, bind=conn, temp=True)
+                    selected = source_root._create_id_scratch_table(conn, source_node_ids)
                     selected_subq = f'SELECT id FROM "{selected.name}"'
 
                     conn.exec_driver_sql(
