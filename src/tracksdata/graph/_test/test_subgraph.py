@@ -1416,6 +1416,37 @@ def test_sql_graph_filter_large_node_ids(tmp_path, monkeypatch: pytest.MonkeyPat
     assert _scratch_table_count(graph) == 0
 
 
+def test_sql_from_other_excludes_scratch_tables(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """``from_other`` over the SQLite attach-dump path must not leak scratch
+    tables into the destination DB.
+
+    The filtered fast path creates a ``_tracksdata_ids_<uuid>`` selection
+    table on the source engine; if the DDL replay does not exclude it the
+    destination ends up with the internal helper persisted alongside
+    ``Node`` / ``Edge`` / ``Overlap`` / ``Metadata``.
+    """
+    import sqlalchemy as sa
+
+    monkeypatch.setattr(SQLGraph, "_sql_chunk_size", lambda self: 1)
+
+    src = SQLGraph("sqlite", str(tmp_path / "src.db"))
+    node_ids = _build_chain_graph(src, n_nodes=6)
+
+    subgraph = src.filter(node_ids=node_ids).subgraph()
+    dst_db = tmp_path / "dst.db"
+    dst = SQLGraph.from_other(subgraph, drivername="sqlite", database=str(dst_db))
+
+    try:
+        with dst._engine.connect() as conn:
+            names = {
+                row[0] for row in conn.execute(sa.text("SELECT name FROM sqlite_master WHERE type='table'")).fetchall()
+            }
+    finally:
+        dst._engine.dispose()
+
+    assert names == {"Node", "Edge", "Overlap", "Metadata"}, names
+
+
 def test_sql_graph_filter_borderline_node_ids(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
     """The scratch cutoff must account for how many times ids appear per statement.
 

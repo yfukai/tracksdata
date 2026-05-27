@@ -2353,10 +2353,14 @@ class SQLGraph(BaseGraph):
                     # 1. Replicate the source schema by replaying its DDL against
                     # the attached destination. ``sqlite_master.sql`` is NULL for
                     # auto-generated objects (e.g. PK indexes), which we skip;
-                    # tables are created before indexes.
+                    # tables are created before indexes. ``_tracksdata_ids_*``
+                    # are internal scratch tables (this call's own ``selected``
+                    # plus any from live ``SQLFilter``s on the same engine) and
+                    # must not be copied into the persisted destination.
                     ddl_rows = conn.exec_driver_sql(
                         "SELECT type, sql FROM main.sqlite_master "
                         "WHERE sql IS NOT NULL AND type IN ('table', 'index') "
+                        "AND name NOT GLOB '_tracksdata_ids_*' "
                         "ORDER BY CASE type WHEN 'table' THEN 0 ELSE 1 END"
                     ).fetchall()
                     for _type, ddl in ddl_rows:
