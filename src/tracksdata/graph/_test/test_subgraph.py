@@ -1405,7 +1405,7 @@ def test_sql_graph_filter_large_node_ids(tmp_path, monkeypatch: pytest.MonkeyPat
     filtered = graph.filter(node_ids=node_ids)
     # The filter wraps node_ids in an _SQLIDSet, which must materialize to a
     # scratch table given the forced tiny chunk size.
-    assert filtered._uses_scratch_tables()
+    assert filtered._uses_scratch_table()
     subgraph = filtered.subgraph()
     assert subgraph.num_nodes() == n_nodes
     assert subgraph.num_edges() == n_nodes - 1
@@ -1464,7 +1464,7 @@ def test_sql_graph_filter_borderline_node_ids(tmp_path, monkeypatch: pytest.Monk
     filtered = graph.filter(node_ids=node_ids)
     # 5 ids fits under chunk_size=12 inline, but with occurrences=3 the
     # effective cutoff is 12 // 3 == 4, so scratch must kick in.
-    assert filtered._uses_scratch_tables()
+    assert filtered._uses_scratch_table()
     subgraph = filtered.subgraph()
     assert subgraph.num_nodes() == n_nodes
     assert subgraph.num_edges() == n_nodes - 1

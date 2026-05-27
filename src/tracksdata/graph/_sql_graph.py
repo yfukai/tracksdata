@@ -63,13 +63,12 @@ def _data_numpy_to_native(data: dict[str, Any]) -> None:
 # Module-level (not methods) so they can be registered with ``weakref.finalize``
 # without holding a bound reference to the owning object, which would prevent
 # it from ever being collected.
-def _drop_scratch_tables(engine: sa.Engine, tables: list[sa.Table]) -> None:
-    """Drop scratch tables, swallowing errors (e.g. at interpreter shutdown)."""
-    for table in tables:
-        try:
-            table.drop(engine)
-        except Exception as exc:
-            LOG.debug("Failed to drop scratch table %s: %s", table.name, exc)
+def _drop_scratch_table(engine: sa.Engine, table: sa.Table) -> None:
+    """Drop a scratch table, swallowing errors (e.g. at interpreter shutdown)."""
+    try:
+        table.drop(engine)
+    except Exception as exc:
+        LOG.debug("Failed to drop scratch table %s: %s", table.name, exc)
 
 
 class _SQLIDSet:
@@ -112,10 +111,6 @@ class _SQLIDSet:
             self._scratch = None
 
     @property
-    def ids(self) -> list[int]:
-        return self._ids
-
-    @property
     def uses_scratch_table(self) -> bool:
         return self._scratch is not None
 
@@ -126,22 +121,15 @@ class _SQLIDSet:
 
     def close(self) -> None:
         if self._scratch is not None:
-            _drop_scratch_tables(self._engine, [self._scratch])
+            _drop_scratch_table(self._engine, self._scratch)
             self._scratch = None
 
-    def __enter__(self) -> "_SQLIDSet":
-        return self
 
-    def __exit__(self, *exc: object) -> None:
-        self.close()
-
-
-def _close_id_sets(id_sets: list["_SQLIDSet"]) -> None:
-    for id_set in id_sets:
-        try:
-            id_set.close()
-        except Exception as exc:
-            LOG.debug("Failed to close _SQLIDSet: %s", exc)
+def _close_id_set(id_set: "_SQLIDSet") -> None:
+    try:
+        id_set.close()
+    except Exception as exc:
+        LOG.debug("Failed to close _SQLIDSet: %s", exc)
 
 
 def _filter_query(
@@ -198,7 +186,7 @@ class SQLFilter(BaseFilter):
         self._node_attr_comps, self._edge_attr_comps = split_attr_comps(attr_filters)
         self._include_targets = include_targets
         self._include_sources = include_sources
-        self._id_sets: list[_SQLIDSet] = []
+        self._id_set: _SQLIDSet | None = None
 
         # creating initial query
         self._node_query: sa.Select = sa.select(self._graph.Node)
@@ -213,7 +201,7 @@ class SQLFilter(BaseFilter):
             # backend's bound-variable limit for the compiled statement.
             occurrences = 1 + int(not self._include_targets) + int(not self._include_sources)
             id_set = _SQLIDSet(self._graph, node_ids, occurrences=occurrences)
-            self._id_sets.append(id_set)
+            self._id_set = id_set
 
             self._node_query = self._node_query.filter(id_set.in_clause(self._graph.Node.node_id))
             if not self._include_targets:
@@ -284,15 +272,15 @@ class SQLFilter(BaseFilter):
 
             self._node_query = sa.union(*nodes_query)
 
-        # Drop scratch tables when this filter is collected. Only register a
-        # finalizer if something was actually allocated, so the common
-        # small-set case stays free of weakref bookkeeping.
-        if self._uses_scratch_tables():
-            weakref.finalize(self, _close_id_sets, self._id_sets)
+        # Drop the scratch table when this filter is collected. Only register a
+        # finalizer if one was actually allocated, so the common small-set case
+        # stays free of weakref bookkeeping.
+        if self._uses_scratch_table():
+            weakref.finalize(self, _close_id_set, self._id_set)
 
-    def _uses_scratch_tables(self) -> bool:
-        """Whether any id set backing this filter materialized a scratch table."""
-        return any(id_set.uses_scratch_table for id_set in self._id_sets)
+    def _uses_scratch_table(self) -> bool:
+        """Whether the id set backing this filter materialized a scratch table."""
+        return self._id_set is not None and self._id_set.uses_scratch_table
 
     @cache_method
     def node_ids(self) -> list[int]:
@@ -2403,7 +2391,7 @@ class SQLGraph(BaseGraph):
             return cls(**kwargs)
         finally:
             if selected is not None:
-                _drop_scratch_tables(source_root._engine, [selected])
+                _drop_scratch_table(source_root._engine, selected)
 
     def __getstate__(self) -> dict:
         data_dict = self.__dict__.copy()
