@@ -1402,7 +1402,7 @@ def test_sql_graph_filter_large_node_ids(tmp_path, monkeypatch: pytest.MonkeyPat
     assert sorted(map(tuple, overlaps)) == sorted([(node_ids[0], node_ids[1]), (node_ids[2], node_ids[3])])
 
     filtered = graph.filter(node_ids=node_ids)
-    # The filter wraps node_ids in an _SqlIdSet, which must materialize to a
+    # The filter wraps node_ids in an _SQLIDSet, which must materialize to a
     # scratch table given the forced tiny chunk size.
     assert filtered._uses_scratch_tables()
     subgraph = filtered.subgraph()

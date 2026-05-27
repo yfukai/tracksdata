@@ -72,7 +72,7 @@ def _drop_scratch_tables(engine: sa.Engine, tables: list[sa.Table]) -> None:
             LOG.debug("Failed to drop scratch table %s: %s", table.name, exc)
 
 
-class _SqlIdSet:
+class _SQLIDSet:
     """A set of ids usable in SQL ``IN`` clauses without overflowing bind limits.
 
     Small sets compile to inline ``col.in_([...])``; larger sets are materialized
@@ -99,7 +99,11 @@ class _SqlIdSet:
         if hasattr(ids, "tolist"):
             ids = ids.tolist()
         self._ids: list[int] = list(ids)
-        self._graph = graph
+        # Hold the engine, not the graph, so this set does not participate in
+        # the graph -> SQLFilter -> _SQLIDSet -> graph reference cycle.
+        # Otherwise the scratch table would only be dropped after Python's
+        # cycle GC runs, delaying cleanup in long-running processes.
+        self._engine = graph._engine
 
         limit = max(1, graph._sql_chunk_size() // max(1, occurrences))
         if len(self._ids) > limit:
@@ -122,22 +126,22 @@ class _SqlIdSet:
 
     def close(self) -> None:
         if self._scratch is not None:
-            _drop_scratch_tables(self._graph._engine, [self._scratch])
+            _drop_scratch_tables(self._engine, [self._scratch])
             self._scratch = None
 
-    def __enter__(self) -> "_SqlIdSet":
+    def __enter__(self) -> "_SQLIDSet":
         return self
 
     def __exit__(self, *exc: object) -> None:
         self.close()
 
 
-def _close_id_sets(id_sets: list["_SqlIdSet"]) -> None:
+def _close_id_sets(id_sets: list["_SQLIDSet"]) -> None:
     for id_set in id_sets:
         try:
             id_set.close()
         except Exception as exc:
-            LOG.debug("Failed to close _SqlIdSet: %s", exc)
+            LOG.debug("Failed to close _SQLIDSet: %s", exc)
 
 
 def _filter_query(
@@ -194,7 +198,7 @@ class SQLFilter(BaseFilter):
         self._node_attr_comps, self._edge_attr_comps = split_attr_comps(attr_filters)
         self._include_targets = include_targets
         self._include_sources = include_sources
-        self._id_sets: list[_SqlIdSet] = []
+        self._id_sets: list[_SQLIDSet] = []
 
         # creating initial query
         self._node_query: sa.Select = sa.select(self._graph.Node)
@@ -208,7 +212,7 @@ class SQLFilter(BaseFilter):
             # Account for that so the inline/scratch cutoff stays below the
             # backend's bound-variable limit for the compiled statement.
             occurrences = 1 + int(not self._include_targets) + int(not self._include_sources)
-            id_set = _SqlIdSet(self._graph, node_ids, occurrences=occurrences)
+            id_set = _SQLIDSet(self._graph, node_ids, occurrences=occurrences)
             self._id_sets.append(id_set)
 
             self._node_query = self._node_query.filter(id_set.in_clause(self._graph.Node.node_id))
@@ -2332,7 +2336,14 @@ class SQLGraph(BaseGraph):
             # Materialize the selection in a per-instance scratch table so the
             # row filter joins instead of expanding into an oversized IN(...).
             # The table lives on ``source_root._engine`` (visible from the
-            # ATTACH-ing connection) and is dropped unconditionally below.
+            # ATTACH-ing connection) and is dropped in the outer ``finally``.
+            #
+            # We deliberately do not use a ``TEMPORARY`` table here even
+            # though this function holds a single connection. SQLAlchemy's
+            # ``Connection.close()`` only returns the underlying DB-API
+            # connection to the pool, it does not destroy it, so a TEMP table
+            # would survive into the next consumer of that same pooled SQLite
+            # connection. A regular table dropped explicitly avoids that.
             selected = source_root._create_id_scratch_table(source_node_ids)
 
         try:
