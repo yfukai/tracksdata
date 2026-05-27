@@ -1355,9 +1355,10 @@ def _build_chain_graph(graph: SQLGraph, n_nodes: int) -> list[int]:
 def _scratch_table_count(graph: SQLGraph) -> int:
     """Count leftover ``_tracksdata_ids_*`` scratch tables in a SQLite graph.
 
-    Scratch tables are ``TEMPORARY`` and live in ``sqlite_temp_master`` on
-    the connection that created them; we also probe ``sqlite_master`` to
-    flag any regression that creates a permanent scratch table.
+    Scratch tables are regular (engine-wide) tables and live in
+    ``sqlite_master``; we also probe ``sqlite_temp_master`` to flag any
+    regression that creates a leaky ``TEMPORARY`` scratch table on a
+    pooled connection.
     """
     import sqlalchemy as sa
 
