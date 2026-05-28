@@ -12,6 +12,14 @@ They can be used to filter elements in the graph as:
 graph.filter(NodeAttr("t") == 1).subgraph()
 ```
 
+Boolean combinations of comparisons can be expressed with `|` (or), `^` (xor),
+`&` (and) and `~` (not). Comparisons passed as multiple positional arguments to
+`filter()` are still implicitly AND-ed together.
+```python
+graph.filter((NodeAttr("t") == 1) | (NodeAttr("t") == 2)).subgraph()
+graph.filter(~(NodeAttr("t") == 0)).subgraph()
+```
+
 Or to create complex expression when solving the tracking problem:
 ```python
 NearestNeighborsSolver(-Attr("iou") * (-Attr("distance") / 30.0).exp())
@@ -32,9 +40,14 @@ Scalar = int | float | str | bool | complex | np.number
 ExprInput = Union[str, Scalar, "Attr", Expr, "AttrComparison"]
 MembershipExprInput = Sequence[Scalar]
 
+# Logical operators supported by AttrFilter compounds.
+_FILTER_LOGICAL_OPS = ("and", "or", "xor", "not")
+FilterInput = Union["AttrComparison", "AttrFilter"]
+
 
 __all__ = [
     "AttrComparison",
+    "AttrFilter",
     "EdgeAttr",
     "NodeAttr",
     "attr_comps_to_strs",
@@ -662,67 +675,244 @@ class EdgeAttr(Attr):
     """
 
 
-def split_attr_comps(attr_comps: Sequence[AttrComparison]) -> tuple[list[AttrComparison], list[AttrComparison]]:
+_FILTER_OP_SYMBOLS = {"and": "&", "or": "|", "xor": "^", "not": "~"}
+
+
+class AttrFilter:
     """
-    Split a list of attribute comparisons into node and edge attribute comparisons.
+    A compound boolean combination of [AttrComparison][tracksdata.attrs.AttrComparison]
+    (or nested `AttrFilter`) operands, used to express OR / XOR / AND / NOT
+    relationships when filtering nodes or edges in a graph.
+
+    Use Python's bitwise operators on `AttrComparison` (or `AttrFilter`)
+    instances to build compounds:
+
+    ```python
+    graph.filter((NodeAttr("t") == 1) | (NodeAttr("t") == 2))
+    graph.filter(~(NodeAttr("t") == 0))
+    graph.filter((EdgeAttr("w") > 0.5) ^ (EdgeAttr("w") < -0.5))
+    ```
+
+    All leaves of a single `AttrFilter` must reference attributes of the same
+    kind (either all [NodeAttr][tracksdata.attrs.NodeAttr] or all
+    [EdgeAttr][tracksdata.attrs.EdgeAttr]). Mixing node and edge attributes
+    inside one compound is not supported because it would require joining the
+    node and edge tables in a way that conflicts with the existing AND-based
+    filter semantics. Top-level node/edge filters can still be combined via
+    positional arguments to `graph.filter()` (implicit AND).
 
     Parameters
     ----------
-    attr_comps : Sequence[AttrComparison]
-        The attribute comparisons to split.
+    op : str
+        Logical operator, one of `"and"`, `"or"`, `"xor"`, `"not"`.
+    operands : Sequence[AttrComparison | AttrFilter]
+        Operands. `"not"` requires exactly one operand; the others require at
+        least two.
+    """
+
+    def __init__(self, op: str, operands: Sequence[FilterInput]) -> None:
+        if op not in _FILTER_LOGICAL_OPS:
+            raise ValueError(f"Unknown logical operator '{op}'. Expected one of {_FILTER_LOGICAL_OPS}.")
+        operands = list(operands)
+        for o in operands:
+            if not isinstance(o, AttrComparison | AttrFilter):
+                raise TypeError(f"AttrFilter operands must be AttrComparison or AttrFilter, got {type(o).__name__}.")
+        if op == "not":
+            if len(operands) != 1:
+                raise ValueError("'not' filter requires exactly one operand.")
+        else:
+            if len(operands) < 2:
+                raise ValueError(f"'{op}' filter requires at least two operands.")
+        self.op = op
+        self.operands = operands
+
+    def __and__(self, other: FilterInput) -> "AttrFilter":
+        return AttrFilter("and", [self, other])
+
+    def __rand__(self, other: FilterInput) -> "AttrFilter":
+        return AttrFilter("and", [other, self])
+
+    def __or__(self, other: FilterInput) -> "AttrFilter":
+        return AttrFilter("or", [self, other])
+
+    def __ror__(self, other: FilterInput) -> "AttrFilter":
+        return AttrFilter("or", [other, self])
+
+    def __xor__(self, other: FilterInput) -> "AttrFilter":
+        return AttrFilter("xor", [self, other])
+
+    def __rxor__(self, other: FilterInput) -> "AttrFilter":
+        return AttrFilter("xor", [other, self])
+
+    def __invert__(self) -> "AttrFilter":
+        return AttrFilter("not", [self])
+
+    def leaves(self) -> list["AttrComparison"]:
+        """Flatten the filter tree to its leaf comparisons."""
+        out: list[AttrComparison] = []
+        for o in self.operands:
+            if isinstance(o, AttrFilter):
+                out.extend(o.leaves())
+            else:
+                out.append(o)
+        return out
+
+    @property
+    def columns(self) -> list[str]:
+        return list(dict.fromkeys(leaf.column for leaf in self.leaves()))
+
+    def __repr__(self) -> str:
+        if self.op == "not":
+            return f"~{self.operands[0]!r}"
+        sep = f" {_FILTER_OP_SYMBOLS[self.op]} "
+        return "(" + sep.join(repr(o) for o in self.operands) + ")"
+
+
+def _filter_attr_kind(f: FilterInput) -> type[Attr]:
+    """Return the leaf-attribute kind (NodeAttr / EdgeAttr) of a filter.
+
+    Raises ValueError if the filter mixes node and edge attributes.
+    """
+    if isinstance(f, AttrComparison):
+        if isinstance(f.attr, NodeAttr):
+            return NodeAttr
+        if isinstance(f.attr, EdgeAttr):
+            return EdgeAttr
+        raise ValueError(f"Expected comparisons of 'NodeAttr' or 'EdgeAttr' objects, got {type(f.attr)}")
+
+    kinds = {_filter_attr_kind(o) for o in f.operands}
+    if len(kinds) > 1:
+        raise ValueError(
+            "A single AttrFilter compound cannot mix NodeAttr and EdgeAttr comparisons. "
+            "Combine node and edge filters via separate positional arguments to graph.filter()."
+        )
+    return kinds.pop()
+
+
+# --- AttrComparison boolean operator overrides --------------------------------
+# These run after _setup_ops() and replace the auto-generated `__and__`,
+# `__or__`, `__xor__` on AttrComparison so that combining comparisons builds an
+# AttrFilter compound instead of an Attr expression. The boolean methods on
+# `Attr` itself are unchanged.
+
+
+def _attr_comparison_logical(self: "AttrComparison", other: Any, op_name: str, py_op: Callable) -> Any:
+    if isinstance(other, AttrComparison | AttrFilter):
+        return AttrFilter(op_name, [self, other])
+    return self._delegate_operator(other, py_op, reverse=False)
+
+
+def _attr_comparison_r_logical(self: "AttrComparison", other: Any, op_name: str, py_op: Callable) -> Any:
+    if isinstance(other, AttrComparison | AttrFilter):
+        return AttrFilter(op_name, [other, self])
+    return self._delegate_operator(other, py_op, reverse=True)
+
+
+AttrComparison.__and__ = functools.partialmethod(_attr_comparison_logical, op_name="and", py_op=operator.and_)
+AttrComparison.__rand__ = functools.partialmethod(_attr_comparison_r_logical, op_name="and", py_op=operator.and_)
+AttrComparison.__or__ = functools.partialmethod(_attr_comparison_logical, op_name="or", py_op=operator.or_)
+AttrComparison.__ror__ = functools.partialmethod(_attr_comparison_r_logical, op_name="or", py_op=operator.or_)
+AttrComparison.__xor__ = functools.partialmethod(_attr_comparison_logical, op_name="xor", py_op=operator.xor)
+AttrComparison.__rxor__ = functools.partialmethod(_attr_comparison_r_logical, op_name="xor", py_op=operator.xor)
+
+
+def _attr_comparison_invert(self: "AttrComparison") -> "AttrFilter":
+    return AttrFilter("not", [self])
+
+
+AttrComparison.__invert__ = _attr_comparison_invert
+
+
+def split_attr_comps(
+    attr_comps: Sequence[FilterInput],
+) -> tuple[list[FilterInput], list[FilterInput]]:
+    """
+    Split a list of attribute comparisons (or compound filters) into node and
+    edge groups based on the kind of their leaf comparisons.
+
+    Parameters
+    ----------
+    attr_comps : Sequence[AttrComparison | AttrFilter]
+        The attribute comparisons or compound filters to split.
 
     Returns
     -------
-    tuple[list[AttrComparison], list[AttrComparison]]
-        A tuple of lists of node and edge attribute comparisons.
+    tuple[list[AttrComparison | AttrFilter], list[AttrComparison | AttrFilter]]
+        A tuple of lists of node and edge filters.
     """
-    node_attr_comps = []
-    edge_attr_comps = []
+    node_attr_comps: list[FilterInput] = []
+    edge_attr_comps: list[FilterInput] = []
 
     for attr_comp in attr_comps:
-        if isinstance(attr_comp.attr, NodeAttr):
+        kind = _filter_attr_kind(attr_comp)
+        if kind is NodeAttr:
             node_attr_comps.append(attr_comp)
-        elif isinstance(attr_comp.attr, EdgeAttr):
-            edge_attr_comps.append(attr_comp)
         else:
-            raise ValueError(f"Expected comparisons of 'NodeAttr' or 'EdgeAttr' objects, got {type(attr_comp.attr)}")
+            edge_attr_comps.append(attr_comp)
 
     return node_attr_comps, edge_attr_comps
 
 
-def attr_comps_to_strs(attr_comps: Sequence[AttrComparison]) -> list[str]:
+def attr_comps_to_strs(attr_comps: Sequence[FilterInput]) -> list[str]:
     """
-    Convert a list of attribute comparisons to a list of strings.
+    Convert a list of attribute comparisons (or compound filters) to a list of
+    column names involved in them.
 
     Parameters
     ----------
-    attr_comps : Sequence[AttrComparison]
-        The attribute comparisons to convert to strings.
+    attr_comps : Sequence[AttrComparison | AttrFilter]
+        The filters to extract column names from.
 
     Returns
     -------
     list[str]
-        The attribute comparisons as strings.
+        The column names referenced by the filters, deduplicated while
+        preserving order.
     """
-    return [str(attr_comp.column) for attr_comp in attr_comps]
+    out: list[str] = []
+    for attr_comp in attr_comps:
+        if isinstance(attr_comp, AttrFilter):
+            out.extend(attr_comp.columns)
+        else:
+            out.append(str(attr_comp.column))
+    return list(dict.fromkeys(out))
+
+
+def _polars_filter_expr(f: FilterInput, df: pl.DataFrame) -> pl.Expr | pl.Series:
+    """Translate a single AttrComparison/AttrFilter to a polars expression."""
+    if isinstance(f, AttrComparison):
+        return f.op(df[str(f.column)], f.other)
+
+    if f.op == "not":
+        return ~_polars_filter_expr(f.operands[0], df)
+
+    child_exprs = [_polars_filter_expr(o, df) for o in f.operands]
+    if f.op == "and":
+        return functools.reduce(operator.and_, child_exprs)
+    if f.op == "or":
+        return functools.reduce(operator.or_, child_exprs)
+    # xor
+    return functools.reduce(operator.xor, child_exprs)
 
 
 def polars_reduce_attr_comps(
     df: pl.DataFrame,
-    attr_comps: Sequence[AttrComparison],
+    attr_comps: Sequence[FilterInput],
     reduce_op: Callable[[Expr, Expr], Expr],
 ) -> pl.Expr:
     """
-    Reduce a list of attribute comparisons into a single polars expression.
+    Reduce a list of attribute comparisons (or compound filters) into a single
+    polars expression, combined with `reduce_op` at the top level (AND-ed by
+    default in callers).
 
     Parameters
     ----------
     df : pl.DataFrame
         The dataframe to reduce the attribute comparisons on.
-    attr_comps : Sequence[AttrComparison]
-        The attribute comparisons to reduce.
+    attr_comps : Sequence[AttrComparison | AttrFilter]
+        The filters to reduce.
     reduce_op : Callable[[Expr, Expr], Expr]
-        The operation to reduce the attribute comparisons with.
+        The operation to reduce the top-level filters with.
 
     Returns
     -------
@@ -733,4 +923,4 @@ def polars_reduce_attr_comps(
         # Return True for all rows by using the first column as a reference
         raise ValueError("No attribute comparisons provided.")
 
-    return pl.reduce(reduce_op, [attr_comp.op(df[str(attr_comp.column)], attr_comp.other) for attr_comp in attr_comps])
+    return pl.reduce(reduce_op, [_polars_filter_expr(f, df) for f in attr_comps])
