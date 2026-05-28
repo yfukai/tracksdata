@@ -70,6 +70,12 @@ def _resolve_attr_filter_column(
     For struct field paths (e.g. ``NodeAttr("m").struct.field("score")``), the
     field path is joined with ``STRUCT_FIELD_SEP`` to form the physical flat
     column name (e.g. ``m__score``), which is a native SQL column.
+
+    Struct attributes are stored as one physical SQL column per leaf field
+    (not as JSON blobs) so that filtering on a struct field is a native SQL
+    predicate on a leaf column rather than a server-side JSON path lookup —
+    the parent ``Attr``'s ``root_column`` and ``field_path`` provide the
+    logical-to-physical mapping.
     """
     if not attr_filter.attr.field_path:
         return getattr(table, str(attr_filter.column))
@@ -652,6 +658,8 @@ class SQLGraph(BaseGraph):
 
         # Compute the set of flat physical columns that belong to known struct schemas,
         # so the legacy fallback below does not register them as independent logical keys.
+        # Without this, reloading a DB with a struct attribute "m" would re-expose
+        # "m__score" / "m__label" as their own top-level attributes.
         known_flat_cols: set[str] = set()
         for schema in schemas.values():
             if isinstance(schema.dtype, pl.Struct):
@@ -1616,7 +1624,13 @@ class SQLGraph(BaseGraph):
         table_class: type[DeclarativeBase],
     ) -> list[Any]:
         """Return SQLAlchemy column objects for *logical_keys*, expanding struct keys
-        into their flat physical leaf columns so the SQL query fetches all necessary data."""
+        into their flat physical leaf columns so the SQL query fetches all necessary data.
+
+        Logical keys are what the user sees (``"measurements"``); physical columns are
+        what actually exists in the table (``"measurements__score"``, ...). The two
+        diverge only for struct attributes; ``_cast_columns`` reassembles the struct
+        on the result DataFrame.
+        """
         schemas = self._attr_schemas_for_table(table_class)
         cols: list[Any] = []
         for key in logical_keys:
@@ -1638,6 +1652,9 @@ class SQLGraph(BaseGraph):
             Whether to include NODE_ID in the returned keys. Defaults to False.
             If True, NODE_ID will be included in the list.
         """
+        # Read from schemas (logical keys), not __table__.columns — the latter exposes
+        # struct leaves (``measurements__score``) as separate keys, but the public API
+        # should only surface the parent ``measurements``.
         keys = list(self._node_attr_schemas().keys())
         if not return_ids and DEFAULT_ATTR_KEYS.NODE_ID in keys:
             keys.remove(DEFAULT_ATTR_KEYS.NODE_ID)

@@ -129,6 +129,9 @@ class AttrComparison:
             raise ValueError(f"Comparison operators are not supported for multiple columns. Found {columns}.")
 
         self.attr = attr
+        # Prefer the explicitly tracked root_column so struct-field comparisons
+        # (e.g. `NodeAttr("m").struct.field("x") == 1`) record the parent storage
+        # column ("m"), letting backends remap to their physical layout via field_path.
         self.column = attr.root_column if attr.root_column is not None else columns[0]
         self.op = op
 
@@ -203,13 +206,21 @@ class AttrComparison:
 
 
 class _StructNamespace:
-    """Wrapper around polars struct namespace that preserves Attr semantics."""
+    """Wrapper around polars struct namespace that preserves Attr semantics.
+
+    Polars' own ``Expr.struct.field(name)`` only updates the underlying expression;
+    it loses the parent column identity, which backends need to map a filter back
+    to its physical storage (e.g. SQL flat columns, dict lookups in rustworkx).
+    This wrapper proxies the namespace while threading ``root_column`` and
+    ``field_path`` through ``.field(...)`` calls.
+    """
 
     def __init__(self, attr: "Attr") -> None:
         self._attr = attr
         self._namespace = attr.expr.struct
 
     def field(self, name: str) -> "Attr":
+        # preserve_field_path keeps the existing root/path before appending the new field.
         out = self._attr._wrap(self._namespace.field(name), preserve_field_path=True)
         if isinstance(out, Attr):
             out._append_field_path(name)
@@ -811,4 +822,8 @@ def polars_reduce_attr_comps(
         # Return True for all rows by using the first column as a reference
         raise ValueError("No attribute comparisons provided.")
 
+    # Apply each comparison against the full Attr expression rather than the bare
+    # column from the dataframe. This matters for struct-field accesses: the
+    # expression already drills into the struct (e.g. `pl.col("m").struct.field("x")`),
+    # while `df[column]` would yield the whole struct and the comparison would fail.
     return pl.reduce(reduce_op, [attr_comp.op(attr_comp.attr.expr, attr_comp.other) for attr_comp in attr_comps])

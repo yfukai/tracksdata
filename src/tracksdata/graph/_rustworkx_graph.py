@@ -89,6 +89,11 @@ def _create_filter_func(
     LOG.info(f"Creating filter function for {attr_comps}")
 
     def _extract_field_path(value: Any, field_path: tuple[str, ...]) -> Any:
+        # Rustworkx stores attributes as plain Python objects (typically dicts for
+        # struct attrs) rather than polars columns, so struct-field filters can't be
+        # pushed down into an expression — we walk the path manually here. We also
+        # accept sequence- and attribute-style access to keep this robust for users
+        # who pass nested dataclasses or tuples through the attr dict.
         for field in field_path:
             if value is None:
                 return None
