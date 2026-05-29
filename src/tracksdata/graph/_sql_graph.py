@@ -30,7 +30,11 @@ from tracksdata.utils._dtypes import (
     sqlalchemy_type_to_polars_dtype,
 )
 from tracksdata.utils._logging import LOG
-from tracksdata.utils._signal import is_signal_on
+from tracksdata.utils._signal import (
+    emit_node_added_events,
+    emit_node_updated_events,
+    is_signal_on,
+)
 
 if TYPE_CHECKING:
     from tracksdata.graph._graph_view import GraphView
@@ -792,31 +796,8 @@ class SQLGraph(BaseGraph):
             if "t" not in attrs:
                 raise ValueError(f"Node attributes must have a 't' key. Got {attrs.keys()}")
 
-        time = attrs["t"]
-
-        if index is None:
-            default_node_id = (time * self.node_id_time_multiplier) - 1
-            node_id = self._max_id_per_time.get(time, default_node_id) + 1
-        else:
-            node_id = index
-
-        node = self.Node(
-            node_id=node_id,
-            **attrs,
-        )
-
-        with Session(self._engine) as session:
-            session.add(node)
-            session.commit()
-
-        # Update max_id tracking only if using auto-generated IDs
-        if index is None:
-            self._max_id_per_time[time] = node_id
-
-        if is_signal_on(self.node_added):
-            self.node_added.emit(node_id, attrs)
-
-        return node_id
+        indices = None if index is None else [index]
+        return self.bulk_add_nodes([attrs], indices=indices)[0]
 
     def bulk_add_nodes(
         self,
@@ -864,6 +845,7 @@ class SQLGraph(BaseGraph):
         self._validate_indices_length(nodes, indices)
 
         node_ids = []
+        insert_rows = []
         for i, node in enumerate(nodes):
             time = node["t"]
 
@@ -875,15 +857,12 @@ class SQLGraph(BaseGraph):
             else:
                 node_id = indices[i]
 
-            node[DEFAULT_ATTR_KEYS.NODE_ID] = node_id
             node_ids.append(node_id)
+            insert_rows.append({**node, DEFAULT_ATTR_KEYS.NODE_ID: node_id})
 
-        self._chunked_sa_write(Session.bulk_insert_mappings, nodes, self.Node)
+        self._chunked_sa_write(Session.bulk_insert_mappings, insert_rows, self.Node)
 
-        if is_signal_on(self.node_added):
-            for node_id, node_attrs in zip(node_ids, nodes, strict=True):
-                new_attrs = {key: value for key, value in node_attrs.items() if key != DEFAULT_ATTR_KEYS.NODE_ID}
-                self.node_added.emit(node_id, new_attrs)
+        emit_node_added_events(self.node_added, zip(node_ids, nodes, strict=True))
 
         return node_ids
 
@@ -905,32 +884,67 @@ class SQLGraph(BaseGraph):
         ValueError
             If the node_id does not exist in the graph.
         """
+        self.bulk_remove_nodes([node_id])
+
+    def bulk_remove_nodes(self, node_ids: Sequence[int]) -> None:
+        """
+        Remove multiple nodes from the graph, along with their incident edges and overlaps.
+
+        Parameters
+        ----------
+        node_ids : Sequence[int]
+            The IDs of the nodes to remove.
+
+        Raises
+        ------
+        ValueError
+            If any node_id does not exist in the graph.
+        """
+        if hasattr(node_ids, "tolist"):
+            node_ids = node_ids.tolist()
+        else:
+            node_ids = list(node_ids)
+
+        if len(node_ids) == 0:
+            return
+
+        emit_signal = is_signal_on(self.node_removed)
+        chunk_size = self._sql_chunk_size()
+
         with Session(self._engine) as session:
-            # Check if the node exists
-            node = session.query(self.Node).filter(self.Node.node_id == node_id).first()
-            if node is None:
-                raise ValueError(f"Node {node_id} does not exist in the graph.")
-            old_attrs = {key: getattr(node, key) for key in self.node_attr_keys()}
-            self.node_removed.emit(node_id, old_attrs)
+            # Validate that all requested node ids exist before doing any destructive work.
+            existing: set[int] = set()
+            for i in range(0, len(node_ids), chunk_size):
+                chunk = node_ids[i : i + chunk_size]
+                existing.update(
+                    row[0] for row in session.query(self.Node.node_id).filter(self.Node.node_id.in_(chunk)).all()
+                )
+            missing = [nid for nid in node_ids if nid not in existing]
+            if missing:
+                raise ValueError(f"Node {missing[0]} does not exist in the graph.")
 
-            if is_signal_on(self.node_removed):
-                old_attrs = {key: getattr(node, key) for key in self.node_attr_keys()}
+            old_attrs_per_node: dict[int, dict[str, Any]] = {}
+            if emit_signal:
+                attr_keys = self.node_attr_keys()
+                for i in range(0, len(node_ids), chunk_size):
+                    chunk = node_ids[i : i + chunk_size]
+                    for node in session.query(self.Node).filter(self.Node.node_id.in_(chunk)).all():
+                        old_attrs_per_node[node.node_id] = {key: getattr(node, key) for key in attr_keys}
 
-            # Remove all edges where this node is source or target
-            session.query(self.Edge).filter(
-                sa.or_(self.Edge.source_id == node_id, self.Edge.target_id == node_id)
-            ).delete()
-
-            # Remove all overlaps involving this node
-            session.query(self.Overlap).filter(
-                sa.or_(self.Overlap.source_id == node_id, self.Overlap.target_id == node_id)
-            ).delete()
-
-            # Remove the node itself
-            session.delete(node)
+            for i in range(0, len(node_ids), chunk_size):
+                chunk = node_ids[i : i + chunk_size]
+                session.query(self.Edge).filter(
+                    sa.or_(self.Edge.source_id.in_(chunk), self.Edge.target_id.in_(chunk))
+                ).delete(synchronize_session=False)
+                session.query(self.Overlap).filter(
+                    sa.or_(self.Overlap.source_id.in_(chunk), self.Overlap.target_id.in_(chunk))
+                ).delete(synchronize_session=False)
+                session.query(self.Node).filter(self.Node.node_id.in_(chunk)).delete(synchronize_session=False)
             session.commit()
-            if is_signal_on(self.node_removed):
-                self.node_removed.emit(node_id, old_attrs)
+
+        if emit_signal:
+            for nid in node_ids:
+                self.node_removed.emit(nid, old_attrs_per_node[nid])
 
     def add_edge(
         self,
@@ -980,18 +994,12 @@ class SQLGraph(BaseGraph):
         if hasattr(target_id, "item"):
             target_id = target_id.item()
 
-        edge = self.Edge(
-            source_id=source_id,
-            target_id=target_id,
+        edge = {
+            DEFAULT_ATTR_KEYS.EDGE_SOURCE: source_id,
+            DEFAULT_ATTR_KEYS.EDGE_TARGET: target_id,
             **attrs,
-        )
-
-        with Session(self._engine) as session:
-            session.add(edge)
-            session.commit()
-            edge_id = edge.edge_id
-
-        return edge_id
+        }
+        return self.bulk_add_edges([edge], return_ids=True)[0]
 
     def bulk_add_edges(
         self,
@@ -1974,18 +1982,10 @@ class SQLGraph(BaseGraph):
             new_attrs_by_id = new_df.rows_by_key(
                 key=DEFAULT_ATTR_KEYS.NODE_ID, named=True, unique=True, include_key=True
             )
-
-            for node_id in updated_node_ids:
-                self.node_updated.emit(node_id, old_attrs_by_id[node_id], new_attrs_by_id[node_id])
-
-            new_df = self.filter(node_ids=updated_node_ids).node_attrs(
-                attr_keys=[DEFAULT_ATTR_KEYS.NODE_ID, *attr_keys]
+            emit_node_updated_events(
+                self.node_updated,
+                ((node_id, old_attrs_by_id[node_id], new_attrs_by_id[node_id]) for node_id in updated_node_ids),
             )
-            new_attrs_by_id = new_df.rows_by_key(
-                key=DEFAULT_ATTR_KEYS.NODE_ID, named=True, unique=True, include_key=True
-            )
-            for node_id in updated_node_ids:
-                self.node_updated.emit(node_id, old_attrs_by_id[node_id], new_attrs_by_id[node_id])
 
     def update_edge_attrs(
         self,
@@ -2384,21 +2384,60 @@ class SQLGraph(BaseGraph):
         """
         Remove an edge from the graph either by its ID or by its endpoints.
         """
+        if edge_id is not None:
+            self.bulk_remove_edges([edge_id])
+            return
+
+        if source_id is None or target_id is None:
+            raise ValueError("Provide either edge_id or both source_id and target_id.")
+
         with Session(self._engine) as session:
-            if edge_id is None:
-                if source_id is None or target_id is None:
-                    raise ValueError("Provide either edge_id or both source_id and target_id.")
-                deleted = (
-                    session.query(self.Edge)
-                    .filter(self.Edge.source_id == source_id, self.Edge.target_id == target_id)
-                    .delete()
+            deleted = (
+                session.query(self.Edge)
+                .filter(self.Edge.source_id == source_id, self.Edge.target_id == target_id)
+                .delete()
+            )
+            if not deleted:
+                raise ValueError(f"Edge {source_id}->{target_id} does not exist in the graph.")
+            session.commit()
+
+    def bulk_remove_edges(self, edge_ids: Sequence[int]) -> None:
+        """
+        Remove multiple edges from the graph by their edge IDs.
+
+        Parameters
+        ----------
+        edge_ids : Sequence[int]
+            The IDs of the edges to remove.
+
+        Raises
+        ------
+        ValueError
+            If any edge_id does not exist in the graph.
+        """
+        if hasattr(edge_ids, "tolist"):
+            edge_ids = edge_ids.tolist()
+        else:
+            edge_ids = list(edge_ids)
+
+        if len(edge_ids) == 0:
+            return
+
+        chunk_size = self._sql_chunk_size()
+        with Session(self._engine) as session:
+            existing: set[int] = set()
+            for i in range(0, len(edge_ids), chunk_size):
+                chunk = edge_ids[i : i + chunk_size]
+                existing.update(
+                    row[0] for row in session.query(self.Edge.edge_id).filter(self.Edge.edge_id.in_(chunk)).all()
                 )
-                if not deleted:
-                    raise ValueError(f"Edge {source_id}->{target_id} does not exist in the graph.")
-            else:
-                deleted = session.query(self.Edge).filter(self.Edge.edge_id == edge_id).delete()
-                if not deleted:
-                    raise ValueError(f"Edge {edge_id} does not exist in the graph.")
+            missing = [eid for eid in edge_ids if eid not in existing]
+            if missing:
+                raise ValueError(f"Edge {missing[0]} does not exist in the graph.")
+
+            for i in range(0, len(edge_ids), chunk_size):
+                chunk = edge_ids[i : i + chunk_size]
+                session.query(self.Edge).filter(self.Edge.edge_id.in_(chunk)).delete(synchronize_session=False)
             session.commit()
 
     def _metadata(self) -> dict[str, Any]:

@@ -255,6 +255,38 @@ class BaseGraph(abc.ABC):
             If the node_id does not exist in the graph.
         """
 
+    def bulk_remove_nodes(self, node_ids: Sequence[int]) -> None:
+        """
+        Remove multiple nodes from the graph, along with their incident edges.
+
+        Existence is validated up-front so the call either removes every node
+        in `node_ids` or raises without modifying the graph.
+
+        Parameters
+        ----------
+        node_ids : Sequence[int]
+            The IDs of the nodes to remove.
+
+        Raises
+        ------
+        ValueError
+            If any node_id does not exist in the graph.
+        """
+        if hasattr(node_ids, "tolist"):
+            node_ids = node_ids.tolist()
+        else:
+            node_ids = list(node_ids)
+        if len(node_ids) == 0:
+            return
+
+        existing = set(self.node_ids())
+        missing = [nid for nid in node_ids if nid not in existing]
+        if missing:
+            raise ValueError(f"Node {missing[0]} does not exist in the graph.")
+
+        for node_id in node_ids:
+            self.remove_node(node_id)
+
     @abc.abstractmethod
     def add_edge(
         self,
@@ -313,6 +345,38 @@ class BaseGraph(abc.ABC):
         ValueError
             If the specified edge does not exist or insufficient identifiers are provided.
         """
+
+    def bulk_remove_edges(self, edge_ids: Sequence[int]) -> None:
+        """
+        Remove multiple edges from the graph by their edge IDs.
+
+        Existence is validated up-front so the call either removes every edge
+        in `edge_ids` or raises without modifying the graph.
+
+        Parameters
+        ----------
+        edge_ids : Sequence[int]
+            The IDs of the edges to remove.
+
+        Raises
+        ------
+        ValueError
+            If any edge_id does not exist in the graph.
+        """
+        if hasattr(edge_ids, "tolist"):
+            edge_ids = edge_ids.tolist()
+        else:
+            edge_ids = list(edge_ids)
+        if len(edge_ids) == 0:
+            return
+
+        existing = set(self.edge_ids())
+        missing = [eid for eid in edge_ids if eid not in existing]
+        if missing:
+            raise ValueError(f"Edge {missing[0]} does not exist in the graph.")
+
+        for edge_id in edge_ids:
+            self.remove_edge(edge_id=edge_id)
 
     @overload
     def bulk_add_edges(
