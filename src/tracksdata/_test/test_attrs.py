@@ -690,6 +690,20 @@ def test_attr_filter_and_operator_between_comparisons() -> None:
     assert and_f.op == "and"
 
 
+@pytest.mark.parametrize(
+    "op",
+    [operator.and_, operator.or_, operator.xor],
+)
+def test_attr_filter_logical_op_with_non_filter_raises(op: Callable) -> None:
+    """Combining a comparison with a non-filter operand is not meaningful."""
+    comp = NodeAttr("a") > 0
+    with pytest.raises(TypeError, match="Boolean operators on comparisons"):
+        op(comp, 5)
+    # reversed operand order goes through the reflected operator
+    with pytest.raises(TypeError, match="Boolean operators on comparisons"):
+        op(5, comp)
+
+
 def test_attr_filter_nested_composition() -> None:
     f = (NodeAttr("a") > 0) & ((NodeAttr("b") == 1) | (NodeAttr("b") == 2))
     assert isinstance(f, AttrFilter)
