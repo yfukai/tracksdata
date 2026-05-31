@@ -7,7 +7,8 @@ import numpy as np
 import polars as pl
 import rustworkx as rx
 
-from tracksdata.attrs import AttrComparison, FilterInput, split_attr_comps
+from tracksdata._filter import _FilterLeaf, _FilterNode
+from tracksdata.attrs import Attr, FilterInput, split_attr_comps
 from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.graph._base_graph import BaseGraph
 from tracksdata.graph._mapped_graph_mixin import MappedGraphMixin
@@ -27,31 +28,28 @@ def _pop_time_eq(
 ) -> tuple[list[FilterInput], int | None]:
     """
     Pop the top-level time equality filter from a list of attribute filters.
-    Compound (AttrFilter) entries are left untouched even if they reference
-    the time column. If multiple time equality filters are found at the top
-    level, an error is raised.
+    Compound entries are left untouched even if they reference the time
+    column. If multiple time equality filters are found at the top level, an
+    error is raised.
 
     Parameters
     ----------
-    attrs : Sequence[AttrComparison | AttrFilter]
+    attrs : Sequence[Attr]
         The attribute filters to pop the time equality filter from.
 
     Returns
     -------
-    tuple[list[AttrComparison | AttrFilter], int | None]
+    tuple[list[Attr], int | None]
         The attribute filters without the time equality filter and the time value.
     """
     out_attrs: list[FilterInput] = []
     time = None
     for attr_comp in attrs:
-        if (
-            isinstance(attr_comp, AttrComparison)
-            and str(attr_comp.column) == DEFAULT_ATTR_KEYS.T
-            and attr_comp.op == operator.eq
-        ):
+        leaf = attr_comp._filter if isinstance(attr_comp, Attr) else None
+        if isinstance(leaf, _FilterLeaf) and str(leaf.column) == DEFAULT_ATTR_KEYS.T and leaf.op == operator.eq:
             if time is not None:
                 raise ValueError(f"Multiple '{DEFAULT_ATTR_KEYS.T}' equality filters are not allowed\n {attrs}")
-            time = int(attr_comp.other)
+            time = int(leaf.other)
         else:
             out_attrs.append(attr_comp)
 
@@ -88,25 +86,36 @@ def _list_to_pl_series(key: str, values: list[Any], schema: AttrSchema) -> pl.Se
     return s
 
 
+def _eval_filter_node(
+    node: _FilterNode,
+    attrs: dict[str, Any],
+    schema: dict[str, AttrSchema],
+) -> bool:
+    """Evaluate a `_FilterNode` AST against an attrs dict."""
+    if isinstance(node, _FilterLeaf):
+        value = attrs.get(node.column, schema[node.column].default_value)
+        return bool(node.op(value, node.other))
+
+    if node.op == "and":
+        return all(_eval_filter_node(o, attrs, schema) for o in node.operands)
+    if node.op == "or":
+        return any(_eval_filter_node(o, attrs, schema) for o in node.operands)
+    if node.op == "xor":
+        truthy_count = sum(1 for o in node.operands if _eval_filter_node(o, attrs, schema))
+        return truthy_count % 2 == 1
+    # not
+    return not _eval_filter_node(node.operands[0], attrs, schema)
+
+
 def _eval_filter(
     f: FilterInput,
     attrs: dict[str, Any],
     schema: dict[str, AttrSchema],
 ) -> bool:
-    """Evaluate a single comparison or compound filter against an attrs dict."""
-    if isinstance(f, AttrComparison):
-        value = attrs.get(f.column, schema[f.column].default_value)
-        return bool(f.op(value, f.other))
-
-    if f.op == "and":
-        return all(_eval_filter(o, attrs, schema) for o in f.operands)
-    if f.op == "or":
-        return any(_eval_filter(o, attrs, schema) for o in f.operands)
-    if f.op == "xor":
-        truthy_count = sum(1 for o in f.operands if _eval_filter(o, attrs, schema))
-        return truthy_count % 2 == 1
-    # not
-    return not _eval_filter(f.operands[0], attrs, schema)
+    """Evaluate a filter-shaped `Attr` against an attrs dict."""
+    if not isinstance(f, Attr) or f._filter is None:
+        raise ValueError(f"Expected a filter-shaped Attr (built from comparisons), got {type(f).__name__}.")
+    return _eval_filter_node(f._filter, attrs, schema)
 
 
 def _create_filter_func(
@@ -922,7 +931,7 @@ class RustWorkXGraph(BaseGraph):
 
         Parameters
         ----------
-        *attrs : AttrComparison | AttrFilter
+        *attrs : Attr
             The attributes to filter by, for example:
         node_ids : list[int] | None
             The IDs of the nodes to include in the filter.
@@ -2052,7 +2061,7 @@ class IndexedRXGraph(MappedGraphMixin, RustWorkXGraph):
 
     def filter(
         self,
-        *attr_filters: AttrComparison,
+        *attr_filters: FilterInput,
         node_ids: Sequence[int] | None = None,
         include_targets: bool = False,
         include_sources: bool = False,

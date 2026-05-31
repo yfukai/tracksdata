@@ -6,10 +6,9 @@ import numpy as np
 import polars as pl
 import pytest
 
+from tracksdata._filter import _FilterCompound, _FilterLeaf
 from tracksdata.attrs import (
     Attr,
-    AttrComparison,
-    AttrFilter,
     EdgeAttr,
     NodeAttr,
     attr_comps_to_strs,
@@ -312,110 +311,101 @@ def test_duplicated_columns() -> None:
 
 
 def test_attr_reverse_comparison() -> None:
-    """Test basic initialization of AttrComparison."""
+    """`5 == attr` is dispatched via Python's symmetric `__eq__` fallback."""
     attr = Attr("test_column")
     comp = 5 == attr  # reversed on purpose
 
-    assert comp.attr == attr
-    assert comp.column == "test_column"
-    assert comp.op == operator.eq
-    assert comp.other == 5
+    leaf = comp._filter
+    assert isinstance(leaf, _FilterLeaf)
+    assert leaf.column == "test_column"
+    assert leaf.op == operator.eq
+    assert leaf.other == 5
 
 
 def test_attr_numpy_comparison() -> None:
-    """Test basic initialization of AttrComparison."""
+    """numpy scalars are cast to Python scalars in the leaf."""
     attr = Attr("test_column")
     comp = attr == np.asarray(5)
 
-    assert comp.attr == attr
-    assert comp.column == "test_column"
-    assert comp.op == operator.eq
-    assert comp.other == 5
+    leaf = comp._filter
+    assert isinstance(leaf, _FilterLeaf)
+    assert leaf.column == "test_column"
+    assert leaf.op == operator.eq
+    assert leaf.other == 5
+    assert type(leaf.other) is int  # native, not np.int64
 
 
 def test_attr_comparison_repr() -> None:
-    """Test string representation of AttrComparison."""
+    """Filter-shaped Attrs render as `Kind(col) op value`."""
     attr = Attr("test_column")
     comp = attr > 10
 
     assert repr(comp) == "Attr(test_column) > 10"
 
 
-def test_attr_comparison_to_attr() -> None:
-    """Test converting AttrComparison back to Attr."""
+def test_attr_comparison_evaluates_as_boolean_series() -> None:
+    """A filter-shaped Attr evaluates directly as a polars boolean expression."""
     df = pl.DataFrame({"test_column": [1, 2, 3, 4, 5]})
-    attr = Attr("test_column")
-    comp = attr > 3
+    comp = Attr("test_column") > 3
 
-    converted_attr = comp.to_attr()
-    result = converted_attr.evaluate(df)
-
+    result = comp.evaluate(df)
     assert result.to_list() == [False, False, False, True, True]
 
 
 def test_attr_comparison_getattr_delegation() -> None:
-    """Test that AttrComparison delegates attribute access to its Attr representation."""
-    attr = Attr("test_column")
-    comp = attr == 5
+    """Filter-shaped Attrs expose the usual `Attr` properties."""
+    comp = Attr("test_column") == 5
 
-    # Test that we can access Attr methods through AttrComparison
     assert comp.columns == ["test_column"]
     assert comp.expr_columns == ["test_column"]
 
 
 def test_attr_comparison_operator_delegation() -> None:
-    """Test that AttrComparison delegates operators to its Attr representation."""
+    """Arithmetic on a filter-shaped Attr produces a non-filter numeric Attr."""
     df = pl.DataFrame({"test_column": [1, 2, 3, 4, 5]})
-    attr = Attr("test_column")
-    comp = attr > 3
+    comp = Attr("test_column") > 3
 
-    # Test that we can use operators on AttrComparison
     result_attr = comp + 10
+    assert result_attr._filter is None  # arithmetic clears the leaf
     result = result_attr.evaluate(df)
-
-    # Should be (test_column > 3) + 10
     expected = [(x > 3) + 10 for x in df["test_column"]]
     assert result.to_list() == expected
 
 
-def test_attr_comparison_init_with_infinity_attr() -> None:
-    """Test that AttrComparison raises error when attr has infinity."""
-    # Create an attr with infinity
+def test_comparison_on_infinity_attr_raises() -> None:
+    """Comparing an Attr that carries infinity tracking is meaningless and raises."""
     attr_with_inf = Attr("test") * math.inf
-
     with pytest.raises(ValueError, match="Comparison operators are not supported for expressions with infinity"):
-        AttrComparison(attr_with_inf, operator.eq, 5)
+        _ = attr_with_inf == 5
 
 
-def test_attr_comparison_init_with_attr_other() -> None:
-    """Test that AttrComparison raises error when comparing two Attr objects."""
+def test_comparison_between_two_attrs_is_not_a_filter() -> None:
+    """`attr1 == attr2` is a polars boolean expression, not a pushdown filter."""
     attr1 = Attr("col1")
     attr2 = Attr("col2")
+    comp = attr1 == attr2
+    assert comp._filter is None
 
-    with pytest.raises(ValueError, match="Does not support comparison between expressions"):
-        AttrComparison(attr1, operator.eq, attr2)
 
-
-def test_attr_comparison_init_with_empty_columns() -> None:
-    """Test that AttrComparison raises error for empty expressions."""
-    # Create an attr with no columns (literal)
+def test_comparison_on_literal_attr_is_not_a_filter() -> None:
+    """Comparison on an empty-column attr falls back to a non-filter Attr."""
     attr_no_cols = Attr(5)
+    comp = attr_no_cols == 10
+    assert comp._filter is None
 
-    with pytest.raises(ValueError, match="Comparison operators are not supported for empty expressions"):
-        AttrComparison(attr_no_cols, operator.eq, 10)
 
-
-def test_attr_comparison_init_with_multiple_columns() -> None:
-    """Test that AttrComparison raises error for multiple columns."""
-    # Create an attr with multiple columns
+def test_comparison_on_multi_column_attr_is_not_a_filter() -> None:
+    """Comparison on a multi-column attr falls back to a non-filter Attr."""
     attr_multi_cols = Attr("col1") + Attr("col2")
-
-    with pytest.raises(ValueError, match="Comparison operators are not supported for multiple columns"):
-        AttrComparison(attr_multi_cols, operator.eq, 10)
+    comp = attr_multi_cols == 10
+    assert comp._filter is None
+    # graph.filter() would later reject it via split_attr_comps:
+    with pytest.raises(ValueError, match="Expected a filter-shaped Attr"):
+        split_attr_comps([comp])
 
 
 def test_attr_comparison_comparison_operators() -> None:
-    """Test all comparison operators with AttrComparison."""
+    """All comparison operators produce filter-shaped Attrs that evaluate correctly."""
     df = pl.DataFrame({"test_column": [1, 2, 3, 4, 5]})
     attr = Attr("test_column")
 
@@ -430,46 +420,37 @@ def test_attr_comparison_comparison_operators() -> None:
 
     for op, other, expected in test_cases:
         comp = op(attr, other)
-        result = comp.to_attr().evaluate(df)
+        assert isinstance(comp._filter, _FilterLeaf)
+        result = comp.evaluate(df)
         assert result.to_list() == expected
 
 
 def test_attr_comparison_binary_operators() -> None:
-    """Test binary operators with AttrComparison."""
+    """Arithmetic on a leaf-filter Attr works as scalar polars math."""
     df = pl.DataFrame({"test_column": [1, 2, 3, 4, 5]})
-    attr = Attr("test_column")
-    comp = AttrComparison(attr, operator.gt, 3)
+    comp = Attr._leaf("test_column", operator.gt, 3)
 
-    # Test addition
     result = comp + 10
-    result_series = result.evaluate(df)
     expected = [(x > 3) + 10 for x in df["test_column"]]
-    assert result_series.to_list() == expected
+    assert result.evaluate(df).to_list() == expected
 
-    # Test multiplication
     result = comp * 2
-    result_series = result.evaluate(df)
     expected = [(x > 3) * 2 for x in df["test_column"]]
-    assert result_series.to_list() == expected
+    assert result.evaluate(df).to_list() == expected
 
 
 def test_attr_comparison_reverse_operators() -> None:
-    """Test reverse operators with AttrComparison."""
+    """Reverse arithmetic on a leaf-filter Attr also works."""
     df = pl.DataFrame({"test_column": [1, 2, 3, 4, 5]})
-    attr = Attr("test_column")
-    comp = AttrComparison(attr, operator.gt, 3)
+    comp = Attr._leaf("test_column", operator.gt, 3)
 
-    # Test reverse addition
     result = 10 + comp
-    result_series = result.evaluate(df)
     expected = [10 + (x > 3) for x in df["test_column"]]
-    assert result_series.to_list() == expected
+    assert result.evaluate(df).to_list() == expected
 
-    # Test reverse multiplication
     result = 2 * comp
-    result_series = result.evaluate(df)
     expected = [2 * (x > 3) for x in df["test_column"]]
-    assert result_series.to_list() == expected
+    assert result.evaluate(df).to_list() == expected
 
 
 def test_split_attr_comps() -> None:
@@ -489,10 +470,10 @@ def test_split_attr_comps() -> None:
 
     assert len(node_comps) == 2
     assert len(edge_comps) == 2
-    assert node_comps[0].column == "node_col1"
-    assert node_comps[1].column == "node_col2"
-    assert edge_comps[0].column == "edge_col1"
-    assert edge_comps[1].column == "edge_col2"
+    assert node_comps[0]._filter.column == "node_col1"
+    assert node_comps[1]._filter.column == "node_col2"
+    assert edge_comps[0]._filter.column == "edge_col1"
+    assert edge_comps[1]._filter.column == "edge_col2"
 
 
 def test_split_attr_comps_empty() -> None:
@@ -504,24 +485,22 @@ def test_split_attr_comps_empty() -> None:
 
 def test_split_attr_comps_only_node() -> None:
     """Test splitting only node attribute comparisons."""
-    node_attr = NodeAttr("node_col")
-    node_comp = AttrComparison(node_attr, operator.eq, 1)
+    node_comp = NodeAttr("node_col") == 1
 
     node_comps, edge_comps = split_attr_comps([node_comp])
     assert len(node_comps) == 1
     assert len(edge_comps) == 0
-    assert node_comps[0].column == "node_col"
+    assert node_comps[0]._filter.column == "node_col"
 
 
 def test_split_attr_comps_only_edge() -> None:
     """Test splitting only edge attribute comparisons."""
-    edge_attr = EdgeAttr("edge_col")
-    edge_comp = AttrComparison(edge_attr, operator.gt, 5)
+    edge_comp = EdgeAttr("edge_col") > 5
 
     node_comps, edge_comps = split_attr_comps([edge_comp])
     assert len(node_comps) == 0
     assert len(edge_comps) == 1
-    assert edge_comps[0].column == "edge_col"
+    assert edge_comps[0]._filter.column == "edge_col"
 
 
 def test_split_attr_comps_invalid_type() -> None:
@@ -633,8 +612,8 @@ def test_attr_is_in_creates_membership_expression() -> None:
     df = pl.DataFrame({"col": [1, 2, 3, 4]})
     comp = Attr("col").is_in([1, 3, 4])
 
-    assert isinstance(comp, AttrComparison)
-    evaluated = comp.to_attr().evaluate(df)
+    assert isinstance(comp._filter, _FilterLeaf)
+    evaluated = comp.evaluate(df)
     assert evaluated.to_list() == [True, False, True, True]
 
 
@@ -649,78 +628,90 @@ def test_attr_is_in_accepts_numpy_arrays() -> None:
     df = pl.DataFrame({"col": [5, 6, 7]})
     comp = Attr("col").is_in(np.array([6, 8], dtype=np.int64))
 
-    evaluated = comp.to_attr().evaluate(df)
+    evaluated = comp.evaluate(df)
     assert evaluated.to_list() == [False, True, False]
 
 
 # ---------------------------------------------------------------------------
-# AttrFilter (compound boolean filters built from AttrComparisons)
+# Compound boolean filters (`& | ^ ~` on filter-shaped Attrs)
 # ---------------------------------------------------------------------------
 
 
-def test_attr_filter_or_operator_returns_filter() -> None:
+def test_filter_or_operator_returns_compound() -> None:
     comp1 = NodeAttr("t") == 1
     comp2 = NodeAttr("t") == 2
     f = comp1 | comp2
 
-    assert isinstance(f, AttrFilter)
-    assert f.op == "or"
-    assert f.operands == [comp1, comp2]
-    assert f.columns == ["t"]
+    assert isinstance(f._filter, _FilterCompound)
+    assert f._filter.op == "or"
+    assert f._filter.operands == (comp1._filter, comp2._filter)
+    assert attr_comps_to_strs([f]) == ["t"]
 
 
-def test_attr_filter_xor_and_invert_operators() -> None:
+def test_filter_xor_and_invert_operators() -> None:
     comp1 = NodeAttr("a") > 0
     comp2 = NodeAttr("b") > 0
     xor_f = comp1 ^ comp2
-    assert isinstance(xor_f, AttrFilter)
-    assert xor_f.op == "xor"
+    assert isinstance(xor_f._filter, _FilterCompound)
+    assert xor_f._filter.op == "xor"
 
     not_f = ~comp1
-    assert isinstance(not_f, AttrFilter)
-    assert not_f.op == "not"
-    assert not_f.operands == [comp1]
+    assert isinstance(not_f._filter, _FilterCompound)
+    assert not_f._filter.op == "not"
+    assert not_f._filter.operands == (comp1._filter,)
 
 
-def test_attr_filter_and_operator_between_comparisons() -> None:
-    comp1 = NodeAttr("a") > 0
-    comp2 = NodeAttr("b") < 1
-    and_f = comp1 & comp2
-    assert isinstance(and_f, AttrFilter)
-    assert and_f.op == "and"
+def test_filter_and_operator_between_comparisons() -> None:
+    and_f = (NodeAttr("a") > 0) & (NodeAttr("b") < 1)
+    assert isinstance(and_f._filter, _FilterCompound)
+    assert and_f._filter.op == "and"
 
 
 @pytest.mark.parametrize(
     "op",
     [operator.and_, operator.or_, operator.xor],
 )
-def test_attr_filter_logical_op_with_non_filter_raises(op: Callable) -> None:
-    """Combining a comparison with a non-filter operand is not meaningful."""
+def test_filter_logical_op_with_non_filter_raises(op: Callable) -> None:
+    """Combining a filter-shaped Attr with a non-filter operand raises."""
     comp = NodeAttr("a") > 0
-    with pytest.raises(TypeError, match="Boolean operators on comparisons"):
+    with pytest.raises(TypeError, match="Cannot apply"):
         op(comp, 5)
     # reversed operand order goes through the reflected operator
-    with pytest.raises(TypeError, match="Boolean operators on comparisons"):
+    with pytest.raises(TypeError, match="Cannot apply"):
         op(5, comp)
 
 
-def test_attr_filter_nested_composition() -> None:
+def test_filter_nested_composition() -> None:
     f = (NodeAttr("a") > 0) & ((NodeAttr("b") == 1) | (NodeAttr("b") == 2))
-    assert isinstance(f, AttrFilter)
-    assert f.op == "and"
-    assert isinstance(f.operands[1], AttrFilter)
-    assert f.operands[1].op == "or"
-    assert sorted({leaf.column for leaf in f.leaves()}) == ["a", "b"]
+    assert isinstance(f._filter, _FilterCompound)
+    assert f._filter.op == "and"
+    assert isinstance(f._filter.operands[1], _FilterCompound)
+    assert f._filter.operands[1].op == "or"
+    leaf_columns = sorted(
+        {
+            leaf.column
+            for leaf in [op for op in f._filter.operands if isinstance(op, _FilterLeaf)]
+            + [op for op in f._filter.operands[1].operands if isinstance(op, _FilterLeaf)]
+        }
+    )
+    assert leaf_columns == ["a", "b"]
 
 
-def test_attr_filter_mixed_node_and_edge_raises_on_split() -> None:
-    """A single compound that mixes node and edge attributes must error in split."""
-    f = (NodeAttr("t") == 1) | (EdgeAttr("weight") > 0.5)
-    with pytest.raises(ValueError, match="cannot mix NodeAttr and EdgeAttr"):
-        split_attr_comps([f])
+def test_filter_auto_flattens_associative_ops() -> None:
+    """`(a | b) | c` should produce a single 3-operand `or` compound."""
+    f = (NodeAttr("t") == 1) | (NodeAttr("t") == 2) | (NodeAttr("t") == 3)
+    assert isinstance(f._filter, _FilterCompound)
+    assert f._filter.op == "or"
+    assert len(f._filter.operands) == 3
 
 
-def test_attr_filter_split_attr_comps_with_compounds() -> None:
+def test_filter_mixed_node_and_edge_raises_on_compound() -> None:
+    """Mixing NodeAttr and EdgeAttr in one compound now raises at construction."""
+    with pytest.raises(ValueError, match="Cannot combine NodeAttr and EdgeAttr"):
+        _ = (NodeAttr("t") == 1) | (EdgeAttr("weight") > 0.5)
+
+
+def test_filter_split_attr_comps_with_compounds() -> None:
     node_f = (NodeAttr("t") == 1) | (NodeAttr("t") == 2)
     edge_f = (EdgeAttr("w") > 0.5) | (EdgeAttr("w") < -0.5)
     node_only = NodeAttr("label") == "A"
@@ -730,27 +721,7 @@ def test_attr_filter_split_attr_comps_with_compounds() -> None:
     assert edges == [edge_f]
 
 
-def test_attr_filter_invalid_op_raises() -> None:
-    with pytest.raises(ValueError, match="Unknown logical operator"):
-        AttrFilter("nor", [NodeAttr("a") == 1, NodeAttr("a") == 2])
-
-
-def test_attr_filter_not_with_multiple_operands_raises() -> None:
-    with pytest.raises(ValueError, match="'not' filter requires exactly one operand"):
-        AttrFilter("not", [NodeAttr("a") == 1, NodeAttr("a") == 2])
-
-
-def test_attr_filter_or_with_single_operand_raises() -> None:
-    with pytest.raises(ValueError, match="'or' filter requires at least two operands"):
-        AttrFilter("or", [NodeAttr("a") == 1])
-
-
-def test_attr_filter_rejects_non_filter_operands() -> None:
-    with pytest.raises(TypeError, match="must be AttrComparison or AttrFilter"):
-        AttrFilter("or", [NodeAttr("a") == 1, 5])
-
-
-def test_attr_filter_polars_reduce_or() -> None:
+def test_filter_polars_reduce_or() -> None:
     df = pl.DataFrame({"t": [0, 1, 2, 3, 4]})
     f = (NodeAttr("t") == 1) | (NodeAttr("t") == 3)
     expr = polars_reduce_attr_comps(df, [f], operator.and_)
@@ -758,7 +729,7 @@ def test_attr_filter_polars_reduce_or() -> None:
     assert result.to_list() == [False, True, False, True, False]
 
 
-def test_attr_filter_polars_reduce_xor() -> None:
+def test_filter_polars_reduce_xor() -> None:
     df = pl.DataFrame({"a": [0, 1, 0, 1], "b": [0, 0, 1, 1]})
     f = (NodeAttr("a") == 1) ^ (NodeAttr("b") == 1)
     expr = polars_reduce_attr_comps(df, [f], operator.and_)
@@ -766,7 +737,7 @@ def test_attr_filter_polars_reduce_xor() -> None:
     assert result.to_list() == [False, True, True, False]
 
 
-def test_attr_filter_polars_reduce_not() -> None:
+def test_filter_polars_reduce_not() -> None:
     df = pl.DataFrame({"t": [0, 1, 2]})
     f = ~(NodeAttr("t") == 1)
     expr = polars_reduce_attr_comps(df, [f], operator.and_)
@@ -774,7 +745,76 @@ def test_attr_filter_polars_reduce_not() -> None:
     assert result.to_list() == [True, False, True]
 
 
-def test_attr_filter_attr_comps_to_strs_with_compound() -> None:
+def test_filter_attr_comps_to_strs_with_compound() -> None:
     f = (NodeAttr("a") == 1) | (NodeAttr("b") == 2)
     plain = NodeAttr("c") == 3
     assert attr_comps_to_strs([f, plain]) == ["a", "b", "c"]
+
+
+# ---------------------------------------------------------------------------
+# Kind preservation (NodeAttr/EdgeAttr survive arithmetic and method delegation)
+# ---------------------------------------------------------------------------
+
+
+def test_node_attr_kind_survives_arithmetic_with_scalar() -> None:
+    assert type(NodeAttr("t") + 5) is NodeAttr
+    assert type(5 + NodeAttr("t")) is NodeAttr
+    assert type(NodeAttr("t") * 2) is NodeAttr
+    assert type(-NodeAttr("t")) is NodeAttr
+
+
+def test_edge_attr_kind_survives_arithmetic_with_scalar() -> None:
+    assert type(EdgeAttr("w") - 1) is EdgeAttr
+    assert type(EdgeAttr("w") / 2) is EdgeAttr
+    assert type(abs(EdgeAttr("w"))) is EdgeAttr
+
+
+def test_node_attr_kind_survives_method_delegation() -> None:
+    assert type(NodeAttr("t").log()) is NodeAttr
+    assert type(NodeAttr("t").alias("x")) is NodeAttr
+
+
+def test_same_kind_binary_op_preserves_kind() -> None:
+    assert type(NodeAttr("a") + NodeAttr("b")) is NodeAttr
+    assert type(EdgeAttr("a") * EdgeAttr("b")) is EdgeAttr
+
+
+def test_base_attr_defers_to_specific_kind() -> None:
+    assert type(Attr("a") + NodeAttr("b")) is NodeAttr
+    assert type(EdgeAttr("a") - Attr("b")) is EdgeAttr
+
+
+def test_mixed_node_edge_arithmetic_raises() -> None:
+    with pytest.raises(ValueError, match="Cannot combine NodeAttr and EdgeAttr"):
+        NodeAttr("a") + EdgeAttr("b")
+    with pytest.raises(ValueError, match="Cannot combine EdgeAttr and NodeAttr"):
+        EdgeAttr("a") * NodeAttr("b")
+
+
+def test_kind_preserved_through_comparison_filter() -> None:
+    """`(NodeAttr("t") + 5) == 0` used to fail kind detection; now must split as a node filter."""
+    comp = (NodeAttr("t") + 5) == 0
+    nodes, edges = split_attr_comps([comp])
+    assert len(nodes) == 1 and len(edges) == 0
+
+
+def test_neg_swaps_infinity_trackers() -> None:
+    expr = NodeAttr("x") * math.inf
+    neg = -expr
+    assert len(neg.inf_exprs) == 0
+    assert len(neg.neg_inf_exprs) == 1
+    assert neg.neg_inf_exprs[0].columns == ["x"]
+
+
+def test_invert_and_abs_propagate_infinity() -> None:
+    df = pl.DataFrame({"x": [True, False, True]})
+    expr = NodeAttr("x") * math.inf
+    inverted = ~expr
+    assert len(inverted.inf_exprs) == 1
+    assert inverted.inf_exprs[0].columns == ["x"]
+
+    abs_expr = abs(NodeAttr("y") * math.inf)
+    assert len(abs_expr.inf_exprs) == 1
+    assert abs_expr.inf_exprs[0].columns == ["y"]
+    # Smoke-check: clean expression still evaluates (drop side-effect)
+    _ = df

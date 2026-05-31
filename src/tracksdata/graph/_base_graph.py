@@ -628,12 +628,12 @@ class BaseGraph(abc.ABC):
         Creates a filter object that can be used to create a subgraph or query ids and attributes.
 
         Multiple positional filters are implicitly AND-ed together. Each filter
-        can itself be a compound `AttrFilter` built from `AttrComparison`s using
-        `&`, `|`, `^`, `~` (e.g. `(NodeAttr("t") == 1) | (NodeAttr("t") == 2)`).
+        is a filter-shaped `Attr` (built from comparisons), optionally combined
+        via `&`, `|`, `^`, `~` (e.g. `(NodeAttr("t") == 1) | (NodeAttr("t") == 2)`).
 
         Parameters
         ----------
-        *attr_filters : AttrComparison | AttrFilter
+        *attr_filters : Attr
             The attribute filters to apply. Positional args are AND-ed.
         node_ids : Sequence[int] | None
             The IDs of the nodes to include in the filter.

@@ -16,7 +16,8 @@ from sqlalchemy.orm import DeclarativeBase, Session, aliased, load_only
 from sqlalchemy.orm.query import Query
 from sqlalchemy.sql.type_api import TypeEngine
 
-from tracksdata.attrs import AttrComparison, FilterInput, split_attr_comps
+from tracksdata._filter import _FilterLeaf, _FilterNode
+from tracksdata.attrs import Attr, FilterInput, split_attr_comps
 from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.graph._base_graph import BaseGraph
 from tracksdata.graph.filters._base_filter import BaseFilter
@@ -59,24 +60,31 @@ def _data_numpy_to_native(data: dict[str, Any]) -> None:
             data[k] = v.item()
 
 
-def _to_sql_clause(f: FilterInput, table: type[DeclarativeBase]) -> Any:
-    """Translate an AttrComparison or AttrFilter into a SQLAlchemy clause."""
-    if isinstance(f, AttrComparison):
-        return f.op(getattr(table, str(f.column)), f.other)
+def _to_sql_clause_node(node: _FilterNode, table: type[DeclarativeBase]) -> Any:
+    """Translate a `_FilterNode` AST into a SQLAlchemy clause."""
+    if isinstance(node, _FilterLeaf):
+        return node.op(getattr(table, str(node.column)), node.other)
 
-    if f.op == "not":
-        return sa.not_(_to_sql_clause(f.operands[0], table))
+    if node.op == "not":
+        return sa.not_(_to_sql_clause_node(node.operands[0], table))
 
-    clauses = [_to_sql_clause(o, table) for o in f.operands]
-    if f.op == "and":
+    clauses = [_to_sql_clause_node(o, table) for o in node.operands]
+    if node.op == "and":
         return sa.and_(*clauses)
-    if f.op == "or":
+    if node.op == "or":
         return sa.or_(*clauses)
     # xor: reduce pairwise via (a OR b) AND NOT (a AND b)
     return functools.reduce(
         lambda a, b: sa.and_(sa.or_(a, b), sa.not_(sa.and_(a, b))),
         clauses,
     )
+
+
+def _to_sql_clause(f: FilterInput, table: type[DeclarativeBase]) -> Any:
+    """Translate a filter-shaped `Attr` into a SQLAlchemy clause."""
+    if not isinstance(f, Attr) or f._filter is None:
+        raise ValueError(f"Expected a filter-shaped Attr (built from comparisons), got {type(f).__name__}.")
+    return _to_sql_clause_node(f._filter, table)
 
 
 def _filter_query(
@@ -86,8 +94,8 @@ def _filter_query(
 ) -> sa.Select:
     """
     Filter a query by a list of attribute filters (AND-ed together at the top
-    level). Each filter may itself be a compound AttrFilter combining
-    AttrComparisons with OR / AND / XOR / NOT.
+    level). Each filter may itself be a compound filter combining leaf
+    comparisons with OR / AND / XOR / NOT.
 
     Parameters
     ----------
@@ -95,8 +103,8 @@ def _filter_query(
         The query to filter.
     table : type[DeclarativeBase]
         The table to filter.
-    attr_filters : Sequence[AttrComparison | AttrFilter]
-        The attribute filters to apply.
+    attr_filters : Sequence[Attr]
+        The filter-shaped Attrs to apply.
 
     Returns
     -------

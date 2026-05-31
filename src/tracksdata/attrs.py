@@ -36,18 +36,20 @@ import numpy as np
 import polars as pl
 from polars import DataFrame, Expr, Series
 
-Scalar = int | float | str | bool | complex | np.number
-ExprInput = Union[str, Scalar, "Attr", Expr, "AttrComparison"]
-MembershipExprInput = Sequence[Scalar]
+from tracksdata._filter import _FilterCompound, _FilterLeaf, _FilterNode, walk_leaves
 
-# Logical operators supported by AttrFilter compounds.
-_FILTER_LOGICAL_OPS = ("and", "or", "xor", "not")
-FilterInput = Union["AttrComparison", "AttrFilter"]
+Scalar = int | float | str | bool | complex | np.number
+ExprInput = Union[str, Scalar, "Attr", Expr]
+MembershipExprInput = Sequence[Scalar] | np.ndarray
+
+# A filter-shaped `Attr` (one whose `_filter` is set). Backends introspect
+# `Attr._filter` to translate compound boolean filters into SQL / polars /
+# Python-dict predicates.
+FilterInput = "Attr"
 
 
 __all__ = [
-    "AttrComparison",
-    "AttrFilter",
+    "Attr",
     "EdgeAttr",
     "NodeAttr",
     "attr_comps_to_strs",
@@ -88,8 +90,16 @@ _OPS_MATH_SYMBOLS: dict[Callable, str] = {
 }
 
 
+_FILTER_OP_SYMBOLS = {"and": "&", "or": "|", "xor": "^", "not": "~"}
+_BOOLEAN_OP_FUNCS: dict[str, Callable] = {
+    "and": operator.and_,
+    "or": operator.or_,
+    "xor": operator.xor,
+}
+
+
 def _is_membership_expr_input(x: Any) -> TypeGuard[MembershipExprInput]:
-    if isinstance(x, Attr | AttrComparison | pl.Expr):
+    if isinstance(x, Attr | pl.Expr):
         return False
     if isinstance(x, Scalar):
         return False
@@ -98,146 +108,26 @@ def _is_membership_expr_input(x: Any) -> TypeGuard[MembershipExprInput]:
     return isinstance(x, Sequence)
 
 
-class AttrComparison:
-    """
-    Class to store a comparison between an [Attr][tracksdata.attrs.Attr] and a value
-    (a sequence of values for `is_in`).
-    It's mainly used for filtering.
-    Complex expression are transformed back to [Attr][tracksdata.attrs.Attr] objects
-    which can be used to evaluate the expression on a DataFrame.
+def _cast_membership(values: MembershipExprInput) -> list:
+    if isinstance(values, np.ndarray):
+        return values.tolist()
+    return list(values)
 
-    Parameters
-    ----------
-    attr : Attr
-        The attribute to compare.
-    op : Callable
-        The operator to use for the comparison.
-    other : ExprInput | MembershipExprInput
-        The value to compare the attribute to.
-    """
 
-    def __init__(self, attr: "Attr", op: Callable, other: ExprInput | MembershipExprInput) -> None:
-        is_membership_expr = _is_membership_expr_input(other)
-        if is_membership_expr and op != _is_in_op:
-            raise ValueError(
-                f"Membership values can only be used with the 'is_in' method. Found '{_OPS_MATH_SYMBOLS[op]}'."
-            )
-        elif not is_membership_expr and op == _is_in_op:
-            raise ValueError(
-                f"Cannot use 'is_in' method with non-membership values. Found '{other}' of type {type(other)}."
-            )
+def _cast_scalar(value: Any) -> Any:
+    # numpy scalars are problematic for sqlalchemy; unwrap to Python types
+    if isinstance(value, np.ndarray):
+        return value.item()
+    return value
 
-        if attr.has_inf():
-            raise ValueError("Comparison operators are not supported for expressions with infinity.")
 
-        if isinstance(other, Attr):
-            raise ValueError(f"Does not support comparison between expressions. Found {other} and {attr}.")
-
-        columns = attr.expr_columns
-
-        if len(columns) == 0:
-            raise ValueError("Comparison operators are not supported for empty expressions.")
-
-        elif len(columns) > 1:
-            raise ValueError(f"Comparison operators are not supported for multiple columns. Found {columns}.")
-
-        self.attr = attr
-        self.column = columns[0]
-        self.op = op
-
-        # casting numpy scalars to python scalars
-        # numpy scalars are problematic for sqlalchemy
-        if is_membership_expr:
-            if isinstance(other, np.ndarray):
-                other = other.tolist()
-            else:
-                other = list(other)
-        elif isinstance(other, np.ndarray):
-            other = other.item()
-        self.other = other
-
-    def __repr__(self) -> str:
-        return f"{type(self.attr).__name__}({self.column}) {_OPS_MATH_SYMBOLS[self.op]} {self.other}"
-
-    def to_attr(self) -> "Attr":
-        """
-        Transform the comparison back to an [Attr][tracksdata.attrs.Attr] object.
-        This is useful for evaluating the expression on a DataFrame.
-        """
-        return Attr(self.op(pl.col(self.column), self.other))
-
-    def __getattr__(self, attr: str) -> Any:
-        return getattr(self.to_attr(), attr)
-
-    def _delegate_operator(self, other: ExprInput, op: Callable[[Expr, Expr], Expr], reverse: bool = False) -> "Attr":
-        return self.to_attr()._delegate_operator(other, op, reverse)
-
-    # Arithmetic operators (auto-generated by `_setup_ops`, return Attr)
-    def __add__(self, other: ExprInput) -> "Attr": ...
-    def __sub__(self, other: ExprInput) -> "Attr": ...
-    def __mul__(self, other: ExprInput) -> "Attr": ...
-    def __truediv__(self, other: ExprInput) -> "Attr": ...
-    def __floordiv__(self, other: ExprInput) -> "Attr": ...
-    def __mod__(self, other: ExprInput) -> "Attr": ...
-    def __pow__(self, other: ExprInput) -> "Attr": ...
-
-    # Reverse arithmetic operators
-    def __radd__(self, other: Scalar) -> "Attr": ...
-    def __rsub__(self, other: Scalar) -> "Attr": ...
-    def __rmul__(self, other: Scalar) -> "Attr": ...
-    def __rtruediv__(self, other: Scalar) -> "Attr": ...
-    def __rfloordiv__(self, other: Scalar) -> "Attr": ...
-    def __rmod__(self, other: Scalar) -> "Attr": ...
-    def __rpow__(self, other: Scalar) -> "Attr": ...
-
-    # Logical operators combine comparisons into an AttrFilter compound.
-    # `AttrFilter` is defined later in the module; the references below resolve
-    # at call time, so the forward reference is fine.
-    def _logical_op(self, op_name: str, other: Any, reverse: bool = False) -> "AttrFilter":
-        if not isinstance(other, AttrComparison | AttrFilter):
-            symbol = _FILTER_OP_SYMBOLS[op_name]
-            raise TypeError(
-                f"Cannot apply '{symbol}' between an AttrComparison and {type(other).__name__}. "
-                "Boolean operators on comparisons combine them into a filter; both operands "
-                "must be an AttrComparison or AttrFilter."
-            )
-        operands = [other, self] if reverse else [self, other]
-        return AttrFilter(op_name, operands)
-
-    def __and__(self, other: FilterInput) -> "AttrFilter":
-        return self._logical_op("and", other)
-
-    def __rand__(self, other: FilterInput) -> "AttrFilter":
-        return self._logical_op("and", other, reverse=True)
-
-    def __or__(self, other: FilterInput) -> "AttrFilter":
-        return self._logical_op("or", other)
-
-    def __ror__(self, other: FilterInput) -> "AttrFilter":
-        return self._logical_op("or", other, reverse=True)
-
-    def __xor__(self, other: FilterInput) -> "AttrFilter":
-        return self._logical_op("xor", other)
-
-    def __rxor__(self, other: FilterInput) -> "AttrFilter":
-        return self._logical_op("xor", other, reverse=True)
-
-    def __invert__(self) -> "AttrFilter":
-        return AttrFilter("not", [self])
-
-    # Comparison operators (always return Attr)
-    def __eq__(self, other: ExprInput) -> "Attr": ...
-    def __req__(self, other: ExprInput) -> "Attr": ...
-    def __ne__(self, other: ExprInput) -> "Attr": ...
-    def __rne__(self, other: ExprInput) -> "Attr": ...
-    def __lt__(self, other: ExprInput) -> "Attr": ...
-    def __rlt__(self, other: ExprInput) -> "Attr": ...
-    def __le__(self, other: ExprInput) -> "Attr": ...
-    def __rle__(self, other: ExprInput) -> "Attr": ...
-    def __gt__(self, other: ExprInput) -> "Attr": ...
-    def __rgt__(self, other: ExprInput) -> "Attr": ...
-    def __ge__(self, other: ExprInput) -> "Attr": ...
-    def __rge__(self, other: ExprInput) -> "Attr": ...
+def _filter_repr(node: _FilterNode) -> str:
+    if isinstance(node, _FilterLeaf):
+        return f"{node.kind.__name__}({node.column}) {_OPS_MATH_SYMBOLS[node.op]} {node.other}"
+    if node.op == "not":
+        return f"~{_filter_repr(node.operands[0])}"
+    sep = f" {_FILTER_OP_SYMBOLS[node.op]} "
+    return "(" + sep.join(_filter_repr(o) for o in node.operands) + ")"
 
 
 class Attr:
@@ -260,62 +150,107 @@ class Attr:
     """
 
     expr: Expr
+    _filter: _FilterNode | None
 
     def __init__(self, value: ExprInput) -> None:
-        self._inf_exprs = []  # expressions multiplied by +inf
-        self._neg_inf_exprs = []  # expressions multiplied by -inf
+        self._inf_exprs: list[Attr] = []  # expressions multiplied by +inf
+        self._neg_inf_exprs: list[Attr] = []  # expressions multiplied by -inf
+        self._filter = None
 
         if isinstance(value, str):
             self.expr = pl.col(value)
         elif isinstance(value, Attr):
             self.expr = value.expr
-            # Copy infinity tracking from the other AttrExpr
+            # Copy infinity tracking; intentionally do NOT copy `_filter` — wrapping
+            # an Attr in another Attr is for rebinding/aliasing, not duplicating
+            # filter identity (operators set `_filter` on the new instance).
             self._inf_exprs = value.inf_exprs
             self._neg_inf_exprs = value.neg_inf_exprs
-        elif isinstance(value, AttrComparison):
-            attr = value.to_attr()
-            self.expr = attr.expr
-            self._inf_exprs = attr.inf_exprs
-            self._neg_inf_exprs = attr.neg_inf_exprs
         elif isinstance(value, Expr):
             self.expr = value
         else:
             self.expr = pl.lit(value)
 
+    @classmethod
+    def _leaf(
+        cls,
+        column: str,
+        op: Callable,
+        other: Any,
+        kind: type["Attr"] | None = None,
+    ) -> "Attr":
+        """Construct an `Attr` representing a single leaf filter `column op other`.
+
+        Provided for tests and internal helpers that need to build filter nodes
+        without going through Python's operator dispatch.
+        """
+        is_membership = _is_membership_expr_input(other)
+        if is_membership and op is not _is_in_op:
+            raise ValueError(
+                f"Membership values can only be used with the 'is_in' method. Found '{_OPS_MATH_SYMBOLS[op]}'."
+            )
+        if not is_membership and op is _is_in_op:
+            raise ValueError(
+                f"Cannot use 'is_in' method with non-membership values. Found '{other}' of type {type(other)}."
+            )
+        leaf_kind = kind if kind is not None else cls
+        other_cast = _cast_membership(other) if is_membership else _cast_scalar(other)
+
+        if is_membership:
+            expr = pl.col(column).is_in(other_cast)
+        else:
+            expr = op(pl.col(column), other_cast)
+
+        result = leaf_kind(expr)
+        result._filter = _FilterLeaf(column=column, op=op, other=other_cast, kind=leaf_kind)
+        return result
+
     def _wrap(self, expr: ExprInput) -> Union["Attr", Any]:
         if isinstance(expr, Expr):
-            result = Attr(expr)
+            result = type(self)(expr)
             # Propagate infinity tracking
             result._inf_exprs = self._inf_exprs.copy()
             result._neg_inf_exprs = self._neg_inf_exprs.copy()
             return result
         return expr
 
+    def _result_kind(self, other: "ExprInput") -> type["Attr"]:
+        """Pick the result class for a binary op so NodeAttr/EdgeAttr is preserved.
+
+        The base `Attr` defers to a more specific operand; two specific kinds
+        must match — mixing `NodeAttr` and `EdgeAttr` in one expression raises
+        because they target different graph tables.
+        """
+        self_kind = type(self)
+        if not isinstance(other, Attr):
+            return self_kind
+        other_kind = type(other)
+        if self_kind is Attr:
+            return other_kind
+        if other_kind is Attr or other_kind is self_kind:
+            return self_kind
+        raise ValueError(
+            f"Cannot combine {self_kind.__name__} and {other_kind.__name__} "
+            "in a single expression — they target different graph tables."
+        )
+
     def _delegate_operator(self, other: ExprInput, op: Callable[[Expr, Expr], Expr], reverse: bool = False) -> "Attr":
         """
-        Delegate the operator to the expression.
+        Delegate a binary numeric/bitwise operator to the polars expression.
 
-        Parameters
-        ----------
-        other : ExprInput
-            The other expression to delegate the operator to.
-        op : Callable[[Expr, Expr], Expr]
-            The operator to delegate.
-        reverse : bool, optional
-            Whether the operator is reversed.
-
-        Returns
-        -------
-        Attr
-            The result of the operator.
+        Arithmetic and pure-bitwise operations always clear `_filter` (the result
+        is no longer a filter-shaped Attr), so callers that need to combine
+        filter compounds must go through `_delegate_boolean_operator` instead.
         """
+        cls = self._result_kind(other)
+
         # Special handling for multiplication with infinity
         if op == operator.mul:
             # Check if we're multiplying with infinity scalar
             # In both reverse and non-reverse cases, 'other' is the infinity value
             # and 'self' is the AttrExpr we want to track
             if isinstance(other, int | float) and math.isinf(other):
-                result = Attr(pl.lit(0))  # Clean expression is zero (infinity term removed)
+                result = cls(pl.lit(0))  # Clean expression is zero (infinity term removed)
 
                 # Copy existing infinity tracking
                 result._inf_exprs = self._inf_exprs.copy()
@@ -332,7 +267,7 @@ class Attr:
         # Regular operation - no infinity involved
         left = Attr(other).expr if reverse else self.expr
         right = self.expr if reverse else Attr(other).expr
-        result = Attr(op(left, right))
+        result = cls(op(left, right))
 
         # Combine infinity tracking from both operands
         if isinstance(other, Attr):
@@ -354,47 +289,80 @@ class Attr:
 
         return result
 
-    def _delegate_comparison_operator(
-        self,
-        other: ExprInput,
-        op: Callable,
-        reverse: bool = False,
-    ) -> "AttrComparison | Attr":
+    def _delegate_comparison_operator(self, other: ExprInput, op: Callable) -> "Attr":
         """
-        Simplified version of `_delegate_operator` for comparison operators.
-        [AttrComparison][tracksdata.attrs.AttrComparison] has a limited scope and
-        it's mainly used for filtering.
-        If creating an [AttrComparison][tracksdata.attrs.AttrComparison] object is
-        not possible, it will return an [Attr][tracksdata.attrs.Attr] object.
+        Build a leaf-filter `Attr` for `self <op> other` when possible.
 
-        Parameters
-        ----------
-        other : ExprInput
-            The other expression to delegate the operator to.
-        op : Callable
-            The operator to delegate.
-        reverse : bool, optional
-            Whether the operator is reversed.
-
-        Returns
-        -------
-        AttrComparison | Attr
-            The result of the operator.
+        If `other` is itself an `Attr`, the result is a non-filter Attr that
+        evaluates as a polars boolean expression. If `self` has infinity
+        tracking, comparison is rejected as semantically meaningless.
+        Multi-column / literal LHS also falls back to a non-filter result —
+        such filters can't be pushed down to SQL and must be evaluated by
+        polars only.
         """
-        if reverse:
-            lhs = Attr(other)
-            rhs = self
-        else:
-            lhs = self
-            rhs = other
+        if self.has_inf():
+            raise ValueError("Comparison operators are not supported for expressions with infinity.")
 
         if isinstance(other, Attr):
-            return self._delegate_operator(other, op, reverse=False)
+            return self._delegate_operator(other, op)
 
-        return AttrComparison(lhs, op, rhs)
+        columns = self.expr_columns
+        if len(columns) != 1:
+            # Can't form a leaf — fall back to a non-filter Attr.
+            return self._delegate_operator(other, op)
+
+        other_cast = _cast_scalar(other)
+        expr = op(self.expr, other_cast)
+        result = type(self)(expr)
+        result._filter = _FilterLeaf(column=columns[0], op=op, other=other_cast, kind=type(self))
+        return result
+
+    def _delegate_boolean_operator(self, other: "ExprInput", op_name: str, reverse: bool = False) -> "Attr":
+        """
+        Combine two `Attr`s with a boolean op (`& | ^`).
+
+        If both have `_filter` set, build a compound filter (auto-flattening
+        nested same-op compounds). If neither has `_filter`, fall through to
+        plain bitwise polars evaluation. Mixing a filter-shaped Attr with a
+        non-filter operand raises: implicit pushdown loss is too easy to miss.
+        """
+        op_func = _BOOLEAN_OP_FUNCS[op_name]
+        self_has = self._filter is not None
+        other_has = isinstance(other, Attr) and other._filter is not None
+
+        if self_has != other_has:
+            symbol = _FILTER_OP_SYMBOLS[op_name]
+            raise TypeError(
+                f"Cannot apply '{symbol}' between a filter-shaped Attr and a non-filter operand. "
+                "Both operands must be filter-shaped (built from comparisons) or both non-filter."
+            )
+
+        if not self_has:
+            # Neither has filter structure — pure bitwise op, no `_filter` on result.
+            return self._delegate_operator(other, op_func, reverse=reverse)
+
+        # Both have filter — combine into a compound, auto-flattening associative ops.
+        cls = self._result_kind(other)
+        first, second = (other, self) if reverse else (self, other)
+        operands: list[_FilterNode] = []
+        for op_attr in (first, second):
+            f = op_attr._filter
+            if isinstance(f, _FilterCompound) and f.op == op_name:
+                operands.extend(f.operands)
+            else:
+                operands.append(f)
+
+        if reverse:
+            expr = op_func(other.expr, self.expr)
+        else:
+            expr = op_func(self.expr, other.expr)
+
+        result = cls(expr)
+        result._filter = _FilterCompound(op_name, tuple(operands))
+        return result
 
     def alias(self, name: str) -> "Attr":
-        result = Attr(self.expr.alias(name))
+        result = type(self)(self.expr.alias(name))
         result._inf_exprs = self._inf_exprs.copy()
         result._neg_inf_exprs = self._neg_inf_exprs.copy()
         return result
@@ -437,7 +405,7 @@ class Attr:
     @property
     def inf_columns(self) -> list[str]:
         """Get the names of columns multiplied by positive infinity."""
-        columns = []
+        columns: list[str] = []
         for attr_expr in self._inf_exprs:
             columns.extend(attr_expr.columns)
         return list(dict.fromkeys(columns))
@@ -445,7 +413,7 @@ class Attr:
     @property
     def neg_inf_columns(self) -> list[str]:
         """Get the names of columns multiplied by negative infinity."""
-        columns = []
+        columns: list[str] = []
         for attr_expr in self._neg_inf_exprs:
             columns.extend(attr_expr.columns)
         return list(dict.fromkeys(columns))
@@ -453,53 +421,65 @@ class Attr:
     def has_inf(self) -> bool:
         """
         Check if any column in the expression is multiplied by infinity or negative infinity.
-
-        Returns
-        -------
-        bool
-            True if any column is multiplied by infinity, False otherwise.
         """
         return self.has_pos_inf() or self.has_neg_inf()
 
     def has_pos_inf(self) -> bool:
-        """
-        Check if any column in the expression is multiplied by positive infinity.
-        """
         return len(self._inf_exprs) > 0
 
     def has_neg_inf(self) -> bool:
-        """
-        Check if any column in the expression is multiplied by negative infinity.
-        """
         return len(self._neg_inf_exprs) > 0
 
-    def is_in(self, values: MembershipExprInput) -> "AttrComparison":
+    def is_in(self, values: MembershipExprInput) -> "Attr":
         """
-        Create a membership comparison between the attribute and a collection of literals.
+        Create a membership filter `self in values`.
+
+        Returns a filter-shaped `Attr` suitable for `graph.filter()` and for
+        composition with `&`, `|`, `^`, `~`.
 
         Parameters
         ----------
-        values : Iterable[Scalar] | Sequence[Scalar] | np.ndarray | Series
+        values : Iterable[Scalar] | Sequence[Scalar] | np.ndarray
             Values the attribute should belong to.
-
-        Returns
-        -------
-        AttrComparison
-            A comparison suitable for filtering across all graph backends.
         """
-        return AttrComparison(self, _is_in_op, values)
+        if not _is_membership_expr_input(values):
+            raise ValueError(
+                f"Cannot use 'is_in' method with non-membership values. Found '{values}' of type {type(values)}."
+            )
+        if self.has_inf():
+            raise ValueError("Comparison operators are not supported for expressions with infinity.")
+        columns = self.expr_columns
+        if len(columns) != 1:
+            raise ValueError(f"'is_in' is only supported for single-column expressions. Found columns {columns}.")
+        values_cast = _cast_membership(values)
+        expr = self.expr.is_in(values_cast)
+        result = type(self)(expr)
+        result._filter = _FilterLeaf(column=columns[0], op=_is_in_op, other=values_cast, kind=type(self))
+        return result
 
     def __invert__(self) -> "Attr":
-        return Attr(~self.expr)
+        result = type(self)(~self.expr)
+        result._inf_exprs = self._inf_exprs.copy()
+        result._neg_inf_exprs = self._neg_inf_exprs.copy()
+        if self._filter is not None:
+            result._filter = _FilterCompound("not", (self._filter,))
+        return result
 
     def __neg__(self) -> "Attr":
-        return Attr(-self.expr)
+        result = type(self)(-self.expr)
+        # `-(x * inf)` is `x * -inf`: swap positive and negative trackers.
+        result._inf_exprs = self._neg_inf_exprs.copy()
+        result._neg_inf_exprs = self._inf_exprs.copy()
+        return result
 
     def __pos__(self) -> "Attr":
-        return Attr(+self.expr)
+        return self
 
     def __abs__(self) -> "Attr":
-        return Attr(abs(self.expr))
+        result = type(self)(abs(self.expr))
+        result._inf_exprs = self._inf_exprs.copy()
+        result._neg_inf_exprs = self._neg_inf_exprs.copy()
+        return result
 
     def __getattr__(self, attr: str) -> Any:
         # Don't delegate our internal attributes to the expr
@@ -518,9 +498,13 @@ class Attr:
         return expr_attr
 
     def __repr__(self) -> str:
+        if self._filter is not None:
+            return _filter_repr(self._filter)
+        # Non-filter Attrs always render as `Attr(<expr>)` regardless of subclass —
+        # the kind is meaningful for filter dispatch, not for arbitrary expressions.
         return f"Attr({self.expr})"
 
-    # Binary operators
+    # Binary arithmetic operators (auto-generated by `_setup_ops`)
     def __add__(self, other: ExprInput) -> "Attr": ...
     def __sub__(self, other: ExprInput) -> "Attr": ...
     def __mul__(self, other: ExprInput) -> "Attr": ...
@@ -528,11 +512,13 @@ class Attr:
     def __floordiv__(self, other: ExprInput) -> "Attr": ...
     def __mod__(self, other: ExprInput) -> "Attr": ...
     def __pow__(self, other: ExprInput) -> "Attr": ...
+
+    # Boolean / bitwise operators (auto-generated by `_setup_ops`)
     def __and__(self, other: ExprInput) -> "Attr": ...
     def __or__(self, other: ExprInput) -> "Attr": ...
     def __xor__(self, other: ExprInput) -> "Attr": ...
 
-    # Reverse operators
+    # Reverse arithmetic operators
     def __radd__(self, other: Scalar) -> "Attr": ...
     def __rsub__(self, other: Scalar) -> "Attr": ...
     def __rmul__(self, other: Scalar) -> "Attr": ...
@@ -544,106 +530,54 @@ class Attr:
     def __ror__(self, other: Scalar) -> "Attr": ...
     def __rxor__(self, other: Scalar) -> "Attr": ...
 
-    # Comparison operators with overloads
+    # Comparison operators with overloads (auto-generated by `_setup_ops`).
+    # No reflected `__r{eq,ne,lt,le,gt,ge}__` — Python uses the symmetric / opposite
+    # operator on the swapped operand instead, so those dunders are never invoked.
     @overload
     def __eq__(self, other: "Attr") -> "Attr": ...
     @overload
-    def __eq__(self, other: Scalar) -> "AttrComparison": ...
-    def __eq__(self, other: ExprInput) -> "Attr | AttrComparison": ...
-
-    @overload
-    def __req__(self, other: "Attr") -> "Attr": ...
-    @overload
-    def __req__(self, other: Scalar) -> "AttrComparison": ...
-    def __req__(self, other: ExprInput) -> "Attr | AttrComparison": ...
+    def __eq__(self, other: Scalar) -> "Attr": ...
+    def __eq__(self, other: ExprInput) -> "Attr": ...
 
     @overload
     def __ne__(self, other: "Attr") -> "Attr": ...
     @overload
-    def __ne__(self, other: Scalar) -> "AttrComparison": ...
-    def __ne__(self, other: ExprInput) -> "Attr | AttrComparison": ...
-
-    @overload
-    def __rne__(self, other: "Attr") -> "Attr": ...
-    @overload
-    def __rne__(self, other: Scalar) -> "AttrComparison": ...
-    def __rne__(self, other: ExprInput) -> "Attr | AttrComparison": ...
+    def __ne__(self, other: Scalar) -> "Attr": ...
+    def __ne__(self, other: ExprInput) -> "Attr": ...
 
     @overload
     def __lt__(self, other: "Attr") -> "Attr": ...
     @overload
-    def __lt__(self, other: Scalar) -> "AttrComparison": ...
-    def __lt__(self, other: ExprInput) -> "Attr | AttrComparison": ...
-
-    @overload
-    def __rlt__(self, other: "Attr") -> "Attr": ...
-    @overload
-    def __rlt__(self, other: Scalar) -> "AttrComparison": ...
-    def __rlt__(self, other: ExprInput) -> "Attr | AttrComparison": ...
+    def __lt__(self, other: Scalar) -> "Attr": ...
+    def __lt__(self, other: ExprInput) -> "Attr": ...
 
     @overload
     def __le__(self, other: "Attr") -> "Attr": ...
     @overload
-    def __le__(self, other: Scalar) -> "AttrComparison": ...
-    def __le__(self, other: ExprInput) -> "Attr | AttrComparison": ...
-
-    @overload
-    def __rle__(self, other: "Attr") -> "Attr": ...
-    @overload
-    def __rle__(self, other: Scalar) -> "AttrComparison": ...
-    def __rle__(self, other: ExprInput) -> "Attr | AttrComparison": ...
+    def __le__(self, other: Scalar) -> "Attr": ...
+    def __le__(self, other: ExprInput) -> "Attr": ...
 
     @overload
     def __gt__(self, other: "Attr") -> "Attr": ...
     @overload
-    def __gt__(self, other: Scalar) -> "AttrComparison": ...
-    def __gt__(self, other: ExprInput) -> "Attr | AttrComparison": ...
-
-    @overload
-    def __rgt__(self, other: "Attr") -> "Attr": ...
-    @overload
-    def __rgt__(self, other: Scalar) -> "AttrComparison": ...
-    def __rgt__(self, other: ExprInput) -> "Attr | AttrComparison": ...
+    def __gt__(self, other: Scalar) -> "Attr": ...
+    def __gt__(self, other: ExprInput) -> "Attr": ...
 
     @overload
     def __ge__(self, other: "Attr") -> "Attr": ...
     @overload
-    def __ge__(self, other: Scalar) -> "AttrComparison": ...
-    def __ge__(self, other: ExprInput) -> "Attr | AttrComparison": ...
-
-    @overload
-    def __rge__(self, other: "Attr") -> "Attr": ...
-    @overload
-    def __rge__(self, other: Scalar) -> "AttrComparison": ...
-    def __rge__(self, other: ExprInput) -> "Attr | AttrComparison": ...
-
-
-# Auto-generate operator methods using functools.partialmethod
-def _add_operator(
-    cls: type[Attr] | type[AttrComparison],
-    name: str,
-    op: Callable,
-    reverse: bool = False,
-) -> None:
-    method = functools.partialmethod(cls._delegate_operator, op=op, reverse=reverse)
-    setattr(cls, name, method)
-
-
-def _add_comparison_operator(
-    name: str,
-    op: Callable,
-    reverse: bool = False,
-) -> None:
-    method = functools.partialmethod(Attr._delegate_comparison_operator, op=op, reverse=reverse)
-    setattr(Attr, name, method)
+    def __ge__(self, other: Scalar) -> "Attr": ...
+    def __ge__(self, other: ExprInput) -> "Attr": ...
 
 
 def _setup_ops() -> None:
+    """Auto-generate dunder methods on `Attr` from operator tables.
+
+    Arithmetic ops use `_delegate_operator` (clears `_filter`); comparison ops
+    use `_delegate_comparison_operator` (sets `_filter` leaf when possible);
+    boolean ops use `_delegate_boolean_operator` (builds compounds).
     """
-    Setup the operator methods for the AttrExpr class.
-    """
-    # Arithmetic operators: generated for both Attr and AttrComparison.
-    bin_ops = {
+    arith_ops = {
         "add": operator.add,
         "sub": operator.sub,
         "mul": operator.mul,
@@ -652,16 +586,7 @@ def _setup_ops() -> None:
         "mod": operator.mod,
         "pow": operator.pow,
     }
-
-    # Logical operators: generated only for Attr (bitwise on the polars expr).
-    # AttrComparison defines its own `& | ^ ~` in the class body to build
-    # AttrFilter compounds, so they are intentionally excluded here.
-    logical_ops = {
-        "and": operator.and_,
-        "or": operator.or_,
-        "xor": operator.xor,
-    }
-
+    bool_ops = ("and", "or", "xor")
     comp_ops = {
         "eq": operator.eq,
         "ne": operator.ne,
@@ -671,21 +596,20 @@ def _setup_ops() -> None:
         "ge": operator.ge,
     }
 
-    for op_name, op_func in (bin_ops | logical_ops).items():
-        _add_operator(Attr, f"__{op_name}__", op_func, reverse=False)
-        _add_operator(Attr, f"__r{op_name}__", op_func, reverse=True)
+    for name, func in arith_ops.items():
+        setattr(Attr, f"__{name}__", functools.partialmethod(Attr._delegate_operator, op=func, reverse=False))
+        setattr(Attr, f"__r{name}__", functools.partialmethod(Attr._delegate_operator, op=func, reverse=True))
 
-    for op_name, op_func in bin_ops.items():
-        _add_operator(AttrComparison, f"__{op_name}__", op_func, reverse=False)
-        _add_operator(AttrComparison, f"__r{op_name}__", op_func, reverse=True)
+    for name in bool_ops:
+        setattr(
+            Attr, f"__{name}__", functools.partialmethod(Attr._delegate_boolean_operator, op_name=name, reverse=False)
+        )
+        setattr(
+            Attr, f"__r{name}__", functools.partialmethod(Attr._delegate_boolean_operator, op_name=name, reverse=True)
+        )
 
-    for op_name, op_func in comp_ops.items():
-        _add_comparison_operator(f"__{op_name}__", op_func, reverse=False)
-        _add_comparison_operator(f"__r{op_name}__", op_func, reverse=True)
-
-        # attrr_comparision uses normal delegate_operator
-        _add_operator(AttrComparison, f"__{op_name}__", op_func, reverse=False)
-        _add_operator(AttrComparison, f"__r{op_name}__", op_func, reverse=True)
+    for name, func in comp_ops.items():
+        setattr(Attr, f"__{name}__", functools.partialmethod(Attr._delegate_comparison_operator, op=func))
 
 
 _setup_ops()
@@ -713,218 +637,91 @@ class EdgeAttr(Attr):
     """
 
 
-_FILTER_OP_SYMBOLS = {"and": "&", "or": "|", "xor": "^", "not": "~"}
+def _filter_attr_kind(node: _FilterNode) -> type[Attr]:
+    """Return the leaf-attribute kind (`NodeAttr` / `EdgeAttr` / `Attr`) of a filter node.
 
-
-class AttrFilter:
+    Raises `ValueError` if the filter mixes `NodeAttr` and `EdgeAttr` leaves.
+    The base `Attr` kind defers to any more specific kind present.
     """
-    A compound boolean combination of [AttrComparison][tracksdata.attrs.AttrComparison]
-    (or nested `AttrFilter`) operands, used to express OR / XOR / AND / NOT
-    relationships when filtering nodes or edges in a graph.
-
-    Use Python's bitwise operators on `AttrComparison` (or `AttrFilter`)
-    instances to build compounds:
-
-    ```python
-    graph.filter((NodeAttr("t") == 1) | (NodeAttr("t") == 2))
-    graph.filter(~(NodeAttr("t") == 0))
-    graph.filter((EdgeAttr("w") > 0.5) ^ (EdgeAttr("w") < -0.5))
-    ```
-
-    All leaves of a single `AttrFilter` must reference attributes of the same
-    kind (either all [NodeAttr][tracksdata.attrs.NodeAttr] or all
-    [EdgeAttr][tracksdata.attrs.EdgeAttr]). Mixing node and edge attributes
-    inside one compound is not supported because it would require joining the
-    node and edge tables in a way that conflicts with the existing AND-based
-    filter semantics. Top-level node/edge filters can still be combined via
-    positional arguments to `graph.filter()` (implicit AND).
-
-    Parameters
-    ----------
-    op : str
-        Logical operator, one of `"and"`, `"or"`, `"xor"`, `"not"`.
-    operands : Sequence[AttrComparison | AttrFilter]
-        Operands. `"not"` requires exactly one operand; the others require at
-        least two.
-    """
-
-    def __init__(self, op: str, operands: Sequence[FilterInput]) -> None:
-        if op not in _FILTER_LOGICAL_OPS:
-            raise ValueError(f"Unknown logical operator '{op}'. Expected one of {_FILTER_LOGICAL_OPS}.")
-        operands = list(operands)
-        for o in operands:
-            if not isinstance(o, AttrComparison | AttrFilter):
-                raise TypeError(f"AttrFilter operands must be AttrComparison or AttrFilter, got {type(o).__name__}.")
-        if op == "not":
-            if len(operands) != 1:
-                raise ValueError("'not' filter requires exactly one operand.")
-        else:
-            if len(operands) < 2:
-                raise ValueError(f"'{op}' filter requires at least two operands.")
-        self.op = op
-        self.operands = operands
-
-    def __and__(self, other: FilterInput) -> "AttrFilter":
-        return AttrFilter("and", [self, other])
-
-    def __rand__(self, other: FilterInput) -> "AttrFilter":
-        return AttrFilter("and", [other, self])
-
-    def __or__(self, other: FilterInput) -> "AttrFilter":
-        return AttrFilter("or", [self, other])
-
-    def __ror__(self, other: FilterInput) -> "AttrFilter":
-        return AttrFilter("or", [other, self])
-
-    def __xor__(self, other: FilterInput) -> "AttrFilter":
-        return AttrFilter("xor", [self, other])
-
-    def __rxor__(self, other: FilterInput) -> "AttrFilter":
-        return AttrFilter("xor", [other, self])
-
-    def __invert__(self) -> "AttrFilter":
-        return AttrFilter("not", [self])
-
-    def leaves(self) -> list["AttrComparison"]:
-        """Flatten the filter tree to its leaf comparisons."""
-        out: list[AttrComparison] = []
-        for o in self.operands:
-            if isinstance(o, AttrFilter):
-                out.extend(o.leaves())
-            else:
-                out.append(o)
-        return out
-
-    @property
-    def columns(self) -> list[str]:
-        return list(dict.fromkeys(leaf.column for leaf in self.leaves()))
-
-    def __repr__(self) -> str:
-        if self.op == "not":
-            return f"~{self.operands[0]!r}"
-        sep = f" {_FILTER_OP_SYMBOLS[self.op]} "
-        return "(" + sep.join(repr(o) for o in self.operands) + ")"
-
-
-def _filter_attr_kind(f: FilterInput) -> type[Attr]:
-    """Return the leaf-attribute kind (NodeAttr / EdgeAttr) of a filter.
-
-    Raises ValueError if the filter mixes node and edge attributes.
-    """
-    if isinstance(f, AttrComparison):
-        if isinstance(f.attr, NodeAttr):
-            return NodeAttr
-        if isinstance(f.attr, EdgeAttr):
-            return EdgeAttr
-        raise ValueError(f"Expected comparisons of 'NodeAttr' or 'EdgeAttr' objects, got {type(f.attr)}")
-
-    kinds = {_filter_attr_kind(o) for o in f.operands}
-    if len(kinds) > 1:
+    kinds = {leaf.kind for leaf in walk_leaves(node)}
+    specific = {k for k in kinds if k is not Attr}
+    if len(specific) > 1:
         raise ValueError(
-            "A single AttrFilter compound cannot mix NodeAttr and EdgeAttr comparisons. "
+            "A single compound filter cannot mix NodeAttr and EdgeAttr comparisons. "
             "Combine node and edge filters via separate positional arguments to graph.filter()."
         )
-    return kinds.pop()
+    return specific.pop() if specific else Attr
 
 
 def split_attr_comps(
-    attr_comps: Sequence[FilterInput],
-) -> tuple[list[FilterInput], list[FilterInput]]:
+    attr_comps: Sequence["Attr"],
+) -> tuple[list["Attr"], list["Attr"]]:
     """
-    Split a list of attribute comparisons (or compound filters) into node and
-    edge groups based on the kind of their leaf comparisons.
+    Split a list of filter-shaped Attrs into node and edge groups based on the
+    kind of their leaf comparisons.
 
     Parameters
     ----------
-    attr_comps : Sequence[AttrComparison | AttrFilter]
-        The attribute comparisons or compound filters to split.
+    attr_comps : Sequence[Attr]
+        The filter-shaped Attrs to split. Each must have `_filter` set (i.e.
+        be built from comparisons + boolean ops).
 
     Returns
     -------
-    tuple[list[AttrComparison | AttrFilter], list[AttrComparison | AttrFilter]]
+    tuple[list[Attr], list[Attr]]
         A tuple of lists of node and edge filters.
     """
-    node_attr_comps: list[FilterInput] = []
-    edge_attr_comps: list[FilterInput] = []
+    node_attr_comps: list[Attr] = []
+    edge_attr_comps: list[Attr] = []
 
     for attr_comp in attr_comps:
-        kind = _filter_attr_kind(attr_comp)
+        if not isinstance(attr_comp, Attr) or attr_comp._filter is None:
+            raise ValueError(f"Expected a filter-shaped Attr (built from comparisons), got {type(attr_comp).__name__}.")
+        kind = _filter_attr_kind(attr_comp._filter)
         if kind is NodeAttr:
             node_attr_comps.append(attr_comp)
-        else:
+        elif kind is EdgeAttr:
             edge_attr_comps.append(attr_comp)
+        else:
+            raise ValueError(f"Expected comparisons of 'NodeAttr' or 'EdgeAttr' objects, got {kind.__name__}.")
 
     return node_attr_comps, edge_attr_comps
 
 
-def attr_comps_to_strs(attr_comps: Sequence[FilterInput]) -> list[str]:
+def attr_comps_to_strs(attr_comps: Sequence["Attr"]) -> list[str]:
     """
-    Convert a list of attribute comparisons (or compound filters) to a list of
-    column names involved in them.
-
-    Parameters
-    ----------
-    attr_comps : Sequence[AttrComparison | AttrFilter]
-        The filters to extract column names from.
-
-    Returns
-    -------
-    list[str]
-        The column names referenced by the filters, deduplicated while
-        preserving order.
+    Convert a list of filter-shaped Attrs to the list of column names they
+    reference, deduplicated while preserving order.
     """
     out: list[str] = []
     for attr_comp in attr_comps:
-        if isinstance(attr_comp, AttrFilter):
-            out.extend(attr_comp.columns)
-        else:
-            out.append(str(attr_comp.column))
+        if attr_comp._filter is None:
+            continue
+        for leaf in walk_leaves(attr_comp._filter):
+            out.append(leaf.column)
     return list(dict.fromkeys(out))
-
-
-def _polars_filter_expr(f: FilterInput, df: pl.DataFrame) -> pl.Expr | pl.Series:
-    """Translate a single AttrComparison/AttrFilter to a polars expression."""
-    if isinstance(f, AttrComparison):
-        return f.op(df[str(f.column)], f.other)
-
-    if f.op == "not":
-        return ~_polars_filter_expr(f.operands[0], df)
-
-    child_exprs = [_polars_filter_expr(o, df) for o in f.operands]
-    if f.op == "and":
-        return functools.reduce(operator.and_, child_exprs)
-    if f.op == "or":
-        return functools.reduce(operator.or_, child_exprs)
-    # xor
-    return functools.reduce(operator.xor, child_exprs)
 
 
 def polars_reduce_attr_comps(
     df: pl.DataFrame,
-    attr_comps: Sequence[FilterInput],
+    attr_comps: Sequence["Attr"],
     reduce_op: Callable[[Expr, Expr], Expr],
 ) -> pl.Expr:
     """
-    Reduce a list of attribute comparisons (or compound filters) into a single
-    polars expression, combined with `reduce_op` at the top level (AND-ed by
-    default in callers).
+    Reduce a list of filter-shaped Attrs into a single polars expression,
+    combined with `reduce_op` at the top level (AND-ed by default in callers).
 
     Parameters
     ----------
     df : pl.DataFrame
-        The dataframe to reduce the attribute comparisons on.
-    attr_comps : Sequence[AttrComparison | AttrFilter]
+        Present for API compatibility; unused — each Attr already carries a
+        fully-formed polars expression in `attr.expr`.
+    attr_comps : Sequence[Attr]
         The filters to reduce.
     reduce_op : Callable[[Expr, Expr], Expr]
         The operation to reduce the top-level filters with.
-
-    Returns
-    -------
-    pl.Expr
-        The reduced polars expression.
     """
     if not attr_comps:
-        # Return True for all rows by using the first column as a reference
         raise ValueError("No attribute comparisons provided.")
-
-    return pl.reduce(reduce_op, [_polars_filter_expr(f, df) for f in attr_comps])
+    del df  # unused; kept for backward-compatible signature
+    return pl.reduce(reduce_op, [a.expr for a in attr_comps])

@@ -825,12 +825,11 @@ def test_filter_subgraph_with_or_attr_filter(graph_backend: BaseGraph) -> None:
 
 
 def test_filter_compound_mixed_node_and_edge_raises(graph_backend: BaseGraph) -> None:
-    """A single compound filter cannot mix node and edge attributes."""
-    graph_with_data = create_test_graph(graph_backend, use_subgraph=False)
+    """A single compound filter cannot mix node and edge attributes — caught at construction."""
+    _ = create_test_graph(graph_backend, use_subgraph=False)
 
-    bad_filter = (NodeAttr("t") == 1) | (EdgeAttr("weight") > 0.5)
-    with pytest.raises(ValueError, match="cannot mix NodeAttr and EdgeAttr"):
-        graph_with_data.filter(bad_filter).node_ids()
+    with pytest.raises(ValueError, match="Cannot combine NodeAttr and EdgeAttr"):
+        _ = (NodeAttr("t") == 1) | (EdgeAttr("weight") > 0.5)
 
 
 @parametrize_subgraph_tests
