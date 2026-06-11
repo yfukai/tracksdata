@@ -1,10 +1,11 @@
 import numpy as np
+import polars as pl
 import pytest
 from skimage.measure._regionprops import RegionProperties
 
 from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.graph import RustWorkXGraph
-from tracksdata.nodes import Mask, RegionPropsNodes
+from tracksdata.nodes import Mask, RegionPropsAttrs, RegionPropsNodes
 from tracksdata.options import get_options, options_context
 
 
@@ -334,3 +335,141 @@ def test_regionprops_multiprocessing_isolation() -> None:
     """Test that multiprocessing options don't affect subsequent tests."""
     # Verify default n_workers is 1
     assert get_options().n_workers == 1
+
+
+TIMELAPSE_LABELS = np.array(
+    [
+        [[1, 1, 0], [1, 0, 2], [0, 2, 2]],  # t=0
+        [[0, 3, 3], [0, 3, 0], [4, 0, 0]],  # t=1
+    ],
+    dtype=np.int32,
+)
+
+TIMELAPSE_INTENSITY = np.array(
+    [
+        [[10, 20, 0], [30, 0, 40], [0, 50, 60]],  # t=0
+        [[0, 70, 80], [0, 90, 0], [100, 0, 0]],  # t=1
+    ],
+    dtype=np.float32,
+)
+
+
+def test_regionprops_attrs_init_validation() -> None:
+    """Test RegionPropsAttrs initialization and property validation."""
+    operator = RegionPropsAttrs(properties=["area", "intensity_mean"], spacing=(1.0, 2.0))
+    assert operator.attr_keys() == ["area", "intensity_mean"]
+    assert operator._spacing == (1.0, 2.0)
+
+    with pytest.raises(ValueError, match="at least one region property"):
+        RegionPropsAttrs(properties=[])
+
+    with pytest.raises(ValueError, match="`centroid` is not supported"):
+        RegionPropsAttrs(properties=["centroid"])
+
+    with pytest.raises(ValueError, match="`bbox` is not supported"):
+        RegionPropsAttrs(properties=["bbox"])
+
+
+@pytest.mark.parametrize("n_workers", [1, 2])
+def test_regionprops_attrs_matches_nodes_operator(n_workers: int) -> None:
+    """Test that recomputed properties match those computed at node creation."""
+    properties = ["area", "intensity_mean", "intensity_max"]
+
+    # ground truth: properties computed directly from the labels
+    expected_graph = RustWorkXGraph()
+    RegionPropsNodes(extra_properties=properties).add_nodes(
+        expected_graph, labels=TIMELAPSE_LABELS, intensity_image=TIMELAPSE_INTENSITY
+    )
+    expected_df = expected_graph.node_attrs(attr_keys=properties)
+
+    # recompute: nodes created without properties, then RegionPropsAttrs
+    graph = RustWorkXGraph()
+    RegionPropsNodes().add_nodes(graph, labels=TIMELAPSE_LABELS)
+
+    operator = RegionPropsAttrs(properties=properties)
+    with options_context(n_workers=n_workers):
+        operator.add_node_attrs(graph, intensity_image=TIMELAPSE_INTENSITY)
+
+    result_df = graph.node_attrs(attr_keys=properties)
+
+    for prop in properties:
+        np.testing.assert_allclose(result_df[prop].to_numpy(), expected_df[prop].to_numpy())
+
+
+def test_regionprops_attrs_callable_property() -> None:
+    """Test recomputing properties with a custom callable."""
+
+    def double_area(region: RegionProperties) -> float:
+        return region.area * 2
+
+    graph = RustWorkXGraph()
+    RegionPropsNodes(extra_properties=["area"]).add_nodes(graph, labels=TIMELAPSE_LABELS)
+
+    RegionPropsAttrs(properties=[double_area]).add_node_attrs(graph)
+
+    nodes_df = graph.node_attrs(attr_keys=["area", "double_area"])
+    np.testing.assert_array_equal(
+        nodes_df["double_area"].to_numpy(),
+        nodes_df["area"].to_numpy() * 2,
+    )
+
+
+def test_regionprops_attrs_single_time_point() -> None:
+    """Test recomputing properties for a single time point only."""
+    graph = RustWorkXGraph()
+    RegionPropsNodes().add_nodes(graph, labels=TIMELAPSE_LABELS, intensity_image=TIMELAPSE_INTENSITY)
+
+    RegionPropsAttrs(properties=["intensity_mean"]).add_node_attrs(graph, t=1, intensity_image=TIMELAPSE_INTENSITY)
+
+    nodes_df = graph.node_attrs(attr_keys=[DEFAULT_ATTR_KEYS.T, "intensity_mean"])
+    at_t1 = nodes_df.filter(nodes_df[DEFAULT_ATTR_KEYS.T] == 1)
+
+    # region 3: pixels (70, 80, 90) -> mean = 80; region 4: pixel (100,) -> mean = 100
+    np.testing.assert_allclose(sorted(at_t1["intensity_mean"]), [80.0, 100.0])
+
+
+def test_regionprops_attrs_overwrites_existing_values() -> None:
+    """Test that existing attribute values are overwritten by the recomputation."""
+    graph = RustWorkXGraph()
+    RegionPropsNodes(extra_properties=["area"]).add_nodes(graph, labels=TIMELAPSE_LABELS)
+
+    expected_areas = graph.node_attrs(attr_keys=["area"])["area"].to_numpy().copy()
+
+    # corrupt the stored values
+    graph.update_node_attrs(node_ids=graph.node_ids(), attrs={"area": [-1] * graph.num_nodes()})
+
+    RegionPropsAttrs(properties=["area"]).add_node_attrs(graph)
+
+    np.testing.assert_array_equal(
+        graph.node_attrs(attr_keys=["area"])["area"].to_numpy(),
+        expected_areas,
+    )
+
+
+def test_regionprops_attrs_spacing() -> None:
+    """Test that spacing affects the recomputed measurements."""
+    graph = RustWorkXGraph()
+    RegionPropsNodes(extra_properties=["area"]).add_nodes(graph, labels=TIMELAPSE_LABELS)
+
+    pixel_areas = graph.node_attrs(attr_keys=["area"])["area"].to_numpy().copy()
+
+    RegionPropsAttrs(properties=["area"], spacing=(2.0, 3.0)).add_node_attrs(graph)
+
+    np.testing.assert_allclose(
+        graph.node_attrs(attr_keys=["area"])["area"].to_numpy(),
+        pixel_areas * 6.0,
+    )
+
+
+def test_regionprops_attrs_missing_mask_key() -> None:
+    """Test error handling when the mask key is missing or invalid."""
+    graph = RustWorkXGraph()
+
+    with pytest.raises(ValueError, match="Mask key 'mask' not found"):
+        RegionPropsAttrs(properties=["area"]).add_node_attrs(graph)
+
+    graph.add_node_attr_key(DEFAULT_ATTR_KEYS.MASK, pl.Object)
+    graph.add_node({"t": 0, "mask": "not a mask"})
+
+    with pytest.raises(TypeError, match="Expected `Mask` object"):
+        RegionPropsAttrs(properties=["area"]).add_node_attrs(graph)

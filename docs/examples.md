@@ -10,6 +10,13 @@ Here's a complete basic example that demonstrates the core workflow of TracksDat
 --8<-- "docs/examples/basic.py"
 ```
 
+## Lineage Tree Plotting and Region-Properties Re-computation
+
+A self-contained notebook demonstrating `plot_lineage_tree` (matplotlib lineage trees with
+attribute-bound colors and sizes, time windows, and exact timestamps) and `RegionPropsAttrs`
+(re-computing region properties from existing masks and an intensity image) is available at
+[`docs/examples/lineage_tree_and_regionprops.ipynb`](examples/lineage_tree_and_regionprops.ipynb).
+
 ## Key Components Explained
 
 - **Graph**: The core data structure holding nodes (objects) and edges (connections)
