@@ -1,5 +1,8 @@
 import binascii
+import functools
 import re
+import uuid
+import weakref
 from collections.abc import Callable, Sequence
 from enum import Enum
 from pathlib import Path
@@ -15,7 +18,7 @@ from sqlalchemy.orm import DeclarativeBase, Session, aliased, load_only
 from sqlalchemy.orm.query import Query
 from sqlalchemy.sql.type_api import TypeEngine
 
-from tracksdata.attrs import AttrComparison, split_attr_comps
+from tracksdata.attrs import AttrComparison, AttrFilter, Filter, split_attr_comps
 from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.graph._base_graph import BaseGraph
 from tracksdata.graph.filters._base_filter import BaseFilter
@@ -30,7 +33,12 @@ from tracksdata.utils._dtypes import (
     sqlalchemy_type_to_polars_dtype,
 )
 from tracksdata.utils._logging import LOG
-from tracksdata.utils._signal import is_signal_on
+from tracksdata.utils._signal import (
+    emit_node_added_events,
+    emit_node_removed_events,
+    emit_node_updated_events,
+    is_signal_on,
+)
 
 if TYPE_CHECKING:
     from tracksdata.graph._graph_view import GraphView
@@ -58,13 +66,109 @@ def _data_numpy_to_native(data: dict[str, Any]) -> None:
             data[k] = v.item()
 
 
+def _to_sql_clause(f: Filter, table: type[DeclarativeBase]) -> Any:
+    """Translate an AttrComparison or AttrFilter into a SQLAlchemy clause."""
+    if isinstance(f, AttrComparison):
+        return f.op(getattr(table, str(f.column)), f.other)
+
+    assert isinstance(f, AttrFilter)
+    if f.op == "not":
+        # AttrFilter.__init__ enforces exactly one operand for "not"
+        return sa.not_(_to_sql_clause(f.operands[0], table))
+
+    clauses = [_to_sql_clause(o, table) for o in f.operands]
+    if f.op == "and":
+        return sa.and_(*clauses)
+    if f.op == "or":
+        return sa.or_(*clauses)
+    # xor: reduce pairwise via (a OR b) AND NOT (a AND b)
+    return functools.reduce(
+        lambda a, b: sa.and_(sa.or_(a, b), sa.not_(sa.and_(a, b))),
+        clauses,
+    )
+
+
+# Module-level (not methods) so they can be registered with ``weakref.finalize``
+# without holding a bound reference to the owning object, which would prevent
+# it from ever being collected.
+def _drop_scratch_table(engine: sa.Engine, table: sa.Table) -> None:
+    """Drop a scratch table, swallowing errors (e.g. at interpreter shutdown)."""
+    try:
+        table.drop(engine)
+    except Exception as exc:
+        LOG.debug("Failed to drop scratch table %s: %s", table.name, exc)
+
+
+class _SQLIDSet:
+    """A set of ids usable in SQL ``IN`` clauses without overflowing bind limits.
+
+    Small sets compile to inline ``col.in_([...])``; larger sets are materialized
+    into a per-instance scratch table on ``graph._engine`` and matched via
+    ``col.in_(SELECT id FROM scratch)``. The scratch table is a regular table
+    (not ``TEMPORARY``) so it is visible from any pool connection the filter
+    later uses; the caller drops it via :meth:`close` once the queries that
+    reference it are no longer needed.
+
+    ``occurrences`` is the maximum number of times the id set will be expanded
+    in a single compiled statement (e.g. filtering both ``source_id`` and
+    ``target_id`` of an edge table counts as 2). The scratch-table cutoff is
+    divided by it so that ``len(ids) * occurrences`` stays safely under the
+    backend's bound-variable limit.
+    """
+
+    def __init__(
+        self,
+        graph: "SQLGraph",
+        ids: Sequence[int],
+        *,
+        occurrences: int = 1,
+    ) -> None:
+        if hasattr(ids, "tolist"):
+            ids = ids.tolist()
+        self._ids: list[int] = list(ids)
+        # Hold the engine, not the graph, so this set does not participate in
+        # the graph -> SQLFilter -> _SQLIDSet -> graph reference cycle.
+        # Otherwise the scratch table would only be dropped after Python's
+        # cycle GC runs, delaying cleanup in long-running processes.
+        self._engine = graph._engine
+
+        limit = max(1, graph._sql_chunk_size() // max(1, occurrences))
+        if len(self._ids) > limit:
+            self._scratch: sa.Table | None = graph._create_id_scratch_table(self._ids)
+        else:
+            self._scratch = None
+
+    @property
+    def uses_scratch_table(self) -> bool:
+        return self._scratch is not None
+
+    def in_clause(self, column: sa.ColumnElement) -> "sa.ColumnElement[bool]":
+        if self._scratch is None:
+            return column.in_(self._ids)
+        return column.in_(sa.select(self._scratch.c.id))
+
+    def close(self) -> None:
+        if self._scratch is not None:
+            _drop_scratch_table(self._engine, self._scratch)
+            self._scratch = None
+
+
+def _close_id_set(id_set: "_SQLIDSet") -> None:
+    try:
+        id_set.close()
+    except Exception as exc:
+        LOG.debug("Failed to close _SQLIDSet: %s", exc)
+
+
 def _filter_query(
     query: sa.Select,
     table: type[DeclarativeBase],
-    attr_filters: list[AttrComparison],
+    attr_filters: Sequence[Filter],
 ) -> sa.Select:
     """
-    Filter a query by a list of attribute filters.
+    Filter a query by a list of attribute filters (AND-ed together at the top
+    level). Each filter may itself be a compound AttrFilter combining
+    AttrComparisons with OR / AND / XOR / NOT.
 
     Parameters
     ----------
@@ -72,7 +176,7 @@ def _filter_query(
         The query to filter.
     table : type[DeclarativeBase]
         The table to filter.
-    attr_filters : list[AttrComparison]
+    attr_filters : Sequence[Filter]
         The attribute filters to apply.
 
     Returns
@@ -81,16 +185,25 @@ def _filter_query(
         The filtered query.
     """
     LOG.info("Filter query:\n%s", attr_filters)
-    query = query.filter(
-        *[attr_filter.op(getattr(table, str(attr_filter.column)), attr_filter.other) for attr_filter in attr_filters]
-    )
+    query = query.filter(*[_to_sql_clause(f, table) for f in attr_filters])
     return query
 
 
 class SQLFilter(BaseFilter):
+    """SQL-backed filter over an :class:`SQLGraph`.
+
+    When ``node_ids`` is larger than the backend's bound-variable budget
+    (after accounting for how many ``IN (...)`` clauses the list expands
+    into), the filter materializes the ids into a per-instance scratch
+    table on ``graph._engine`` and references it via subselects. The
+    scratch table is dropped when the filter is garbage-collected (via
+    :func:`weakref.finalize`), so callers don't need to close the filter
+    explicitly.
+    """
+
     def __init__(
         self,
-        *attr_filters: AttrComparison,
+        *attr_filters: Filter,
         graph: "SQLGraph",
         node_ids: Sequence[int] | None = None,
         include_targets: bool = False,
@@ -101,6 +214,7 @@ class SQLFilter(BaseFilter):
         self._node_attr_comps, self._edge_attr_comps = split_attr_comps(attr_filters)
         self._include_targets = include_targets
         self._include_sources = include_sources
+        self._id_set: _SQLIDSet | None = None
 
         # creating initial query
         self._node_query: sa.Select = sa.select(self._graph.Node)
@@ -108,18 +222,20 @@ class SQLFilter(BaseFilter):
         node_filtered = False
 
         if node_ids is not None:
-            if hasattr(node_ids, "tolist"):
-                node_ids = node_ids.tolist()
+            # The node_ids list is expanded in up to three IN(...) clauses
+            # below (once on Node, plus once each on Edge.target_id /
+            # Edge.source_id unless the corresponding ``include_*`` is set).
+            # Account for that so the inline/scratch cutoff stays below the
+            # backend's bound-variable limit for the compiled statement.
+            occurrences = 1 + int(not self._include_targets) + int(not self._include_sources)
+            id_set = _SQLIDSet(self._graph, node_ids, occurrences=occurrences)
+            self._id_set = id_set
 
-            self._node_query = self._node_query.filter(self._graph.Node.node_id.in_(node_ids))
+            self._node_query = self._node_query.filter(id_set.in_clause(self._graph.Node.node_id))
             if not self._include_targets:
-                self._edge_query = self._edge_query.filter(
-                    self._graph.Edge.target_id.in_(node_ids),
-                )
+                self._edge_query = self._edge_query.filter(id_set.in_clause(self._graph.Edge.target_id))
             if not self._include_sources:
-                self._edge_query = self._edge_query.filter(
-                    self._graph.Edge.source_id.in_(node_ids),
-                )
+                self._edge_query = self._edge_query.filter(id_set.in_clause(self._graph.Edge.source_id))
             node_filtered = True
 
         if self._node_attr_comps:
@@ -183,6 +299,16 @@ class SQLFilter(BaseFilter):
                 )
 
             self._node_query = sa.union(*nodes_query)
+
+        # Drop the scratch table when this filter is collected. Only register a
+        # finalizer if one was actually allocated, so the common small-set case
+        # stays free of weakref bookkeeping.
+        if self._uses_scratch_table():
+            weakref.finalize(self, _close_id_set, self._id_set)
+
+    def _uses_scratch_table(self) -> bool:
+        """Whether the id set backing this filter materialized a scratch table."""
+        return self._id_set is not None and self._id_set.uses_scratch_table
 
     @cache_method
     def node_ids(self) -> list[int]:
@@ -728,7 +854,7 @@ class SQLGraph(BaseGraph):
 
     def filter(
         self,
-        *attr_filters: AttrComparison,
+        *attr_filters: Filter,
         node_ids: Sequence[int] | None = None,
         include_targets: bool = False,
         include_sources: bool = False,
@@ -740,83 +866,6 @@ class SQLGraph(BaseGraph):
             include_targets=include_targets,
             include_sources=include_sources,
         )
-
-    def add_node(
-        self,
-        attrs: dict[str, Any],
-        validate_keys: bool = True,
-        index: int | None = None,
-    ) -> int:
-        """
-        Add a node to the graph at time t.
-
-        Node IDs are automatically generated based on the time point and
-        the node_id_time_multiplier to ensure uniqueness across time points,
-        unless an explicit index is provided.
-
-        Parameters
-        ----------
-        attrs : dict[str, Any]
-            The attributes of the node to be added. Must contain a "t" key
-            specifying the time point. Additional keys will be stored as
-            node attributes.
-        validate_keys : bool, default True
-            Whether to check if the attribute keys are valid against the
-            current schema. If False, validation is skipped for performance.
-        index : int | None, default None
-            Optional specific node ID to use. If provided, this will be used
-            as the node_id instead of the auto-generated value.
-
-        Returns
-        -------
-        int
-            The ID of the newly added node.
-
-        Raises
-        ------
-        ValueError
-            If validate_keys is True and the attributes contain invalid keys,
-            or if the "t" key is missing.
-
-        Examples
-        --------
-        ```python
-        node_id = graph.add_node({"t": 0, "x": 10.5, "y": 20.3})
-        node_id = graph.add_node({"t": 1, "x": 15.2, "y": 25.8, "intensity": 150.0})
-        node_id = graph.add_node({"t": 0, "x": 20.0, "y": 30.0}, index=12345)
-        ```
-        """
-        if validate_keys:
-            self._validate_attributes(attrs, self.node_attr_keys(), "node")
-
-            if "t" not in attrs:
-                raise ValueError(f"Node attributes must have a 't' key. Got {attrs.keys()}")
-
-        time = attrs["t"]
-
-        if index is None:
-            default_node_id = (time * self.node_id_time_multiplier) - 1
-            node_id = self._max_id_per_time.get(time, default_node_id) + 1
-        else:
-            node_id = index
-
-        node = self.Node(
-            node_id=node_id,
-            **attrs,
-        )
-
-        with Session(self._engine) as session:
-            session.add(node)
-            session.commit()
-
-        # Update max_id tracking only if using auto-generated IDs
-        if index is None:
-            self._max_id_per_time[time] = node_id
-
-        if is_signal_on(self.node_added):
-            self.node_added.emit(node_id, attrs)
-
-        return node_id
 
     def bulk_add_nodes(
         self,
@@ -864,6 +913,7 @@ class SQLGraph(BaseGraph):
         self._validate_indices_length(nodes, indices)
 
         node_ids = []
+        insert_rows = []
         for i, node in enumerate(nodes):
             time = node["t"]
 
@@ -875,123 +925,83 @@ class SQLGraph(BaseGraph):
             else:
                 node_id = indices[i]
 
-            node[DEFAULT_ATTR_KEYS.NODE_ID] = node_id
             node_ids.append(node_id)
+            insert_rows.append({**node, DEFAULT_ATTR_KEYS.NODE_ID: node_id})
 
-        self._chunked_sa_write(Session.bulk_insert_mappings, nodes, self.Node)
+        self._chunked_sa_write(Session.bulk_insert_mappings, insert_rows, self.Node)
 
-        if is_signal_on(self.node_added):
-            for node_id, node_attrs in zip(node_ids, nodes, strict=True):
-                new_attrs = {key: value for key, value in node_attrs.items() if key != DEFAULT_ATTR_KEYS.NODE_ID}
-                self.node_added.emit(node_id, new_attrs)
+        emit_node_added_events(self.node_added, zip(node_ids, nodes, strict=True))
 
         return node_ids
 
-    def remove_node(self, node_id: int) -> None:
+    def bulk_remove_nodes(self, node_ids: Sequence[int]) -> None:
         """
-        Remove a node from the graph.
-
-        This method removes the specified node and all edges connected to it
-        (both incoming and outgoing edges). Also removes any overlaps
-        involving this node.
+        Remove multiple nodes from the graph, along with their incident edges and overlaps.
 
         Parameters
         ----------
-        node_id : int
-            The ID of the node to remove.
+        node_ids : Sequence[int]
+            The IDs of the nodes to remove.
 
         Raises
         ------
         ValueError
-            If the node_id does not exist in the graph.
+            If any node_id does not exist in the graph.
         """
+        if hasattr(node_ids, "tolist"):
+            node_ids = node_ids.tolist()
+        else:
+            node_ids = list(node_ids)
+
+        if len(node_ids) == 0:
+            return
+
+        emit_signal = is_signal_on(self.node_removed)
+        chunk_size = self._sql_chunk_size()
+
+        unique_ids = set(node_ids)
         with Session(self._engine) as session:
-            # Check if the node exists
-            node = session.query(self.Node).filter(self.Node.node_id == node_id).first()
-            if node is None:
-                raise ValueError(f"Node {node_id} does not exist in the graph.")
-            old_attrs = {key: getattr(node, key) for key in self.node_attr_keys()}
-            self.node_removed.emit(node_id, old_attrs)
+            old_attrs_per_node: dict[int, dict[str, Any]] = {}
+            if emit_signal:
+                attr_keys = self.node_attr_keys()
+                for i in range(0, len(node_ids), chunk_size):
+                    chunk = node_ids[i : i + chunk_size]
+                    for node in session.query(self.Node).filter(self.Node.node_id.in_(chunk)).all():
+                        old_attrs_per_node[node.node_id] = {key: getattr(node, key) for key in attr_keys}
 
-            if is_signal_on(self.node_removed):
-                old_attrs = {key: getattr(node, key) for key in self.node_attr_keys()}
+            # Delete incident edges/overlaps and the nodes in a single pass; the node
+            # delete rowcount tells us how many requested nodes actually existed,
+            # avoiding a separate up-front existence query on the happy path.
+            deleted = 0
+            for i in range(0, len(node_ids), chunk_size):
+                chunk = node_ids[i : i + chunk_size]
+                session.query(self.Edge).filter(
+                    sa.or_(self.Edge.source_id.in_(chunk), self.Edge.target_id.in_(chunk))
+                ).delete(synchronize_session=False)
+                session.query(self.Overlap).filter(
+                    sa.or_(self.Overlap.source_id.in_(chunk), self.Overlap.target_id.in_(chunk))
+                ).delete(synchronize_session=False)
+                deleted += (
+                    session.query(self.Node).filter(self.Node.node_id.in_(chunk)).delete(synchronize_session=False)
+                )
 
-            # Remove all edges where this node is source or target
-            session.query(self.Edge).filter(
-                sa.or_(self.Edge.source_id == node_id, self.Edge.target_id == node_id)
-            ).delete()
+            if deleted != len(unique_ids):
+                # Some requested nodes were missing: discard the deletes instead of
+                # committing, then identify a missing id for the error message.
+                session.rollback()
+                existing: set[int] = set()
+                for i in range(0, len(node_ids), chunk_size):
+                    chunk = node_ids[i : i + chunk_size]
+                    existing.update(
+                        row[0] for row in session.query(self.Node.node_id).filter(self.Node.node_id.in_(chunk)).all()
+                    )
+                missing = [nid for nid in node_ids if nid not in existing]
+                raise ValueError(f"Node {missing[0]} does not exist in the graph.")
 
-            # Remove all overlaps involving this node
-            session.query(self.Overlap).filter(
-                sa.or_(self.Overlap.source_id == node_id, self.Overlap.target_id == node_id)
-            ).delete()
-
-            # Remove the node itself
-            session.delete(node)
             session.commit()
-            if is_signal_on(self.node_removed):
-                self.node_removed.emit(node_id, old_attrs)
 
-    def add_edge(
-        self,
-        source_id: int,
-        target_id: int,
-        attrs: dict[str, Any],
-        validate_keys: bool = True,
-    ) -> int:
-        """
-        Add an edge to the graph.
-
-        Parameters
-        ----------
-        source_id : int
-            The ID of the source node.
-        target_id : int
-            The ID of the target node.
-        attrs : dict[str, Any]
-            Additional attributes for the edge (e.g., weight, distance).
-        validate_keys : bool, default True
-            Whether to check if the attribute keys are valid against the
-            current schema. If False, validation is skipped for performance.
-
-        Returns
-        -------
-        int
-            The ID of the newly added edge.
-
-        Raises
-        ------
-        ValueError
-            If validate_keys is True and the attributes contain invalid keys.
-
-        Examples
-        --------
-        ```python
-        edge_id = graph.add_edge(node1_id, node2_id, {"weight": 0.8})
-        edge_id = graph.add_edge(node1_id, node2_id, {"weight": 0.9, "distance": 5.2, "confidence": 0.95})
-        ```
-        """
-        if validate_keys:
-            self._validate_attributes(attrs, self.edge_attr_keys(), "edge")
-
-        if hasattr(source_id, "item"):
-            source_id = source_id.item()
-
-        if hasattr(target_id, "item"):
-            target_id = target_id.item()
-
-        edge = self.Edge(
-            source_id=source_id,
-            target_id=target_id,
-            **attrs,
-        )
-
-        with Session(self._engine) as session:
-            session.add(edge)
-            session.commit()
-            edge_id = edge.edge_id
-
-        return edge_id
+        if emit_signal:
+            emit_node_removed_events(self.node_removed, ((nid, old_attrs_per_node[nid]) for nid in node_ids))
 
     def bulk_add_edges(
         self,
@@ -1943,6 +1953,40 @@ class SQLGraph(BaseGraph):
             chunks.append(data_df)
         return pl.concat(chunks)
 
+    def _create_id_scratch_table(self, ids: Sequence[int]) -> sa.Table:
+        """Create a uniquely-named helper table holding ``ids`` on ``self._engine``.
+
+        Used to work around SQL bound-variable limits when filtering by large
+        ``IN (...)`` lists: callers replace ``col.in_(ids)`` with
+        ``col.in_(sa.select(table.c.id))``. The table is a regular table on
+        the engine (not ``TEMPORARY``), so it is visible from any session or
+        connection drawn from the same engine pool — that is what makes it
+        usable across the multiple ``Session(engine)`` calls inside
+        :class:`SQLFilter`.
+
+        The caller owns the table's lifetime and must eventually call
+        ``table.drop(self._engine)`` (or hand the table off to a finalizer
+        that does so) to remove it.
+        """
+        unique_ids = list({int(v) for v in ids})
+
+        name = f"_tracksdata_ids_{uuid.uuid4().hex}"
+        table = sa.Table(
+            name,
+            sa.MetaData(),
+            sa.Column("id", sa.BigInteger, primary_key=True),
+        )
+        table.create(self._engine)
+
+        chunk_size = max(1, self._sql_chunk_size())
+        with self._engine.begin() as conn:
+            for i in range(0, len(unique_ids), chunk_size):
+                conn.execute(
+                    table.insert(),
+                    [{"id": v} for v in unique_ids[i : i + chunk_size]],
+                )
+        return table
+
     def update_node_attrs(
         self,
         *,
@@ -1974,18 +2018,10 @@ class SQLGraph(BaseGraph):
             new_attrs_by_id = new_df.rows_by_key(
                 key=DEFAULT_ATTR_KEYS.NODE_ID, named=True, unique=True, include_key=True
             )
-
-            for node_id in updated_node_ids:
-                self.node_updated.emit(node_id, old_attrs_by_id[node_id], new_attrs_by_id[node_id])
-
-            new_df = self.filter(node_ids=updated_node_ids).node_attrs(
-                attr_keys=[DEFAULT_ATTR_KEYS.NODE_ID, *attr_keys]
+            emit_node_updated_events(
+                self.node_updated,
+                ((node_id, old_attrs_by_id[node_id], new_attrs_by_id[node_id]) for node_id in updated_node_ids),
             )
-            new_attrs_by_id = new_df.rows_by_key(
-                key=DEFAULT_ATTR_KEYS.NODE_ID, named=True, unique=True, include_key=True
-            )
-            for node_id in updated_node_ids:
-                self.node_updated.emit(node_id, old_attrs_by_id[node_id], new_attrs_by_id[node_id])
 
     def update_edge_attrs(
         self,
@@ -2037,13 +2073,22 @@ class SQLGraph(BaseGraph):
             with Session(self._engine) as session:
                 return int(session.execute(stmt).scalar())
 
-        stmt = sa.select(edge_key_col, sa.func.count()).group_by(edge_key_col)
-        if node_ids is not None:
-            stmt = stmt.where(edge_key_col.in_(node_ids))
+        base_stmt = sa.select(edge_key_col, sa.func.count()).group_by(edge_key_col)
 
+        degree: dict[int, int] = {}
         with Session(self._engine) as session:
-            # get the number of edges for each using group by and count
-            degree = dict(session.execute(stmt).all())
+            if node_ids is None:
+                degree.update(session.execute(base_stmt).all())
+            else:
+                # Chunk the IN(...) so the bound-parameter count stays below
+                # the backend's limit (notably SQLite's
+                # ``SQLITE_MAX_VARIABLE_NUMBER``). Each chunk's group-by result
+                # is disjoint, so we can merge them with a simple dict update.
+                chunk_size = max(1, self._sql_chunk_size())
+                for i in range(0, len(node_ids), chunk_size):
+                    chunk = node_ids[i : i + chunk_size]
+                    stmt = base_stmt.where(edge_key_col.in_(chunk))
+                    degree.update(session.execute(stmt).all())
 
         if node_ids is None:
             # this is necessary to make sure it's the same order as node_ids
@@ -2158,9 +2203,10 @@ class SQLGraph(BaseGraph):
         reflection path then rebuilds the in-memory state.
 
         For filtered copies (``source_node_ids`` not ``None``) the selection
-        is materialized in a temp table so the row filter joins instead of
-        using an oversized ``IN (...)`` clause that would hit SQLite's
-        bound-parameter limit.
+        is materialized in a per-instance scratch table on the source engine
+        so the row filter joins instead of using an oversized ``IN (...)``
+        clause that would hit SQLite's bound-parameter limit. The scratch
+        table is dropped in the ``finally`` block before returning.
         """
         dst_database: str = kwargs["database"]
         dst_path = Path(dst_database)
@@ -2176,69 +2222,80 @@ class SQLGraph(BaseGraph):
         # escape the path safely via single-quote doubling.
         attach_path = dst_database.replace("'", "''")
 
-        with source_root._engine.connect() as conn:
-            conn.exec_driver_sql(f"ATTACH DATABASE '{attach_path}' AS _td_dst")
-            try:
-                # 1. Replicate the source schema by replaying its DDL against
-                # the attached destination. ``sqlite_master.sql`` is NULL for
-                # auto-generated objects (e.g. PK indexes), which we skip;
-                # tables are created before indexes.
-                ddl_rows = conn.exec_driver_sql(
-                    "SELECT type, sql FROM main.sqlite_master "
-                    "WHERE sql IS NOT NULL AND type IN ('table', 'index') "
-                    "ORDER BY CASE type WHEN 'table' THEN 0 ELSE 1 END"
-                ).fetchall()
-                for _type, ddl in ddl_rows:
-                    qualified = cls._SQLITE_DDL_QUALIFIER.sub(r"\g<1>_td_dst.", ddl, count=1)
-                    conn.exec_driver_sql(qualified)
+        if source_node_ids is None:
+            selected: sa.Table | None = None
+        else:
+            # Materialize the selection in a per-instance scratch table so the
+            # row filter joins instead of expanding into an oversized IN(...).
+            # The table lives on ``source_root._engine`` (visible from the
+            # ATTACH-ing connection) and is dropped in the outer ``finally``.
+            #
+            # We deliberately do not use a ``TEMPORARY`` table here even
+            # though this function holds a single connection. SQLAlchemy's
+            # ``Connection.close()`` only returns the underlying DB-API
+            # connection to the pool, it does not destroy it, so a TEMP table
+            # would survive into the next consumer of that same pooled SQLite
+            # connection. A regular table dropped explicitly avoids that.
+            selected = source_root._create_id_scratch_table(source_node_ids)
 
-                # 2. Copy rows. The Metadata table is included verbatim — its
-                # SQL-private schema entries describe the columns we just
-                # cloned and so are valid for the destination as-is.
-                if source_node_ids is None:
-                    for table_name in ("Node", "Edge", "Overlap", "Metadata"):
-                        conn.exec_driver_sql(f'INSERT INTO _td_dst."{table_name}" SELECT * FROM main."{table_name}"')
-                else:
-                    node_ids = list(source_node_ids)
-                    if hasattr(node_ids, "tolist"):
-                        node_ids = node_ids.tolist()
-                    # Materialize the selection in a temp table so the row
-                    # filter joins instead of using an oversized IN(...) clause.
-                    conn.exec_driver_sql("CREATE TEMP TABLE _td_selected (node_id INTEGER PRIMARY KEY)")
-                    insert_stmt = sa.text("INSERT INTO _td_selected (node_id) VALUES (:node_id)")
-                    chunk_size = max(1, source_root._sql_chunk_size())
-                    for i in range(0, len(node_ids), chunk_size):
-                        batch = node_ids[i : i + chunk_size]
-                        conn.execute(
-                            insert_stmt,
-                            [{"node_id": int(nid)} for nid in batch],
+        try:
+            with source_root._engine.connect() as conn:
+                conn.exec_driver_sql(f"ATTACH DATABASE '{attach_path}' AS _td_dst")
+                try:
+                    # 1. Replicate the source schema by replaying its DDL against
+                    # the attached destination. ``sqlite_master.sql`` is NULL for
+                    # auto-generated objects (e.g. PK indexes), which we skip;
+                    # tables are created before indexes. ``_tracksdata_ids_*``
+                    # are internal scratch tables (this call's own ``selected``
+                    # plus any from live ``SQLFilter``s on the same engine) and
+                    # must not be copied into the persisted destination.
+                    ddl_rows = conn.exec_driver_sql(
+                        "SELECT type, sql FROM main.sqlite_master "
+                        "WHERE sql IS NOT NULL AND type IN ('table', 'index') "
+                        "AND name NOT GLOB '_tracksdata_ids_*' "
+                        "ORDER BY CASE type WHEN 'table' THEN 0 ELSE 1 END"
+                    ).fetchall()
+                    for _type, ddl in ddl_rows:
+                        qualified = cls._SQLITE_DDL_QUALIFIER.sub(r"\g<1>_td_dst.", ddl, count=1)
+                        conn.exec_driver_sql(qualified)
+
+                    # 2. Copy rows. The Metadata table is included verbatim — its
+                    # SQL-private schema entries describe the columns we just
+                    # cloned and so are valid for the destination as-is.
+                    if selected is None:
+                        for table_name in ("Node", "Edge", "Overlap", "Metadata"):
+                            conn.exec_driver_sql(
+                                f'INSERT INTO _td_dst."{table_name}" SELECT * FROM main."{table_name}"'
+                            )
+                    else:
+                        selected_subq = f'SELECT id FROM "{selected.name}"'
+
+                        conn.exec_driver_sql(
+                            f'INSERT INTO _td_dst."Node" SELECT * FROM main."Node" WHERE node_id IN ({selected_subq})'
                         )
+                        conn.exec_driver_sql(
+                            f'INSERT INTO _td_dst."Edge" SELECT * FROM main."Edge" '
+                            f"WHERE source_id IN ({selected_subq}) "
+                            f"AND target_id IN ({selected_subq})"
+                        )
+                        conn.exec_driver_sql(
+                            f'INSERT INTO _td_dst."Overlap" SELECT * FROM main."Overlap" '
+                            f"WHERE source_id IN ({selected_subq}) "
+                            f"AND target_id IN ({selected_subq})"
+                        )
+                        conn.exec_driver_sql('INSERT INTO _td_dst."Metadata" SELECT * FROM main."Metadata"')
 
-                    conn.exec_driver_sql(
-                        'INSERT INTO _td_dst."Node" SELECT * FROM main."Node" '
-                        "WHERE node_id IN (SELECT node_id FROM _td_selected)"
-                    )
-                    conn.exec_driver_sql(
-                        'INSERT INTO _td_dst."Edge" SELECT * FROM main."Edge" '
-                        "WHERE source_id IN (SELECT node_id FROM _td_selected) "
-                        "AND target_id IN (SELECT node_id FROM _td_selected)"
-                    )
-                    conn.exec_driver_sql(
-                        'INSERT INTO _td_dst."Overlap" SELECT * FROM main."Overlap" '
-                        "WHERE source_id IN (SELECT node_id FROM _td_selected) "
-                        "AND target_id IN (SELECT node_id FROM _td_selected)"
-                    )
-                    conn.exec_driver_sql('INSERT INTO _td_dst."Metadata" SELECT * FROM main."Metadata"')
-                    conn.exec_driver_sql("DROP TABLE _td_selected")
+                    conn.commit()
+                finally:
+                    conn.exec_driver_sql("DETACH DATABASE _td_dst")
 
-                conn.commit()
-            finally:
-                conn.exec_driver_sql("DETACH DATABASE _td_dst")
-
-        # 3. Open the destination from the now-populated file. The standard
-        # constructor reflects the schema, restores pickled column types,
-        # and recomputes ``_max_id_per_time``.
-        return cls(**kwargs)
+            # 3. Open the destination from the now-populated file. The standard
+            # constructor reflects the schema, restores pickled column types,
+            # and recomputes ``_max_id_per_time``.
+            return cls(**kwargs)
+        finally:
+            if selected is not None:
+                _drop_scratch_table(source_root._engine, selected)
 
     def __getstate__(self) -> dict:
         data_dict = self.__dict__.copy()
@@ -2374,31 +2431,54 @@ class SQLGraph(BaseGraph):
                 raise ValueError(f"Edge {source_id}->{target_id} does not exist in the graph.")
             return edge_id
 
-    def remove_edge(
-        self,
-        source_id: int | None = None,
-        target_id: int | None = None,
-        *,
-        edge_id: int | None = None,
-    ) -> None:
+    def bulk_remove_edges(self, edge_ids: Sequence[int]) -> None:
         """
-        Remove an edge from the graph either by its ID or by its endpoints.
+        Remove multiple edges from the graph by their edge IDs.
+
+        Parameters
+        ----------
+        edge_ids : Sequence[int]
+            The IDs of the edges to remove.
+
+        Raises
+        ------
+        ValueError
+            If any edge_id does not exist in the graph.
         """
+        if hasattr(edge_ids, "tolist"):
+            edge_ids = edge_ids.tolist()
+        else:
+            edge_ids = list(edge_ids)
+
+        if len(edge_ids) == 0:
+            return
+
+        chunk_size = self._sql_chunk_size()
+        unique_ids = set(edge_ids)
         with Session(self._engine) as session:
-            if edge_id is None:
-                if source_id is None or target_id is None:
-                    raise ValueError("Provide either edge_id or both source_id and target_id.")
-                deleted = (
-                    session.query(self.Edge)
-                    .filter(self.Edge.source_id == source_id, self.Edge.target_id == target_id)
-                    .delete()
+            # Delete and count in a single pass; the delete rowcount tells us how
+            # many of the requested edges actually existed, avoiding a separate
+            # existence query on the happy path.
+            deleted = 0
+            for i in range(0, len(edge_ids), chunk_size):
+                chunk = edge_ids[i : i + chunk_size]
+                deleted += (
+                    session.query(self.Edge).filter(self.Edge.edge_id.in_(chunk)).delete(synchronize_session=False)
                 )
-                if not deleted:
-                    raise ValueError(f"Edge {source_id}->{target_id} does not exist in the graph.")
-            else:
-                deleted = session.query(self.Edge).filter(self.Edge.edge_id == edge_id).delete()
-                if not deleted:
-                    raise ValueError(f"Edge {edge_id} does not exist in the graph.")
+
+            if deleted != len(unique_ids):
+                # Some requested edges were missing: discard the deletes instead
+                # of committing, then identify a missing id for the error message.
+                session.rollback()
+                existing: set[int] = set()
+                for i in range(0, len(edge_ids), chunk_size):
+                    chunk = edge_ids[i : i + chunk_size]
+                    existing.update(
+                        row[0] for row in session.query(self.Edge.edge_id).filter(self.Edge.edge_id.in_(chunk)).all()
+                    )
+                missing = [eid for eid in edge_ids if eid not in existing]
+                raise ValueError(f"Edge {missing[0]} does not exist in the graph.")
+
             session.commit()
 
     def _metadata(self) -> dict[str, Any]:
