@@ -131,6 +131,50 @@ def test_plot_lineage_tree_time_range() -> None:
     assert labels == ["1", "2"]
 
 
+def test_plot_lineage_tree_time_points() -> None:
+    """Test selecting an arbitrary, non-contiguous subset of time points."""
+    graph = _dividing_graph()
+
+    ax = plot_lineage_tree(graph, time_points=[0, 3])
+
+    lines, scatter = ax.collections
+    # nodes: t=0 (tracklet 1) and t=3 (tracklets 2 and 3)
+    assert len(scatter.get_offsets()) == 3
+    # no edge has both endpoints in {0, 3}
+    assert len(lines.get_segments()) == 0
+
+    # the two displayed time points are evenly separated and labeled with their values
+    offsets = np.asarray(scatter.get_offsets())
+    np.testing.assert_array_equal(np.sort(np.unique(offsets[:, 1])), [0.0, 1.0])
+    labels = [tick.get_text() for tick in ax.get_yticklabels()]
+    assert labels == ["0", "3"]
+
+
+def test_plot_lineage_tree_time_points_mutually_exclusive() -> None:
+    """Test that time_range and time_points cannot be combined."""
+    graph = _dividing_graph()
+
+    with pytest.raises(ValueError, match="mutually exclusive"):
+        plot_lineage_tree(graph, time_range=(0, 2), time_points=[0, 1])
+
+
+def test_plot_lineage_tree_edge_colors() -> None:
+    """Test styling marker borders via scatter_kwargs (edgecolors/linewidths)."""
+    graph = _dividing_graph()
+
+    ax = plot_lineage_tree(
+        graph,
+        color_attr="feature",
+        scatter_kwargs={"edgecolors": "red", "linewidths": 1.5},
+    )
+
+    scatter = ax.collections[-1]
+    np.testing.assert_allclose(scatter.get_edgecolors()[0], [1.0, 0.0, 0.0, 1.0])
+    np.testing.assert_allclose(scatter.get_linewidths(), [1.5])
+    # face colors still come from the colormap, independent of the edge color
+    np.testing.assert_array_equal(np.asarray(scatter.get_array()), graph.node_attrs(attr_keys=["feature"])["feature"])
+
+
 def test_plot_lineage_tree_time_positions() -> None:
     """Test exact time positions given as a mapping and as a sequence."""
     graph = _dividing_graph()

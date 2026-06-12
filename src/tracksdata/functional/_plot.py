@@ -1,6 +1,6 @@
 """Matplotlib-based plotting utilities for lineage trees."""
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
@@ -167,6 +167,7 @@ def plot_lineage_tree(
     size_range: tuple[float, float] = (10.0, 100.0),
     node_size: float = 30.0,
     time_range: tuple[int, int] | None = None,
+    time_points: Sequence[int] | None = None,
     time_positions: "Mapping[int, float] | ArrayLike | None" = None,
     orientation: Literal["vertical", "horizontal"] = "vertical",
     scatter_kwargs: dict[str, Any] | None = None,
@@ -218,7 +219,11 @@ def plot_lineage_tree(
     time_range : tuple[int, int] | None, optional
         Inclusive `(start, end)` range of time points to display.
         If None, all time points are displayed. Edges with an endpoint
-        outside the range are not drawn.
+        outside the range are not drawn. Mutually exclusive with `time_points`.
+    time_points : Sequence[int] | None, optional
+        Explicit subset of time points to display, which need not be
+        contiguous (e.g. `[0, 5, 10]`). Edges with an endpoint that is not
+        displayed are not drawn. Mutually exclusive with `time_range`.
     time_positions : Mapping[int, float] | ArrayLike | None, optional
         Exact positions of the time points along the time axis
         (e.g. acquisition timestamps). Either a mapping of time point to
@@ -228,7 +233,8 @@ def plot_lineage_tree(
         If "vertical", time runs downward along the y-axis.
         If "horizontal", time runs rightward along the x-axis.
     scatter_kwargs : dict[str, Any] | None, optional
-        Additional keyword arguments forwarded to `Axes.scatter`.
+        Additional keyword arguments forwarded to `Axes.scatter`,
+        e.g. `edgecolors` and `linewidths` to style the marker borders.
     line_kwargs : dict[str, Any] | None, optional
         Additional keyword arguments forwarded to the edge
         `LineCollection` (e.g. `color`, `linewidth`).
@@ -258,6 +264,16 @@ def plot_lineage_tree(
         time_positions={t: t * 30.0 for t in range(50)},
     )
     ```
+
+    Display an arbitrary subset of time points with styled marker borders:
+
+    ```python
+    ax = plot_lineage_tree(
+        graph,
+        time_points=[0, 5, 10, 15],
+        scatter_kwargs={"edgecolors": "black", "linewidths": 0.5},
+    )
+    ```
     """
     try:
         import matplotlib.pyplot as plt
@@ -283,14 +299,19 @@ def plot_lineage_tree(
             raise ValueError(f"Attribute '{key}' not found in graph. Expected one of {graph.node_attr_keys()}")
         attr_keys.append(key)
 
+    if time_range is not None and time_points is not None:
+        raise ValueError("`time_range` and `time_points` are mutually exclusive, provide at most one.")
+
     nodes_df = graph.node_attrs(attr_keys=attr_keys)
 
     if time_range is not None:
         start, end = time_range
         nodes_df = nodes_df.filter((nodes_df[DEFAULT_ATTR_KEYS.T] >= start) & (nodes_df[DEFAULT_ATTR_KEYS.T] <= end))
+    elif time_points is not None:
+        nodes_df = nodes_df.filter(nodes_df[DEFAULT_ATTR_KEYS.T].is_in(list(time_points)))
 
     if len(nodes_df) == 0:
-        raise ValueError("No nodes to plot. The graph is empty or `time_range` excluded all nodes.")
+        raise ValueError("No nodes to plot. The graph is empty or `time_range`/`time_points` excluded all nodes.")
 
     # tree-axis coordinate per tracklet, computed on the full graph so the
     # layout is independent of the displayed time range
