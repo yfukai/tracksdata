@@ -154,6 +154,49 @@ def _map_to_size_range(
     return smin + fraction * (smax - smin)
 
 
+def _bridged_edge_segments(
+    successors: dict[int, list[int]],
+    node_coords: dict[int, tuple[float, float]],
+) -> list[tuple[tuple[float, float], tuple[float, float]]]:
+    """
+    Build edge segments between displayed nodes, bridging across hidden ones.
+
+    Each displayed node is connected to its nearest displayed descendants by
+    walking forward through the tracking graph and skipping over nodes that are
+    not displayed. This keeps the lineage structure visible when only a subset
+    of time points is shown. When all nodes are displayed it reduces to the
+    direct edges of the graph.
+
+    Parameters
+    ----------
+    successors : dict[int, list[int]]
+        Forward adjacency of the full (sub)graph, mapping each source node id
+        to the list of its target node ids.
+    node_coords : dict[int, tuple[float, float]]
+        Plot coordinates of the displayed nodes, keyed by node id.
+
+    Returns
+    -------
+    list[tuple[tuple[float, float], tuple[float, float]]]
+        Line segments connecting the coordinates of displayed nodes.
+    """
+    segments = []
+    for source in node_coords:
+        # walk forward to the nearest displayed descendants, skipping hidden nodes
+        stack = list(successors.get(source, ()))
+        seen: set[int] = set()
+        while stack:
+            node = stack.pop()
+            if node in seen:
+                continue
+            seen.add(node)
+            if node in node_coords:
+                segments.append((node_coords[source], node_coords[node]))
+            else:
+                stack.extend(successors.get(node, ()))
+    return segments
+
+
 def plot_lineage_tree(
     graph: BaseGraph,
     *,
@@ -178,7 +221,10 @@ def plot_lineage_tree(
 
     Nodes are drawn as points aligned in time and grouped by tracklet,
     with parent tracklets centered above their children. Edges are drawn
-    as line segments, so divisions appear as forks in the tree.
+    as line segments, so divisions appear as forks in the tree. When only a
+    subset of time points is shown, each node is connected to its nearest
+    displayed descendants, bridging over the hidden time points so the lineage
+    stays connected.
 
     Requires `matplotlib`, which is an optional dependency
     (`pip install "tracksdata[plot]"`).
@@ -218,12 +264,13 @@ def plot_lineage_tree(
         Marker size in points**2 used when `size_attr` is None.
     time_range : tuple[int, int] | None, optional
         Inclusive `(start, end)` range of time points to display.
-        If None, all time points are displayed. Edges with an endpoint
-        outside the range are not drawn. Mutually exclusive with `time_points`.
+        If None, all time points are displayed. Mutually exclusive with
+        `time_points`.
     time_points : Sequence[int] | None, optional
         Explicit subset of time points to display, which need not be
-        contiguous (e.g. `[0, 5, 10]`). Edges with an endpoint that is not
-        displayed are not drawn. Mutually exclusive with `time_range`.
+        contiguous (e.g. `[0, 5, 10]`). Edges bridge over the hidden time
+        points, connecting each displayed node to its nearest displayed
+        descendants. Mutually exclusive with `time_range`.
     time_positions : Mapping[int, float] | ArrayLike | None, optional
         Exact positions of the time points along the time axis
         (e.g. acquisition timestamps). Either a mapping of time point to
@@ -333,13 +380,15 @@ def plot_lineage_tree(
     }
 
     edges_df = graph.edge_attrs(attr_keys=[])
-    segments = [
-        (node_coords[source], node_coords[target])
-        for source, target in zip(
-            edges_df[DEFAULT_ATTR_KEYS.EDGE_SOURCE], edges_df[DEFAULT_ATTR_KEYS.EDGE_TARGET], strict=True
-        )
-        if source in node_coords and target in node_coords
-    ]
+    successors: dict[int, list[int]] = {}
+    for source, target in zip(
+        edges_df[DEFAULT_ATTR_KEYS.EDGE_SOURCE].to_list(),
+        edges_df[DEFAULT_ATTR_KEYS.EDGE_TARGET].to_list(),
+        strict=True,
+    ):
+        successors.setdefault(source, []).append(target)
+
+    segments = _bridged_edge_segments(successors, node_coords)
 
     if ax is None:
         _, ax = plt.subplots()

@@ -140,8 +140,20 @@ def test_plot_lineage_tree_time_points() -> None:
     lines, scatter = ax.collections
     # nodes: t=0 (tracklet 1) and t=3 (tracklets 2 and 3)
     assert len(scatter.get_offsets()) == 3
-    # no edge has both endpoints in {0, 3}
-    assert len(lines.get_segments()) == 0
+
+    # edges bridge over the hidden frames: the single t=0 node connects to each
+    # of the two t=3 nodes through the (hidden) division at t=2
+    segments = lines.get_segments()
+    assert len(segments) == 2
+    # both bridged segments start at the same point: the single displayed t=0 node,
+    # which sits at the minimum (topmost) time coordinate
+    starts = np.asarray([seg[0] for seg in segments])
+    np.testing.assert_array_equal(starts[0], starts[1])
+    assert starts[0, 1] == 0.0  # t=0 evenly-separated position
+    # the two endpoints are the two distinct t=3 nodes
+    ends = np.asarray([seg[1] for seg in segments])
+    assert ends[0, 0] != ends[1, 0]
+    np.testing.assert_array_equal(ends[:, 1], [1.0, 1.0])  # both at t=3 position
 
     # the two displayed time points are evenly separated and labeled with their values
     offsets = np.asarray(scatter.get_offsets())
