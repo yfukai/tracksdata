@@ -80,7 +80,7 @@ def test_crop_func_attrs_simple_function_no_frames() -> None:
         attr_keys=["value"],
     )
 
-    operator.add_node_attrs(graph)
+    operator.update_nodes(graph)
 
     # Check that attributes were added
     nodes_df = graph.node_attrs()
@@ -131,7 +131,7 @@ def test_crop_func_attrs_function_with_frames() -> None:
         attr_keys=[DEFAULT_ATTR_KEYS.MASK],
     )
 
-    operator.add_node_attrs(graph, t=0, frames=frames)
+    operator.update_nodes(graph, t=0, frames=frames)
 
     # Check that attributes were added
     nodes_df = graph.node_attrs()
@@ -188,7 +188,7 @@ def test_crop_func_attrs_function_with_frames_and_attrs() -> None:
         attr_keys=["mask", "multiplier"],
     )
 
-    operator.add_node_attrs(graph, t=0, frames=frames)
+    operator.update_nodes(graph, t=0, frames=frames)
 
     # Check that attributes were added
     nodes_df = graph.node_attrs()
@@ -242,7 +242,7 @@ def test_crop_func_attrs_function_returns_different_types() -> None:
         output_key="string_result",
         attr_keys=[DEFAULT_ATTR_KEYS.MASK],
     )
-    operator_str.add_node_attrs(graph)
+    operator_str.update_nodes(graph)
 
     # Test list return type
     operator_list = GenericFuncNodeAttrs(
@@ -250,7 +250,7 @@ def test_crop_func_attrs_function_returns_different_types() -> None:
         output_key="list_result",
         attr_keys=[DEFAULT_ATTR_KEYS.MASK],
     )
-    operator_list.add_node_attrs(graph)
+    operator_list.update_nodes(graph)
 
     # Test dict return type
     operator_dict = GenericFuncNodeAttrs(
@@ -258,7 +258,7 @@ def test_crop_func_attrs_function_returns_different_types() -> None:
         output_key="dict_result",
         attr_keys=[DEFAULT_ATTR_KEYS.MASK],
     )
-    operator_dict.add_node_attrs(graph)
+    operator_dict.update_nodes(graph)
 
     # Test array return type
     operator_array = GenericFuncNodeAttrs(
@@ -266,7 +266,7 @@ def test_crop_func_attrs_function_returns_different_types() -> None:
         output_key="array_result",
         attr_keys=[DEFAULT_ATTR_KEYS.MASK],
     )
-    operator_array.add_node_attrs(graph)
+    operator_array.update_nodes(graph)
 
     # Check results
     nodes_df = graph.node_attrs()
@@ -303,7 +303,7 @@ def test_crop_func_attrs_error_handling_missing_attr_key() -> None:
 
     # Should raise ValueError when output key is not registered
     with pytest.raises(ValueError, match="Output key 'result' not found in graph"):
-        operator.add_node_attrs(graph)
+        operator.update_nodes(graph)
 
 
 @pytest.mark.parametrize("n_workers", [1, 2])
@@ -348,7 +348,7 @@ def test_crop_func_attrs_function_with_frames_multiprocessing(n_workers: int) ->
     )
 
     with options_context(n_workers=n_workers):
-        operator.add_node_attrs(graph, frames=frames)
+        operator.update_nodes(graph, frames=frames)
 
     # Check that attributes were added
     nodes_df = graph.node_attrs()
@@ -379,7 +379,7 @@ def test_crop_func_attrs_empty_graph() -> None:
     )
 
     # Should not raise an error, just do nothing
-    operator.add_node_attrs(graph)
+    operator.update_nodes(graph)
 
     # Check that no attributes were added
     nodes_df = graph.node_attrs()
@@ -419,7 +419,7 @@ def test_crop_func_attrs_batch_processing_without_frames() -> None:
         batch_size=2,
     )
 
-    operator.add_node_attrs(graph)
+    operator.update_nodes(graph)
 
     # Check that attributes were added
     nodes_df = graph.node_attrs()
@@ -480,7 +480,7 @@ def test_crop_func_attrs_batch_processing_with_frames() -> None:
         batch_size=2,
     )
 
-    operator.add_node_attrs(graph, frames=frames)
+    operator.update_nodes(graph, frames=frames)
 
     # Check that attributes were added
     nodes_df = graph.node_attrs()

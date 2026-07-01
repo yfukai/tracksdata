@@ -5,7 +5,7 @@ from skimage.measure._regionprops import RegionProperties
 
 from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.graph import RustWorkXGraph
-from tracksdata.nodes import Mask, RegionPropsAttrs, RegionPropsNodes
+from tracksdata.nodes import Mask, RegionPropsNodes
 from tracksdata.options import get_options, options_context
 
 
@@ -355,19 +355,22 @@ TIMELAPSE_INTENSITY = np.array(
 
 
 def test_regionprops_attrs_init_validation() -> None:
-    """Test RegionPropsAttrs initialization and property validation."""
-    operator = RegionPropsAttrs(properties=["area", "intensity_mean"], spacing=(1.0, 2.0))
+    """Test RegionPropsNodes property validation for add_node_attrs."""
+    operator = RegionPropsNodes(extra_properties=["area", "intensity_mean"], spacing=(1.0, 2.0))
     assert operator.attr_keys() == ["area", "intensity_mean"]
     assert operator._spacing == (1.0, 2.0)
 
+    # empty properties are only rejected when (re-)computing attributes on existing nodes
+    graph = RustWorkXGraph()
+    RegionPropsNodes().add_nodes(graph, labels=TIMELAPSE_LABELS)
     with pytest.raises(ValueError, match="at least one region property"):
-        RegionPropsAttrs(properties=[])
+        RegionPropsNodes().add_node_attrs(graph)
 
     with pytest.raises(ValueError, match="`centroid` is not supported"):
-        RegionPropsAttrs(properties=["centroid"])
+        RegionPropsNodes(extra_properties=["centroid"])
 
     with pytest.raises(ValueError, match="`bbox` is not supported"):
-        RegionPropsAttrs(properties=["bbox"])
+        RegionPropsNodes(extra_properties=["bbox"])
 
 
 @pytest.mark.parametrize("n_workers", [1, 2])
@@ -382,11 +385,11 @@ def test_regionprops_attrs_matches_nodes_operator(n_workers: int) -> None:
     )
     expected_df = expected_graph.node_attrs(attr_keys=properties)
 
-    # recompute: nodes created without properties, then RegionPropsAttrs
+    # recompute: nodes created without properties, then add_node_attrs
     graph = RustWorkXGraph()
     RegionPropsNodes().add_nodes(graph, labels=TIMELAPSE_LABELS)
 
-    operator = RegionPropsAttrs(properties=properties)
+    operator = RegionPropsNodes(extra_properties=properties)
     with options_context(n_workers=n_workers):
         operator.add_node_attrs(graph, intensity_image=TIMELAPSE_INTENSITY)
 
@@ -405,7 +408,7 @@ def test_regionprops_attrs_callable_property() -> None:
     graph = RustWorkXGraph()
     RegionPropsNodes(extra_properties=["area"]).add_nodes(graph, labels=TIMELAPSE_LABELS)
 
-    RegionPropsAttrs(properties=[double_area]).add_node_attrs(graph)
+    RegionPropsNodes(extra_properties=[double_area]).add_node_attrs(graph)
 
     nodes_df = graph.node_attrs(attr_keys=["area", "double_area"])
     np.testing.assert_array_equal(
@@ -419,7 +422,9 @@ def test_regionprops_attrs_single_time_point() -> None:
     graph = RustWorkXGraph()
     RegionPropsNodes().add_nodes(graph, labels=TIMELAPSE_LABELS, intensity_image=TIMELAPSE_INTENSITY)
 
-    RegionPropsAttrs(properties=["intensity_mean"]).add_node_attrs(graph, t=1, intensity_image=TIMELAPSE_INTENSITY)
+    RegionPropsNodes(extra_properties=["intensity_mean"]).add_node_attrs(
+        graph, t=1, intensity_image=TIMELAPSE_INTENSITY
+    )
 
     nodes_df = graph.node_attrs(attr_keys=[DEFAULT_ATTR_KEYS.T, "intensity_mean"])
     at_t1 = nodes_df.filter(nodes_df[DEFAULT_ATTR_KEYS.T] == 1)
@@ -438,7 +443,7 @@ def test_regionprops_attrs_overwrites_existing_values() -> None:
     # corrupt the stored values
     graph.update_node_attrs(node_ids=graph.node_ids(), attrs={"area": [-1] * graph.num_nodes()})
 
-    RegionPropsAttrs(properties=["area"]).add_node_attrs(graph)
+    RegionPropsNodes(extra_properties=["area"]).add_node_attrs(graph)
 
     np.testing.assert_array_equal(
         graph.node_attrs(attr_keys=["area"])["area"].to_numpy(),
@@ -453,7 +458,7 @@ def test_regionprops_attrs_spacing() -> None:
 
     pixel_areas = graph.node_attrs(attr_keys=["area"])["area"].to_numpy().copy()
 
-    RegionPropsAttrs(properties=["area"], spacing=(2.0, 3.0)).add_node_attrs(graph)
+    RegionPropsNodes(extra_properties=["area"], spacing=(2.0, 3.0)).add_node_attrs(graph)
 
     np.testing.assert_allclose(
         graph.node_attrs(attr_keys=["area"])["area"].to_numpy(),
@@ -466,10 +471,86 @@ def test_regionprops_attrs_missing_mask_key() -> None:
     graph = RustWorkXGraph()
 
     with pytest.raises(ValueError, match="Mask key 'mask' not found"):
-        RegionPropsAttrs(properties=["area"]).add_node_attrs(graph)
+        RegionPropsNodes(extra_properties=["area"]).add_node_attrs(graph)
 
     graph.add_node_attr_key(DEFAULT_ATTR_KEYS.MASK, pl.Object)
     graph.add_node({"t": 0, "mask": "not a mask"})
 
     with pytest.raises(TypeError, match="Expected `Mask` object"):
-        RegionPropsAttrs(properties=["area"]).add_node_attrs(graph)
+        RegionPropsNodes(extra_properties=["area"]).add_node_attrs(graph)
+
+
+# multichannel intensity: channel 0 == TIMELAPSE_INTENSITY, channel 1 == 2x, stacked on the last axis
+TIMELAPSE_INTENSITY_MULTICHANNEL = np.stack(
+    [TIMELAPSE_INTENSITY, TIMELAPSE_INTENSITY * 2.0],
+    axis=-1,
+)  # shape (2, 3, 3, 2)
+
+
+def test_regionprops_add_nodes_multichannel() -> None:
+    """Test that multichannel intensity images produce per-channel attributes."""
+    assert TIMELAPSE_INTENSITY_MULTICHANNEL.shape == (2, 3, 3, 2)
+
+    graph = RustWorkXGraph()
+    operator = RegionPropsNodes(
+        extra_properties=["intensity_mean"],
+        channel_names=["DAPI", "GFP"],
+    )
+    operator.add_nodes(graph, labels=TIMELAPSE_LABELS, intensity_image=TIMELAPSE_INTENSITY_MULTICHANNEL)
+
+    nodes_df = graph.node_attrs()
+    # per-channel attributes are created, the un-suffixed one is not
+    assert "intensity_mean_DAPI" in nodes_df.columns
+    assert "intensity_mean_GFP" in nodes_df.columns
+    assert "intensity_mean" not in nodes_df.columns
+
+    # GFP channel is exactly twice the DAPI channel
+    np.testing.assert_allclose(
+        nodes_df["intensity_mean_GFP"].to_numpy(),
+        nodes_df["intensity_mean_DAPI"].to_numpy() * 2.0,
+    )
+
+    # DAPI channel matches the single-channel computation
+    single_channel_graph = RustWorkXGraph()
+    RegionPropsNodes(extra_properties=["intensity_mean"]).add_nodes(
+        single_channel_graph, labels=TIMELAPSE_LABELS, intensity_image=TIMELAPSE_INTENSITY
+    )
+    np.testing.assert_allclose(
+        sorted(nodes_df["intensity_mean_DAPI"].to_numpy()),
+        sorted(single_channel_graph.node_attrs(attr_keys=["intensity_mean"])["intensity_mean"].to_numpy()),
+    )
+
+
+def test_regionprops_add_node_attrs_multichannel() -> None:
+    """Test that add_node_attrs supports multichannel intensity images."""
+    graph = RustWorkXGraph()
+    RegionPropsNodes().add_nodes(graph, labels=TIMELAPSE_LABELS)
+
+    RegionPropsNodes(
+        extra_properties=["intensity_mean", "intensity_max"],
+        channel_names=["DAPI", "GFP"],
+    ).add_node_attrs(graph, intensity_image=TIMELAPSE_INTENSITY_MULTICHANNEL)
+
+    nodes_df = graph.node_attrs()
+    for key in ["intensity_mean_DAPI", "intensity_mean_GFP", "intensity_max_DAPI", "intensity_max_GFP"]:
+        assert key in nodes_df.columns
+
+    np.testing.assert_allclose(
+        nodes_df["intensity_mean_GFP"].to_numpy(),
+        nodes_df["intensity_mean_DAPI"].to_numpy() * 2.0,
+    )
+
+
+def test_regionprops_channel_names_mismatch() -> None:
+    """Test error handling when channel_names does not match the intensity image."""
+    graph = RustWorkXGraph()
+    operator = RegionPropsNodes(
+        extra_properties=["intensity_mean"],
+        channel_names=["DAPI", "GFP", "RFP"],  # 3 names but only 2 channels
+    )
+
+    with pytest.raises(ValueError, match="does not match the number of `channel_names`"):
+        operator.add_nodes(graph, labels=TIMELAPSE_LABELS, intensity_image=TIMELAPSE_INTENSITY_MULTICHANNEL)
+
+    with pytest.raises(ValueError, match="no `intensity_image` was given"):
+        operator.add_nodes(graph, labels=TIMELAPSE_LABELS)

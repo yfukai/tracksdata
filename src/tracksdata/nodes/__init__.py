@@ -3,6 +3,6 @@
 from tracksdata.nodes._generic_nodes import GenericFuncNodeAttrs
 from tracksdata.nodes._mask import Mask, MaskDiskAttrs
 from tracksdata.nodes._random import RandomNodes
-from tracksdata.nodes._regionprops import RegionPropsAttrs, RegionPropsNodes
+from tracksdata.nodes._regionprops import RegionPropsNodes
 
-__all__ = ["GenericFuncNodeAttrs", "Mask", "MaskDiskAttrs", "RandomNodes", "RegionPropsAttrs", "RegionPropsNodes"]
+__all__ = ["GenericFuncNodeAttrs", "Mask", "MaskDiskAttrs", "RandomNodes", "RegionPropsNodes"]

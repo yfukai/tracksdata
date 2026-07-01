@@ -62,7 +62,7 @@ def test_visualize_matches(make_napari_viewer: Callable[[], "napari.Viewer"]) ->
         image_shape=image_shape,
         output_key=DEFAULT_ATTR_KEYS.MASK,
     )
-    input_mask_attrs.add_node_attrs(input_graph)
+    input_mask_attrs.update_nodes(input_graph)
 
     # Add masks to reference graph
     ref_mask_attrs = MaskDiskAttrs(
@@ -70,7 +70,7 @@ def test_visualize_matches(make_napari_viewer: Callable[[], "napari.Viewer"]) ->
         image_shape=image_shape,
         output_key=DEFAULT_ATTR_KEYS.MASK,
     )
-    ref_mask_attrs.add_node_attrs(ref_graph)
+    ref_mask_attrs.update_nodes(ref_graph)
 
     # Match the graphs to add matching attributes
     input_graph.match(ref_graph)

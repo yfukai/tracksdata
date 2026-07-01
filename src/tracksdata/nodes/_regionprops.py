@@ -12,7 +12,6 @@ from typing_extensions import override
 from tracksdata.attrs import NodeAttr
 from tracksdata.constants import DEFAULT_ATTR_KEYS
 from tracksdata.graph._base_graph import BaseGraph
-from tracksdata.nodes._base_node_attrs import BaseNodeAttrsOperator
 from tracksdata.nodes._base_nodes import BaseNodesOperator
 from tracksdata.nodes._mask import Mask
 from tracksdata.utils._logging import LOG
@@ -67,26 +66,101 @@ def _add_missing_node_attr_keys(graph: BaseGraph, node_attrs: dict[str, Any]) ->
                 graph.add_node_attr_key(key, type(value))
 
 
+def _region_property_attrs(
+    obj: RegionProperties,
+    properties: list[str | Callable[[RegionProperties], Any]],
+    channel_names: list[str] | None,
+) -> dict[str, Any]:
+    """
+    Compute the requested region properties for a single region.
+
+    When ``channel_names`` is provided (multichannel intensity images), any
+    property whose value has a trailing axis matching the number of channels
+    is split into one attribute per channel, named ``{property}_{channel_name}``
+    (e.g. ``intensity_mean_DAPI``). This is the case for intensity-based
+    properties computed from a multichannel intensity image, where scikit-image
+    appends the channel axis as the last axis of the returned value.
+
+    Parameters
+    ----------
+    obj : RegionProperties
+        The scikit-image region to compute the properties for.
+    properties : list[str | Callable[[RegionProperties], Any]]
+        The properties to compute. Strings are looked up on ``obj``, callables
+        are called with ``obj`` and named after their ``__name__``.
+    channel_names : list[str] | None
+        Names of the intensity image channels. If None, no per-channel splitting
+        is performed.
+
+    Returns
+    -------
+    dict[str, Any]
+        Mapping from attribute key to value for this region.
+    """
+    attrs: dict[str, Any] = {}
+    for prop in properties:
+        if callable(prop):
+            name = prop.__name__
+            value = prop(obj)
+        else:
+            name = prop
+            value = getattr(obj, prop)
+
+        if channel_names is not None and np.ndim(value) >= 1 and np.shape(value)[-1] == len(channel_names):
+            value = np.asarray(value)
+            for channel_idx, channel_name in enumerate(channel_names):
+                channel_value = value[..., channel_idx]
+                # a scalar-per-channel property (e.g. intensity_mean) yields a 0-d
+                # array here; unwrap it to a numpy scalar to keep the stored dtype
+                if channel_value.ndim == 0:
+                    channel_value = channel_value[()]
+                attrs[f"{name}_{channel_name}"] = channel_value
+        else:
+            attrs[name] = value
+
+    return attrs
+
+
 class RegionPropsNodes(BaseNodesOperator):
     """
-    Operator that adds nodes to a graph using scikit-image's regionprops.
+    Operator that adds nodes and (re-)computes their region properties using scikit-image's regionprops.
 
     Extracts region properties from labeled images to create graph nodes using
     scikit-image's regionprops function to compute geometric and intensity-based
     features. Automatically adds centroid coordinates and mask information, with
-    additional properties computed based on the extra_properties parameter.
+    additional properties computed based on the ``extra_properties`` parameter.
+
+    The same operator can also (re-)compute properties for nodes that already
+    exist in a graph, evaluating regionprops on each node's stored
+    [Mask][tracksdata.nodes.Mask] via [add_node_attrs][tracksdata.nodes.RegionPropsNodes.add_node_attrs].
+    This is useful to compute properties that were not requested when the nodes
+    were created (e.g. intensity features of an additional channel) or to refresh
+    properties after masks were modified, without rebuilding the graph.
+
+    Multichannel intensity images are supported: pass ``channel_names`` and an
+    intensity image whose last axis is the channel axis. Intensity-based
+    properties are then split into one attribute per channel, named
+    ``{property}_{channel_name}`` (e.g. ``intensity_mean_DAPI``).
 
     Parameters
     ----------
     extra_properties : list[str | Callable[[RegionProperties], Any]] | None, optional
         Additional properties to compute for each region. Can be:
-        - String names of built-in regionprops properties (e.g., 'area', 'perimeter')
+        - String names of built-in regionprops properties (e.g. 'area', 'perimeter')
         - Callable functions that take a RegionProperties object and return a value
         If None, only centroid coordinates and masks are extracted.
     spacing : tuple[float, float] | None, optional
         Physical spacing between pixels. If provided, affects distance-based
         measurements. Should be (row_spacing, col_spacing) for 2D or
         (depth_spacing, row_spacing, col_spacing) for 3D.
+    channel_names : list[str] | None, optional
+        Names of the channels of a multichannel intensity image. The channel axis
+        must be the last axis of the intensity image (scikit-image convention).
+        When provided, intensity-based properties are split into one attribute per
+        channel, suffixed with the channel name (e.g. ``intensity_mean_DAPI``).
+    mask_key : str, optional
+        The key of the node attribute holding the [Mask][tracksdata.nodes.Mask]
+        objects, used by [add_node_attrs][tracksdata.nodes.RegionPropsNodes.add_node_attrs].
 
     Attributes
     ----------
@@ -94,6 +168,8 @@ class RegionPropsNodes(BaseNodesOperator):
         List of additional properties to compute.
     _spacing : tuple[float, float] | None
         Physical spacing between pixels.
+    _channel_names : list[str] | None
+        Names of the channels of a multichannel intensity image.
 
     Examples
     --------
@@ -136,17 +212,40 @@ class RegionPropsNodes(BaseNodesOperator):
     labels_series = np.random.randint(0, 10, (10, 100, 100))
     node_op.add_nodes(graph, labels=labels_series)
     ```
+
+    Compute intensity features per channel of a multichannel image (last axis is the channel axis):
+
+    ```python
+    node_op = RegionPropsNodes(
+        extra_properties=["intensity_mean"],
+        channel_names=["DAPI", "GFP"],
+    )
+    # intensity_image[t] has shape (..., y, x, 2)
+    node_op.add_nodes(graph, labels=labels, intensity_image=intensity_image)
+    # creates 'intensity_mean_DAPI' and 'intensity_mean_GFP' attributes
+    ```
+
+    Recompute properties of an additional channel on an existing graph:
+
+    ```python
+    node_op = RegionPropsNodes(extra_properties=["intensity_mean", "intensity_max"])
+    node_op.add_node_attrs(graph, intensity_image=second_channel)
+    ```
     """
 
     def __init__(
         self,
         extra_properties: list[str | Callable[[RegionProperties], Any]] | None = None,
         spacing: tuple[float, float] | None = None,
+        channel_names: list[str] | None = None,
+        mask_key: str = DEFAULT_ATTR_KEYS.MASK,
     ):
         super().__init__()
         self._extra_properties = extra_properties or []
         _validate_properties(self._extra_properties)
         self._spacing = spacing
+        self._channel_names = list(channel_names) if channel_names is not None else None
+        self._mask_key = mask_key
 
     def _axis_names(self, labels: NDArray[np.integer]) -> list[str]:
         """
@@ -169,6 +268,31 @@ class RegionPropsNodes(BaseNodesOperator):
         else:
             raise ValueError(f"`labels` must be 't + 2D' or 't + 3D', got '{labels.ndim}' dimensions.")
 
+    def _check_channels(self, intensity_image: NDArray | None) -> None:
+        """
+        Validate that ``intensity_image`` is consistent with ``channel_names``.
+
+        The channel axis is expected to be the last axis of the intensity image.
+
+        Parameters
+        ----------
+        intensity_image : NDArray | None
+            The (possibly multichannel) intensity image, indexed by time point.
+        """
+        if self._channel_names is None:
+            return
+
+        if intensity_image is None:
+            raise ValueError("`channel_names` was provided but no `intensity_image` was given.")
+
+        n_channels = intensity_image.shape[-1]
+        if n_channels != len(self._channel_names):
+            raise ValueError(
+                f"Number of channels in `intensity_image` ({n_channels}) does not match "
+                f"the number of `channel_names` ({len(self._channel_names)}). "
+                "The channel axis is expected to be the last axis of the intensity image."
+            )
+
     def _init_node_attrs(self, graph: BaseGraph, node_attrs: dict[str, Any]) -> None:
         """
         Initialize the node attributes for the graph.
@@ -177,10 +301,13 @@ class RegionPropsNodes(BaseNodesOperator):
 
     def attr_keys(self) -> list[str]:
         """
-        Get the keys of the node attributes that will be extracted.
+        Get the base keys of the node attributes that will be extracted.
 
-        Returns only the keys for extra_properties. The centroid coordinates
-        (x, y, z) and mask are always included but not listed here.
+        Returns only the keys for ``extra_properties``. The centroid coordinates
+        (x, y, z) and mask are always included but not listed here. When
+        ``channel_names`` is set, intensity-based properties are additionally
+        suffixed with the channel name at compute time (e.g. ``intensity_mean_DAPI``),
+        which is not reflected in this list.
 
         Returns
         -------
@@ -231,7 +358,8 @@ class RegionPropsNodes(BaseNodesOperator):
         intensity_image : NDArray | None, optional
             Intensity image(s) corresponding to the labels. Used for computing
             intensity-based properties. Must have the same shape as labels
-            (excluding the label values).
+            (excluding the label values). For multichannel images an extra
+            trailing channel axis is expected; see ``channel_names``.
 
         Examples
         --------
@@ -262,6 +390,8 @@ class RegionPropsNodes(BaseNodesOperator):
         """
         if "shape" not in graph.metadata:
             graph.metadata.update(shape=labels.shape)
+
+        self._check_channels(intensity_image)
 
         if t is None:
             time_points = range(labels.shape[0])
@@ -331,11 +461,7 @@ class RegionPropsNodes(BaseNodesOperator):
         ):
             attrs = dict(zip(axis_names, obj.centroid, strict=False))
 
-            for prop in self._extra_properties:
-                if callable(prop):
-                    attrs[prop.__name__] = prop(obj)
-                else:
-                    attrs[prop] = getattr(obj, prop)
+            attrs.update(_region_property_attrs(obj, self._extra_properties, self._channel_names))
 
             attrs[DEFAULT_ATTR_KEYS.MASK] = Mask(obj.image, obj.bbox)
             attrs[DEFAULT_ATTR_KEYS.BBOX] = np.asarray(obj.bbox, dtype=int)
@@ -349,93 +475,6 @@ class RegionPropsNodes(BaseNodesOperator):
 
         return nodes_data
 
-
-class RegionPropsAttrs(BaseNodeAttrsOperator):
-    """
-    Operator that (re-)computes region properties of existing nodes from their masks.
-
-    For each node, scikit-image's regionprops is evaluated on the node's
-    [Mask][tracksdata.nodes.Mask] attribute, optionally combined with a given
-    intensity image cropped to the mask bounding box. This allows computing
-    properties that were not requested when the nodes were created (e.g.
-    intensity features of an additional channel) or refreshing properties
-    after masks were modified, without rebuilding the graph.
-
-    Missing output attribute keys are registered in the graph with dtypes
-    inferred from the first computed values; existing keys are overwritten.
-
-    Parameters
-    ----------
-    properties : list[str | Callable[[RegionProperties], Any]]
-        Properties to compute for each node. Can be:
-        - String names of built-in regionprops properties (e.g., 'area', 'intensity_mean')
-        - Callable functions that take a RegionProperties object and return a value
-        Coordinate-based properties are returned in absolute image coordinates.
-    spacing : tuple[float, float] | None, optional
-        Physical spacing between pixels. If provided, affects distance-based
-        measurements. Should be (row_spacing, col_spacing) for 2D or
-        (depth_spacing, row_spacing, col_spacing) for 3D.
-    mask_key : str, optional
-        The key of the node attribute holding the [Mask][tracksdata.nodes.Mask] objects.
-
-    Examples
-    --------
-    Compute intensity features from an additional channel on an existing graph:
-
-    ```python
-    from tracksdata.nodes import RegionPropsAttrs
-
-    attrs_op = RegionPropsAttrs(properties=["intensity_mean", "intensity_max"])
-    attrs_op.add_node_attrs(graph, intensity_image=second_channel)
-    ```
-
-    Recompute geometric properties with custom functions for a single time point:
-
-    ```python
-    def aspect_ratio(region):
-        return region.axis_major_length / region.axis_minor_length
-
-
-    attrs_op = RegionPropsAttrs(properties=["area", aspect_ratio])
-    attrs_op.add_node_attrs(graph, t=0)
-    ```
-    """
-
-    def __init__(
-        self,
-        properties: list[str | Callable[[RegionProperties], Any]],
-        spacing: tuple[float, float] | None = None,
-        mask_key: str = DEFAULT_ATTR_KEYS.MASK,
-    ) -> None:
-        if not properties:
-            raise ValueError("`properties` must contain at least one region property.")
-        _validate_properties(properties)
-        self._properties = properties
-        self._spacing = spacing
-        self._mask_key = mask_key
-        super().__init__(output_key=self.attr_keys())
-
-    def attr_keys(self) -> list[str]:
-        """
-        Get the keys of the node attributes that will be computed.
-
-        Returns
-        -------
-        list[str]
-            List of attribute key names that will be added to nodes.
-        """
-        return [prop.__name__ if callable(prop) else prop for prop in self._properties]
-
-    def _init_node_attrs(self, graph: BaseGraph) -> None:
-        """
-        Validate that the mask key exists in the graph.
-
-        Output attribute keys are registered lazily once the first values
-        are computed, since their dtypes depend on the computed values.
-        """
-        if self._mask_key not in graph.node_attr_keys():
-            raise ValueError(f"Mask key '{self._mask_key}' not found in graph. Expected '{graph.node_attr_keys()}'")
-
     def add_node_attrs(
         self,
         graph: BaseGraph,
@@ -444,7 +483,13 @@ class RegionPropsAttrs(BaseNodeAttrsOperator):
         intensity_image: NDArray | None = None,
     ) -> None:
         """
-        Compute region properties from the node masks and store them as node attributes.
+        (Re-)compute region properties from the node masks and store them as node attributes.
+
+        For each node, scikit-image's regionprops is evaluated on the node's
+        [Mask][tracksdata.nodes.Mask] attribute (``mask_key``), optionally combined
+        with a given intensity image cropped to the mask bounding box. Missing
+        output attribute keys are registered in the graph with dtypes inferred from
+        the first computed values; existing keys are overwritten.
 
         Parameters
         ----------
@@ -456,9 +501,25 @@ class RegionPropsAttrs(BaseNodeAttrsOperator):
         intensity_image : NDArray | None, optional
             Intensity image used for computing intensity-based properties,
             indexed by time point such that `intensity_image[t]` is the frame
-            matching the masks at time point `t`.
+            matching the masks at time point `t`. For multichannel images an
+            extra trailing channel axis is expected; see ``channel_names``.
+
+        Examples
+        --------
+        Compute intensity features from an additional channel on an existing graph:
+
+        ```python
+        node_op = RegionPropsNodes(extra_properties=["intensity_mean", "intensity_max"])
+        node_op.add_node_attrs(graph, intensity_image=second_channel)
+        ```
         """
-        self._init_node_attrs(graph)
+        if not self._extra_properties:
+            raise ValueError("`extra_properties` must contain at least one region property to compute node attributes.")
+
+        if self._mask_key not in graph.node_attr_keys():
+            raise ValueError(f"Mask key '{self._mask_key}' not found in graph. Expected '{graph.node_attr_keys()}'")
+
+        self._check_channels(intensity_image)
 
         if t is None:
             time_points = graph.time_points()
@@ -514,7 +575,7 @@ class RegionPropsAttrs(BaseNodeAttrsOperator):
 
         frame = np.asarray(intensity_image[t]) if intensity_image is not None else None
 
-        results: dict[str, list[Any]] = {key: [] for key in self.attr_keys()}
+        results: dict[str, list[Any]] = {}
         for mask in masks:
             if not isinstance(mask, Mask):
                 raise TypeError(
@@ -528,11 +589,8 @@ class RegionPropsAttrs(BaseNodeAttrsOperator):
 
             obj = mask.regionprops(**regionprops_kwargs)
 
-            for prop in self._properties:
-                if callable(prop):
-                    results[prop.__name__].append(prop(obj))
-                else:
-                    results[prop].append(getattr(obj, prop))
+            for key, value in _region_property_attrs(obj, self._extra_properties, self._channel_names).items():
+                results.setdefault(key, []).append(value)
 
             obj._cache.clear()  # clearing to reduce memory footprint
 
