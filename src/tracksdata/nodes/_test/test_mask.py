@@ -1,10 +1,15 @@
+import copy
+import inspect
+import pickle
 from dataclasses import FrozenInstanceError
 
 import numpy as np
 import polars as pl
 import pytest
 
+import tracksdata.nodes._mask as _mask_module
 from tracksdata.nodes._mask import (
+    _MASK_METHODS,
     Mask,
     _nd_sphere,
     mask_bbox_struct_fields,
@@ -739,3 +744,78 @@ def test_mask_struct_attr_in_graph(graph_backend) -> None:
     # filtering on a bbox field of the mask struct
     filtered = graph.filter(NodeAttr(DEFAULT_ATTR_KEYS.MASK).struct.field("min_y") > 2).node_ids()
     assert filtered == [node_b]
+
+
+def test_mask_method_dispatch_matches_functions() -> None:
+    """Every `mask_*` function taking a mask is callable as a method with the same result."""
+    mask = Mask(bbox=np.array([1, 1, 3, 3]), mask=np.ones((2, 2), dtype=bool))
+    other = Mask(bbox=np.array([2, 2, 4, 4]), mask=np.ones((2, 2), dtype=bool))
+    image = np.arange(25).reshape(5, 5)
+
+    assert mask.size() == mask_size(mask)
+    assert mask.iou(other) == mask_iou(mask, other)
+    assert mask.intersection(other) == mask_intersection(mask, other)
+    assert mask.union(other) == mask_union(mask, other)
+    assert mask.subtract(other) == mask_subtract(mask, other)
+    assert mask.dilate(1) == mask_dilate(mask, 1)
+    assert mask.dilate(1, image_shape=image.shape) == mask_dilate(mask, 1, image_shape=image.shape)
+    assert mask.move(np.array([1, 0])) == mask_move(mask, np.array([1, 0]))
+    assert mask.to_struct() == mask_to_struct(mask)
+    np.testing.assert_array_equal(mask.crop(image), mask_crop(mask, image))
+    np.testing.assert_array_equal(mask.indices(), mask_indices(mask))
+    np.testing.assert_array_equal(mask.indices(offset=2), mask_indices(mask, offset=2))
+    assert mask.regionprops().centroid == mask_regionprops(mask).centroid
+
+    method_buffer = np.zeros((5, 5), dtype=int)
+    func_buffer = np.zeros((5, 5), dtype=int)
+    mask.paint_buffer(method_buffer, 3)
+    mask_paint_buffer(mask, func_buffer, 3)
+    np.testing.assert_array_equal(method_buffer, func_buffer)
+
+
+def test_mask_method_binding() -> None:
+    """The generated attribute is a bound method carrying the function metadata."""
+    mask = Mask(bbox=np.array([0, 0, 2, 2]), mask=np.ones((2, 2), dtype=bool))
+
+    assert mask.dilate.__func__ is mask_dilate
+    assert mask.dilate.__self__ is mask
+    assert mask.dilate.__doc__ == mask_dilate.__doc__
+
+
+def test_mask_dir_lists_methods() -> None:
+    """`dir` exposes the derived methods next to the regular attributes."""
+    mask = Mask(bbox=np.array([0, 0, 2, 2]), mask=np.ones((2, 2), dtype=bool))
+    names = dir(mask)
+
+    assert {"mask", "bbox", "dilate", "size", "iou", "to_struct"} <= set(names)
+    # factories / helpers that do not take a mask are not exposed as methods
+    assert {"from_coordinates", "from_struct", "struct_dtype", "bbox_struct_fields"}.isdisjoint(names)
+
+
+def test_mask_unknown_attribute() -> None:
+    """Unknown attributes still raise `AttributeError`."""
+    mask = Mask(bbox=np.array([0, 0, 2, 2]), mask=np.ones((2, 2), dtype=bool))
+
+    with pytest.raises(AttributeError, match="'Mask' object has no attribute 'not_a_mask_function'"):
+        getattr(mask, "not_a_mask_function")  # noqa: B009
+
+    # private/dunder lookups must not be resolved through the `mask_*` namespace
+    with pytest.raises(AttributeError):
+        getattr(mask, "__deepcopy__")  # noqa: B009
+
+    assert copy.deepcopy(mask) == mask
+    assert pickle.loads(pickle.dumps(mask)) == mask
+
+
+def test_mask_method_registry_is_complete() -> None:
+    """Every public `mask_*(mask, ...)` function must be registered as a `Mask` method."""
+    expected = set()
+
+    for name, obj in vars(_mask_module).items():
+        if not name.startswith("mask_") or not inspect.isfunction(obj):
+            continue
+        params = list(inspect.signature(obj).parameters.values())
+        if params and params[0].name == "mask":
+            expected.add(name.removeprefix("mask_"))
+
+    assert set(_MASK_METHODS) == expected
