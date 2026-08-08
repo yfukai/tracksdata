@@ -3,6 +3,7 @@ from pathlib import Path
 import numpy as np
 import polars as pl
 import pytest
+import rustworkx as rx
 
 from tracksdata.attrs import EdgeAttr, NodeAttr
 from tracksdata.constants import DEFAULT_ATTR_KEYS
@@ -1304,6 +1305,33 @@ def test_spatial_filter_basic(graph_backend: BaseGraph) -> None:
 
     assert set(g_filter[0:0, 0:2, 0:2, 0:2].node_ids()) == {node1}
     assert set(bb_filter[0:0, 0:2, 0:2, 0:2].node_ids()) == {node3}
+
+
+def test_assign_track_ids(graph_backend: BaseGraph):
+    if isinstance(graph_backend, SQLGraph):
+        return
+        # with pytest.raises()
+    else:
+        # Add nodes:
+        #     0
+        #    / \
+        #   1   2
+        nodes = [
+            graph_backend.add_node({DEFAULT_ATTR_KEYS.T: 0}),
+            graph_backend.add_node({DEFAULT_ATTR_KEYS.T: 1}),
+            graph_backend.add_node({DEFAULT_ATTR_KEYS.T: 1}),
+        ]
+        graph_backend.add_edge(nodes[0], nodes[1], {})
+        graph_backend.add_edge(nodes[0], nodes[2], {})
+
+    tracks_graph = graph_backend.assign_track_ids()
+
+    ## Should create 2 tracks: one for each branch
+    # assert len(node_ids) == 3
+    # assert len(track_ids) == 3
+    # assert len(np.unique(track_ids)) == 3  # Three unique track IDs
+    assert isinstance(tracks_graph, rx.PyDiGraph)
+    assert tracks_graph.num_nodes() == 3 + 1  # Three tracks (includes null node (0))
 
 
 def test_tracklet_graph_basic(graph_backend: BaseGraph) -> None:
