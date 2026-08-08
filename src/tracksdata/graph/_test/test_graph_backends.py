@@ -1325,6 +1325,10 @@ def test_assign_track_ids(graph_backend: BaseGraph):
         graph_backend.add_edge(nodes[0], nodes[2], {})
 
     tracks_graph = graph_backend.assign_track_ids()
+    track_ids = graph_backend.node_attrs(attr_keys=[DEFAULT_ATTR_KEYS.TRACK_ID])
+    assert len(track_ids) == 3
+    assert len(set(track_ids[DEFAULT_ATTR_KEYS.TRACK_ID])) == 3
+    # assert len
 
     ## Should create 2 tracks: one for each branch
     # assert len(node_ids) == 3

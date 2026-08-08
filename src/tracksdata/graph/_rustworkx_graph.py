@@ -1011,6 +1011,7 @@ class RustWorkXGraph(BaseGraph):
 
     def assign_track_ids(
         self,
+        track_id_offset: int = 1,
         output_key: str = DEFAULT_ATTR_KEYS.TRACK_ID,
         reset: bool = True,
     ) -> rx.PyDiGraph:
@@ -1019,6 +1020,8 @@ class RustWorkXGraph(BaseGraph):
 
         Parameters
         ----------
+        track_id_offset : int
+            The starting track id, useful when assigning track ids to a subgraph.
         output_key : str
             The key of the output track id attribute.
         reset : bool
@@ -1030,7 +1033,7 @@ class RustWorkXGraph(BaseGraph):
             A compressed graph (parent -> child) with track ids lineage relationships.
         """
         try:
-            node_ids, track_ids, tracks_graph = _assign_track_ids(self.rx_graph)
+            node_ids, track_ids, tracks_graph = _assign_track_ids(self.rx_graph, track_id_offset)
         except RuntimeError as e:
             raise RuntimeError(
                 "Are you sure this graph is a valid lineage graph?\n"
@@ -1043,7 +1046,10 @@ class RustWorkXGraph(BaseGraph):
         elif reset:
             self.update_node_attrs(node_ids=self.node_ids(), attrs={output_key: -1})
 
-        self.update_node_attrs(
+        # Casting since we don't need node_id mapping for the indexed graph.
+        # XXX better way to enforce this?
+        RustWorkXGraph.update_node_attrs(
+            self,
             node_ids=node_ids,
             attrs={output_key: track_ids},
         )
