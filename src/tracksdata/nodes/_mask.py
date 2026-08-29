@@ -1,7 +1,8 @@
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from functools import lru_cache
-from typing import TYPE_CHECKING, Any
+from types import MethodType
+from typing import TYPE_CHECKING, Any, TypeVar
 
 import blosc2
 import numpy as np
@@ -22,6 +23,21 @@ if TYPE_CHECKING:
 
 MASK_DATA_FIELD = "data"
 """Name of the struct field holding the compressed binary mask."""
+
+_MASK_METHODS: dict[str, Callable[..., Any]] = {}
+"""Functions exposed as `Mask` methods, keyed by method name (`mask_` prefix removed)."""
+
+_F = TypeVar("_F", bound=Callable[..., Any])
+
+
+def _mask_method(func: _F) -> _F:
+    """
+    Register a ``mask_<name>(mask, ...)`` function as the `Mask.<name>` method.
+
+    The function is returned unchanged, it is only recorded in `_MASK_METHODS`.
+    """
+    _MASK_METHODS[func.__name__.removeprefix("mask_")] = func
+    return func
 
 
 @dataclass(frozen=True, slots=True, eq=False, repr=False)
@@ -48,10 +64,20 @@ class Mask:
     ValueError
         If the bbox dimension or the bbox size does not match the binary array.
 
+    Notes
+    -----
+    Every ``mask_*`` function taking a `Mask` as first argument is also
+    reachable as a method with the ``mask_`` prefix removed, for example
+    `mask.dilate(2)` is equivalent to
+    [mask_dilate][tracksdata.nodes.mask_dilate]`(mask, 2)`.
+    Use `dir(mask)` to list the available methods.
+
     Examples
     --------
     ```python
     mask = Mask(mask=np.array([[True, False], [False, True]]), bbox=np.array([0, 0, 2, 2]))
+    mask.size()  # same as mask_size(mask)
+    mask.dilate(1)  # same as mask_dilate(mask, 1)
     ```
     """
 
@@ -81,6 +107,24 @@ class Mask:
         ndim = self.mask.ndim
         slicing_str = ", ".join(f"{i}:{j}" for i, j in zip(self.bbox[:ndim], self.bbox[ndim:], strict=True))
         return f"Mask(bbox=[{slicing_str}])"
+
+    def __getattr__(self, name: str) -> Any:
+        """
+        Expose the module-level `mask_*` functions as methods.
+
+        Only called when regular attribute lookup fails, so it never shadows
+        the `mask` and `bbox` fields nor any explicitly defined method.
+        """
+        func = _MASK_METHODS.get(name)
+        if func is None:
+            # includes dunder / private lookups, e.g. the copy and pickle protocols
+            raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
+
+        return MethodType(func, self)
+
+    def __dir__(self) -> list[str]:
+        # zero-arg `super()` is broken by `slots=True` (the class is recreated by `dataclass`)
+        return [*object.__dir__(self), *_MASK_METHODS]
 
 
 def _pack_mask_array(mask: NDArray) -> bytes:
@@ -133,6 +177,7 @@ def _unpack(mask: Mask) -> tuple[NDArray[np.bool_], NDArray[np.int64], int]:
     return array, np.array(mask.bbox, dtype=np.int64), array.ndim
 
 
+@_mask_method
 def mask_crop(
     mask: Mask,
     image: NDArray,
@@ -170,6 +215,7 @@ def mask_crop(
     return image[slicing]
 
 
+@_mask_method
 def mask_indices(
     mask: Mask,
     offset: NDArray[np.integer] | int = 0,
@@ -202,6 +248,7 @@ def mask_indices(
     return tuple(indices)
 
 
+@_mask_method
 def mask_paint_buffer(
     mask: Mask,
     buffer: np.ndarray,
@@ -251,6 +298,7 @@ def mask_paint_buffer(
     buffer[window][array[mask_slicing]] = value
 
 
+@_mask_method
 def mask_iou(mask: Mask, other: Mask) -> float:
     """
     Compute the Intersection over Union (IoU) between two masks
@@ -271,6 +319,7 @@ def mask_iou(mask: Mask, other: Mask) -> float:
     return fast_iou_with_bbox(np.asarray(mask.bbox), np.asarray(other.bbox), mask.mask, other.mask)
 
 
+@_mask_method
 def mask_intersection(mask: Mask, other: Mask) -> float:
     """
     Compute the intersection between two masks considering their bounding boxes location.
@@ -290,6 +339,7 @@ def mask_intersection(mask: Mask, other: Mask) -> float:
     return fast_intersection_with_bbox(np.asarray(mask.bbox), np.asarray(other.bbox), mask.mask, other.mask)
 
 
+@_mask_method
 def mask_union(mask: Mask, other: Mask) -> Mask:
     """
     Compute the union mask between two masks considering their bounding boxes location.
@@ -334,6 +384,7 @@ def mask_union(mask: Mask, other: Mask) -> Mask:
     return Mask(bbox=np.concatenate([union_start, union_end]), mask=union_mask)
 
 
+@_mask_method
 def mask_subtract(mask: Mask, other: Mask) -> Mask:
     """
     Compute the difference between two masks considering their bounding boxes location.
@@ -420,6 +471,7 @@ def _crop_overhang(mask: Mask, image_shape: tuple[int, ...]) -> Mask:
     return Mask(mask=array[slicing], bbox=bbox)
 
 
+@_mask_method
 def mask_dilate(mask: Mask, radius: int, image_shape: tuple[int, ...] | None = None) -> Mask:
     """
     Dilate a mask by a given radius.
@@ -462,6 +514,7 @@ def mask_dilate(mask: Mask, radius: int, image_shape: tuple[int, ...] | None = N
     return dilated
 
 
+@_mask_method
 def mask_move(
     mask: Mask,
     offset: NDArray[np.integer],
@@ -498,6 +551,7 @@ def mask_move(
     return moved
 
 
+@_mask_method
 def mask_regionprops(mask: Mask, **kwargs) -> "RegionProperties":
     """
     Compute scikit-image regionprops for a mask.
@@ -530,6 +584,7 @@ def mask_regionprops(mask: Mask, **kwargs) -> "RegionProperties":
     return props[0]
 
 
+@_mask_method
 def mask_size(mask: Mask) -> int:
     """
     Get the number of pixels that are part of the object.
@@ -641,6 +696,7 @@ def mask_struct_dtype(ndim: int) -> pl.Struct:
     return pl.Struct(fields)
 
 
+@_mask_method
 def mask_to_struct(mask: Mask) -> dict[str, Any]:
     """
     Convert a mask to a dict matching [mask_struct_dtype][tracksdata.nodes.mask_struct_dtype].
