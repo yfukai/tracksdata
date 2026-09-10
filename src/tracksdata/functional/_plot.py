@@ -76,11 +76,19 @@ def _tracklet_tree_layout(tracklet_graph: rx.PyDiGraph) -> dict[int, float]:
     )
 
     for root in roots:
-        # iterative post-order traversal: children are positioned before parents
+        # Iterative post-order DFS: children are positioned before their parents.
+        # DFS visits a subtree contiguously, so its leaves take a consecutive block of
+        # slots and its parents, being means of their children, land inside that block.
+        # Sibling blocks are therefore disjoint and no edges cross.
+        #
+        # For 1 -> (2, 3) and 3 -> (4, 5), tracklets are positioned in the order
+        # 2, 4, 5, 3, 1, giving 2: 0.0, 4: 1.0, 5: 2.0, 3: 1.5, 1: 0.75.
         stack: list[tuple[int, bool]] = [(root, False)]
         while stack:
+            # `rx_id` is a rustworkx node index, `tracklet_graph[rx_id]` the tracklet id
             rx_id, expanded = stack.pop()
             if expanded:
+                # second visit: every child has been positioned already
                 children_pos = [
                     positions[tracklet_graph[child]]
                     for child in tracklet_graph.successor_indices(rx_id)
@@ -89,16 +97,20 @@ def _tracklet_tree_layout(tracklet_graph: rx.PyDiGraph) -> dict[int, float]:
                 if children_pos:
                     positions[tracklet_graph[rx_id]] = float(np.mean(children_pos))
                 else:
+                    # leaf tracklet: take the next free slot
                     positions[tracklet_graph[rx_id]] = next_leaf
                     next_leaf += 1.0
             elif rx_id not in visited:
+                # first visit: re-push self as expanded, then push children on top
                 visited.add(rx_id)
                 stack.append((rx_id, True))
+                # reversed order, so LIFO pops children by ascending tracklet id
                 for child in sorted(
                     tracklet_graph.successor_indices(rx_id),
                     key=tracklet_graph.__getitem__,
                     reverse=True,
                 ):
+                    # skip children already reached via another parent (merges)
                     if child not in visited:
                         stack.append((child, False))
 
