@@ -315,7 +315,7 @@ def test_plot_lineage_tree_size_constant() -> None:
     ax = plot_lineage_tree(graph, size=42.0)
 
     sizes = np.asarray(ax.collections[-1].get_sizes())
-    np.testing.assert_allclose(sizes, [42.0])
+    np.testing.assert_allclose(sizes, np.full(graph.num_nodes(), 42.0))
 
 
 def test_plot_lineage_tree_marker_callable_groups() -> None:

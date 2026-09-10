@@ -5,6 +5,7 @@ from collections.abc import Callable, Mapping, Sequence
 from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
+import polars as pl
 import rustworkx as rx
 from numpy.typing import ArrayLike
 
@@ -18,37 +19,9 @@ if TYPE_CHECKING:
 __all__ = ["plot_lineage_tree"]
 
 
-def _resolve_color_values(raw: list) -> tuple[Any, bool]:
-    """
-    Interpret per-node color-callable outputs as either scalars or literal colors.
-
-    Parameters
-    ----------
-    raw : list
-        One value per node, as returned by a `color`/`edge_color` callable.
-
-    Returns
-    -------
-    tuple[Any, bool]
-        `(values, is_scalar)`. If the outputs form a 1-D numeric array,
-        `values` is that array and `is_scalar` is True, so they are mapped
-        through a colormap (and support a colorbar). Otherwise `values` is
-        the original list of literal colors (names, hex, or RGB(A) tuples)
-        and `is_scalar` is False.
-    """
-    try:
-        arr = np.asarray(raw, dtype=float)
-    except (ValueError, TypeError):
-        return list(raw), False
-    if arr.ndim == 1:
-        return arr, True
-    # (N, 3) or (N, 4): literal RGB(A) colors, not colormap-able scalars
-    return list(raw), False
-
-
 def _resolve_color_channel(
     spec: "str | Callable[[Mapping[str, Any]], Any] | None",
-    nodes_df: Any,
+    nodes_df: pl.DataFrame,
     rows: list[Mapping[str, Any]],
 ) -> tuple[Any, bool]:
     """
@@ -67,17 +40,29 @@ def _resolve_color_channel(
     Returns
     -------
     tuple[Any, bool]
-        `(values, is_scalar)` as in `_resolve_color_values`, or `(None, False)`
-        when `spec` is None. A literal color string becomes one entry per node.
+        `(values, is_scalar)`. If the values form a 1-D numeric array,
+        `values` is that array and `is_scalar` is True, so they are mapped
+        through a colormap (and support a colorbar). Otherwise `values` is a
+        list of literal colors (names, hex, or RGB(A) tuples), one per node,
+        and `is_scalar` is False. `(None, False)` when `spec` is None.
     """
     if spec is None:
         return None, False
-    if callable(spec):
-        return _resolve_color_values([spec(row) for row in rows])
-    if spec in nodes_df.columns:
-        return nodes_df[spec].to_numpy(), True
-    # validated upfront as a matplotlib color: same literal for every node
-    return [spec] * len(nodes_df), False
+    if not callable(spec):
+        if spec in nodes_df.columns:
+            return nodes_df[spec].to_numpy(), True
+        # validated upfront as a matplotlib color: same literal for every node
+        return [spec] * len(nodes_df), False
+
+    raw = [spec(row) for row in rows]
+    try:
+        arr = np.asarray(raw, dtype=float)
+    except (ValueError, TypeError):
+        return raw, False
+    if arr.ndim == 1:
+        return arr, True
+    # (N, 3) or (N, 4): literal RGB(A) colors, not colormap-able scalars
+    return raw, False
 
 
 def _tracklet_tree_layout(tracklet_graph: rx.PyDiGraph) -> dict[int, float]:
@@ -411,6 +396,8 @@ def plot_lineage_tree(
     scatter_kwargs : dict[str, Any] | None, optional
         Additional keyword arguments forwarded to `Axes.scatter`,
         e.g. `linewidths` to set the marker border width or `alpha`.
+        `c`, `edgecolors`, `s`, and `marker` are set from the aesthetics
+        above and take precedence.
     line_kwargs : dict[str, Any] | None, optional
         Additional keyword arguments forwarded to the edge
         `LineCollection` (e.g. `color`, `linewidth`).
@@ -494,6 +481,7 @@ def plot_lineage_tree(
 
     if orientation not in ("vertical", "horizontal"):
         raise ValueError(f"`orientation` must be 'vertical' or 'horizontal', got '{orientation}'.")
+    vertical = orientation == "vertical"
 
     node_attr_keys = graph.node_attr_keys()
     if tracklet_id_key not in node_attr_keys:
@@ -515,7 +503,13 @@ def plot_lineage_tree(
                 f"Expected a color or one of {node_attr_keys}"
             )
 
-    attr_keys = [DEFAULT_ATTR_KEYS.NODE_ID, DEFAULT_ATTR_KEYS.T, tracklet_id_key]
+    # attribute names referenced directly (string aesthetics) plus any extra
+    # keys the callables need. `marker` as a string is a matplotlib glyph, not
+    # an attribute name, so it is not loaded.
+    requested = color_attr_keys + [spec for spec in (size, text) if isinstance(spec, str)] + list(attrs or [])
+    missing = [key for key in requested if key not in node_attr_keys]
+    if missing:
+        raise ValueError(f"Attributes {missing} not found in graph. Expected one of {node_attr_keys}")
     if has_callable and attrs is None:
         warnings.warn(
             "A `color`/`edge_color`/`size`/`marker`/`text` callable was given without `attrs`; "
@@ -523,22 +517,8 @@ def plot_lineage_tree(
             "(e.g. mask attributes). Pass `attrs=[...]` to load only the keys the callables need.",
             stacklevel=2,
         )
-        for key in node_attr_keys:
-            if key not in attr_keys:
-                attr_keys.append(key)
-    else:
-        # attribute names referenced directly (string aesthetics) plus any
-        # extra keys the callables need. `marker` as a string is a matplotlib
-        # glyph, not an attribute name, so it is not loaded.
-        requested = color_attr_keys + [spec for spec in (size, text) if isinstance(spec, str)]
-        if attrs is not None:
-            requested.extend(attrs)
-        for key in requested:
-            if key in attr_keys:
-                continue
-            if key not in node_attr_keys:
-                raise ValueError(f"Attribute '{key}' not found in graph. Expected one of {node_attr_keys}")
-            attr_keys.append(key)
+        requested = node_attr_keys
+    attr_keys = list(dict.fromkeys([DEFAULT_ATTR_KEYS.NODE_ID, DEFAULT_ATTR_KEYS.T, tracklet_id_key, *requested]))
 
     nodes_df = graph.node_attrs(attr_keys=attr_keys)
 
@@ -552,30 +532,19 @@ def plot_lineage_tree(
     # layout is independent of the displayed time range
     tracklet_positions = _tracklet_tree_layout(graph.tracklet_graph(tracklet_id_key=tracklet_id_key))
 
-    time_points = nodes_df[DEFAULT_ATTR_KEYS.T].unique().sort().to_list()
-    time_axis_positions = _time_axis_positions(time_points, time_positions)
+    shown_time_points = nodes_df[DEFAULT_ATTR_KEYS.T].unique().sort().to_list()
+    time_axis_positions = _time_axis_positions(shown_time_points, time_positions)
 
-    tree_coords = np.asarray([tracklet_positions[tid] for tid in nodes_df[tracklet_id_key]])
-    time_coords = np.asarray([time_axis_positions[t] for t in nodes_df[DEFAULT_ATTR_KEYS.T]])
-
-    if orientation == "vertical":
-        x_coords, y_coords = tree_coords, time_coords
-    else:
-        x_coords, y_coords = time_coords, tree_coords
+    tree_coords = nodes_df[tracklet_id_key].replace_strict(tracklet_positions, return_dtype=pl.Float64).to_numpy()
+    time_coords = nodes_df[DEFAULT_ATTR_KEYS.T].replace_strict(time_axis_positions, return_dtype=pl.Float64).to_numpy()
+    x_coords, y_coords = (tree_coords, time_coords) if vertical else (time_coords, tree_coords)
 
     node_coords = {
         node_id: (x, y) for node_id, x, y in zip(nodes_df[DEFAULT_ATTR_KEYS.NODE_ID], x_coords, y_coords, strict=True)
     }
 
     edges_df = graph.edge_attrs(attr_keys=[])
-    successors: dict[int, list[int]] = {}
-    for source, target in zip(
-        edges_df[DEFAULT_ATTR_KEYS.EDGE_SOURCE].to_list(),
-        edges_df[DEFAULT_ATTR_KEYS.EDGE_TARGET].to_list(),
-        strict=True,
-    ):
-        successors.setdefault(source, []).append(target)
-
+    successors = dict(edges_df.group_by(DEFAULT_ATTR_KEYS.EDGE_SOURCE).agg(DEFAULT_ATTR_KEYS.EDGE_TARGET).iter_rows())
     segments = _bridged_edge_segments(successors, node_coords)
 
     if ax is None:
@@ -609,26 +578,28 @@ def plot_lineage_tree(
     # scatter only colormaps `c`, so numeric edge colors are mapped here
     edge_cmap = plt.get_cmap(cmap) if edge_is_scalar else None
 
-    # resolve the size channel: attribute name -> mapped range, callable -> raw
-    # sizes, number -> constant
+    # resolve the size channel to one size per node: attribute name -> mapped
+    # range, callable -> raw sizes, number -> constant
     if callable(size):
-        size_values: Any = np.asarray([size(row) for row in rows], dtype=float)
+        size_values = np.asarray([size(row) for row in rows], dtype=float)
     elif isinstance(size, str):
         size_values = _map_to_size_range(nodes_df[size].to_numpy(), size_norm, size_range)
     else:
-        size_values = float(size)
+        size_values = np.full(len(nodes_df), float(size))
 
-    # resolve the marker channel: callable -> per-node glyphs (grouped), string
-    # -> single glyph, None -> "o"
+    # resolve the marker channel: callable -> per-node glyphs, string -> single
+    # glyph, None -> "o"
     if callable(marker):
         marker_values = [marker(row) for row in rows]
     else:
-        marker_values = None
-        single_marker = marker if isinstance(marker, str) else "o"
+        marker_values = [marker or "o"] * len(nodes_df)
+    marker_arr = np.asarray(marker_values, dtype=object)
 
     scatter_kwargs = {"zorder": 2, **(scatter_kwargs or {})}
 
-    def _scatter_group(idx: np.ndarray, marker_glyph: str) -> Any:
+    # one scatter call per distinct glyph (scatter accepts a single marker)
+    for glyph in dict.fromkeys(marker_values):
+        idx = np.nonzero(marker_arr == glyph)[0]
         kwargs = dict(scatter_kwargs)
         if color_is_scalar:
             kwargs["c"] = color_values[idx]
@@ -640,20 +611,8 @@ def plot_lineage_tree(
             kwargs["edgecolors"] = edge_cmap(norm(edge_values[idx]))
         elif edge_values is not None:
             kwargs["edgecolors"] = [edge_values[i] for i in idx]
-        if np.isscalar(size_values):
-            kwargs.setdefault("s", size_values)
-        else:
-            kwargs["s"] = size_values[idx]
-        return ax.scatter(x_coords[idx], y_coords[idx], marker=marker_glyph, **kwargs)
-
-    if marker_values is None:
-        _scatter_group(np.arange(len(nodes_df)), single_marker)
-    else:
-        marker_arr = np.asarray(marker_values, dtype=object)
-        # one scatter call per distinct glyph (scatter accepts a single marker)
-        for glyph in dict.fromkeys(marker_values):
-            idx = np.nonzero(marker_arr == glyph)[0]
-            _scatter_group(idx, glyph)
+        kwargs["s"] = size_values[idx]
+        ax.scatter(x_coords[idx], y_coords[idx], marker=glyph, **kwargs)
 
     if text is not None:
         if callable(text):
@@ -669,21 +628,17 @@ def plot_lineage_tree(
         for x, y, label in zip(x_coords, y_coords, labels, strict=True):
             ax.annotate(str(label), (x, y), **annotate_kwargs)
 
-    if orientation == "vertical":
-        time_axis, tree_axis = ax.yaxis, ax.xaxis
-        ax.set_ylabel("time")
-        if not ax.yaxis_inverted():
-            ax.invert_yaxis()
-    else:
-        time_axis, tree_axis = ax.xaxis, ax.yaxis
-        ax.set_xlabel("time")
-
+    time_axis, tree_axis = (ax.yaxis, ax.xaxis) if vertical else (ax.xaxis, ax.yaxis)
+    time_axis.set_label_text("time")
     tree_axis.set_ticks([])
+    # time runs downward in the vertical layout
+    if vertical and not ax.yaxis_inverted():
+        ax.invert_yaxis()
 
     if time_positions is None:
         # evenly separated positions: label the ticks with the time point values
-        stride = max(1, len(time_points) // 10)
-        ticks = time_points[::stride]
+        stride = max(1, len(shown_time_points) // 10)
+        ticks = shown_time_points[::stride]
         time_axis.set_ticks([time_axis_positions[t] for t in ticks], labels=[str(t) for t in ticks])
 
     return ax
