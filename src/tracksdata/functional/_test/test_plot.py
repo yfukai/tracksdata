@@ -113,6 +113,12 @@ def test_plot_lineage_tree_size_norm() -> None:
     expected = 10.0 + np.clip(feature / 2.0, 0.0, 1.0) * 40.0
     np.testing.assert_allclose(sizes, expected)
 
+    # a matplotlib Normalize instance is accepted as well
+    _, ax2 = plt.subplots()
+    norm = matplotlib.colors.Normalize(0.0, 2.0, clip=True)
+    plot_lineage_tree(graph, ax=ax2, size="feature", size_norm=norm, size_range=(10.0, 50.0))
+    np.testing.assert_allclose(np.asarray(ax2.collections[-1].get_sizes()), expected)
+
 
 def test_plot_lineage_tree_time_points_window() -> None:
     """A contiguous `time_points` window (a range) limits the displayed nodes and edges."""
@@ -138,28 +144,24 @@ def test_plot_lineage_tree_time_points() -> None:
     ax = plot_lineage_tree(graph, time_points=[0, 3])
 
     lines, scatter = ax.collections
-    # nodes: t=0 (tracklet 1) and t=3 (tracklets 2 and 3)
-    assert len(scatter.get_offsets()) == 3
-
-    # edges bridge over the hidden frames: the single t=0 node connects to each
-    # of the two t=3 nodes through the (hidden) division at t=2
-    segments = lines.get_segments()
-    assert len(segments) == 2
-    # both bridged segments start at the same point: the single displayed t=0 node,
-    # which sits at the minimum (topmost) time coordinate
-    starts = np.asarray([seg[0] for seg in segments])
-    np.testing.assert_array_equal(starts[0], starts[1])
-    assert starts[0, 1] == 0.0  # t=0 evenly-separated position
-    # the two endpoints are the two distinct t=3 nodes
-    ends = np.asarray([seg[1] for seg in segments])
-    assert ends[0, 0] != ends[1, 0]
-    np.testing.assert_array_equal(ends[:, 1], [1.0, 1.0])  # both at t=3 position
-
-    # the two displayed time points are evenly separated and labeled with their values
+    # markers: t=0 (tracklet 1) and t=3 (tracklets 2 and 3)
     offsets = np.asarray(scatter.get_offsets())
-    np.testing.assert_array_equal(np.sort(np.unique(offsets[:, 1])), [0.0, 1.0])
+    assert len(offsets) == 3
+    # every time point in the displayed range is evenly separated, hidden ones
+    # included, and only the displayed ones are labeled
+    np.testing.assert_array_equal(np.sort(np.unique(offsets[:, 1])), [0.0, 3.0])
     labels = [tick.get_text() for tick in ax.get_yticklabels()]
     assert labels == ["0", "3"]
+
+    # edges still run through the hidden t=1 and t=2 nodes
+    segments = np.asarray(lines.get_segments())
+    assert len(segments) == graph.num_edges()
+    np.testing.assert_array_equal(np.sort(np.unique(segments[:, :, 1])), [0.0, 1.0, 2.0, 3.0])
+    # the division fork starts at the hidden t=1 node and ends at the two distinct t=2 nodes
+    forks = segments[segments[:, 0, 1] == 1.0]
+    assert len(forks) == 2
+    np.testing.assert_array_equal(forks[:, 1, 1], [2.0, 2.0])
+    assert forks[0, 1, 0] != forks[1, 1, 0]
 
 
 def test_plot_lineage_tree_edge_colors() -> None:

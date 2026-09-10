@@ -146,7 +146,8 @@ def _time_axis_positions(
     Parameters
     ----------
     time_points : list[int]
-        Sorted unique time points to be displayed.
+        Sorted unique time points needing a coordinate: the displayed ones
+        and the hidden ones in between that edges pass through.
     time_positions : Mapping[int, float] | ArrayLike | None
         Exact time-axis coordinates (e.g. timestamps). Either a mapping of
         time point to coordinate or a sequence indexed by time point.
@@ -177,86 +178,6 @@ def _time_axis_positions(
     return {t: float(time_positions[t]) for t in time_points}
 
 
-def _map_to_size_range(
-    values: np.ndarray,
-    size_norm: tuple[float, float] | None,
-    size_range: tuple[float, float],
-) -> np.ndarray:
-    """
-    Linearly map attribute values to marker sizes within `size_range`.
-
-    Parameters
-    ----------
-    values : np.ndarray
-        Attribute values to map.
-    size_norm : tuple[float, float] | None
-        The (vmin, vmax) values mapped to the limits of `size_range`.
-        If None, the minimum and maximum of `values` are used.
-    size_range : tuple[float, float]
-        The (smallest, largest) marker sizes in points**2.
-
-    Returns
-    -------
-    np.ndarray
-        Marker sizes, one per value.
-    """
-    values = np.asarray(values, dtype=float)
-    if size_norm is None:
-        vmin, vmax = np.nanmin(values), np.nanmax(values)
-    else:
-        vmin, vmax = size_norm
-
-    smin, smax = size_range
-    if vmax <= vmin:
-        return np.full(values.shape, (smin + smax) / 2)
-
-    fraction = np.clip((values - vmin) / (vmax - vmin), 0.0, 1.0)
-    return smin + fraction * (smax - smin)
-
-
-def _bridged_edge_segments(
-    successors: dict[int, list[int]],
-    node_coords: dict[int, tuple[float, float]],
-) -> list[tuple[tuple[float, float], tuple[float, float]]]:
-    """
-    Build edge segments between displayed nodes, bridging across hidden ones.
-
-    Each displayed node is connected to its nearest displayed descendants by
-    walking forward through the tracking graph and skipping over nodes that are
-    not displayed. This keeps the lineage structure visible when only a subset
-    of time points is shown. When all nodes are displayed it reduces to the
-    direct edges of the graph.
-
-    Parameters
-    ----------
-    successors : dict[int, list[int]]
-        Forward adjacency of the full (sub)graph, mapping each source node id
-        to the list of its target node ids.
-    node_coords : dict[int, tuple[float, float]]
-        Plot coordinates of the displayed nodes, keyed by node id.
-
-    Returns
-    -------
-    list[tuple[tuple[float, float], tuple[float, float]]]
-        Line segments connecting the coordinates of displayed nodes.
-    """
-    segments = []
-    for source in node_coords:
-        # walk forward to the nearest displayed descendants, skipping hidden nodes
-        stack = list(successors.get(source, ()))
-        seen: set[int] = set()
-        while stack:
-            node = stack.pop()
-            if node in seen:
-                continue
-            seen.add(node)
-            if node in node_coords:
-                segments.append((node_coords[source], node_coords[node]))
-            else:
-                stack.extend(successors.get(node, ()))
-    return segments
-
-
 def plot_lineage_tree(
     graph: BaseGraph,
     *,
@@ -267,7 +188,7 @@ def plot_lineage_tree(
     cmap: "str | Colormap" = "viridis",
     color_norm: "Normalize | tuple[float, float] | None" = None,
     size: "str | Callable[[Mapping[str, Any]], float] | float" = 30.0,
-    size_norm: tuple[float, float] | None = None,
+    size_norm: "Normalize | tuple[float, float] | None" = None,
     size_range: tuple[float, float] = (10.0, 100.0),
     marker: "str | Callable[[Mapping[str, Any]], str] | None" = None,
     text: "str | Callable[[Mapping[str, Any]], Any] | None" = None,
@@ -285,9 +206,9 @@ def plot_lineage_tree(
     Nodes are drawn as points aligned in time and grouped by tracklet,
     with parent tracklets centered above their children. Edges are drawn
     as line segments, so divisions appear as forks in the tree. When only a
-    subset of time points is shown, each node is connected to its nearest
-    displayed descendants, bridging over the hidden time points so the lineage
-    stays connected.
+    subset of time points is shown, markers are limited to those time points
+    while edges still run through the hidden nodes in between, so the tree
+    keeps its shape and divisions stay at their true time.
 
     The `color`, `edge_color`, `size`, `marker`, and `text` aesthetics each
     accept either a fixed value or a callable, which is the main way to
@@ -354,9 +275,10 @@ def plot_lineage_tree(
         `size_range`. A callable receives each node's attribute row and returns
         the marker size in points**2 directly. A number sets a constant size
         in points**2 for every node.
-    size_norm : tuple[float, float] | None, optional
-        The `(vmin, vmax)` attribute values mapped to the limits of
-        `size_range`, used when `size` is an attribute name. If None, the data
+    size_norm : Normalize | tuple[float, float] | None, optional
+        Normalization of attribute values onto `size_range`, used when `size`
+        is an attribute name: a matplotlib `Normalize` instance or a
+        `(vmin, vmax)` tuple (values outside are clipped). If None, the data
         range is used.
     size_range : tuple[float, float], optional
         The marker sizes in points**2 assigned to the smallest and largest
@@ -381,15 +303,17 @@ def plot_lineage_tree(
         or memory-heavy (e.g. mask attributes). Ignored keys already loaded for
         other reasons are harmless.
     time_points : Sequence[int] | None, optional
-        Time points to display, e.g. `range(10, 21)` for a contiguous window
-        or `[0, 5, 10]` for a sparse subset. Edges bridge over the hidden time
-        points, connecting each displayed node to its nearest displayed
-        descendants. If None, all time points are displayed.
+        Time points at which markers are drawn, e.g. `range(10, 21)` for a
+        contiguous window or `[0, 5, 10]` for a sparse subset. Edges are drawn
+        for every node between the first and last displayed time point, hidden
+        ones included. If None, all time points are displayed.
     time_positions : Mapping[int, float] | ArrayLike | None, optional
         Exact positions of the time points along the time axis
         (e.g. acquisition timestamps). Either a mapping of time point to
-        position or a sequence indexed by time point. If None, the displayed
-        time points are evenly separated and labeled with their values.
+        position or a sequence indexed by time point, covering every time
+        point within the displayed range. If None, every time point within
+        the displayed range is evenly separated, hidden ones included, and
+        the displayed ones are labeled with their values.
     orientation : {"vertical", "horizontal"}, optional
         If "vertical", time runs downward along the y-axis.
         If "horizontal", time runs rightward along the x-axis.
@@ -520,32 +444,44 @@ def plot_lineage_tree(
         requested = node_attr_keys
     attr_keys = list(dict.fromkeys([DEFAULT_ATTR_KEYS.NODE_ID, DEFAULT_ATTR_KEYS.T, tracklet_id_key, *requested]))
 
-    nodes_df = graph.node_attrs(attr_keys=attr_keys)
+    all_nodes_df = graph.node_attrs(attr_keys=attr_keys)
 
+    shown_time_points = all_nodes_df[DEFAULT_ATTR_KEYS.T].unique().sort()
     if time_points is not None:
-        nodes_df = nodes_df.filter(nodes_df[DEFAULT_ATTR_KEYS.T].is_in(list(time_points)))
-
-    if len(nodes_df) == 0:
+        shown_time_points = shown_time_points.filter(shown_time_points.is_in(list(time_points)))
+    shown_time_points = shown_time_points.to_list()
+    if not shown_time_points:
         raise ValueError("No nodes to plot. The graph is empty or `time_points` excluded all nodes.")
 
     # tree-axis coordinate per tracklet, computed on the full graph so the
     # layout is independent of the displayed time range
     tracklet_positions = _tracklet_tree_layout(graph.tracklet_graph(tracklet_id_key=tracklet_id_key))
 
-    shown_time_points = nodes_df[DEFAULT_ATTR_KEYS.T].unique().sort().to_list()
-    time_axis_positions = _time_axis_positions(shown_time_points, time_positions)
+    # edges run through every node inside the displayed time span, hidden time
+    # points included, so divisions appear at their true time
+    span_df = all_nodes_df.filter(pl.col(DEFAULT_ATTR_KEYS.T).is_between(shown_time_points[0], shown_time_points[-1]))
+    span_time_points = span_df[DEFAULT_ATTR_KEYS.T].unique().sort().to_list()
+    time_axis_positions = _time_axis_positions(span_time_points, time_positions)
 
-    tree_coords = nodes_df[tracklet_id_key].replace_strict(tracklet_positions, return_dtype=pl.Float64).to_numpy()
-    time_coords = nodes_df[DEFAULT_ATTR_KEYS.T].replace_strict(time_axis_positions, return_dtype=pl.Float64).to_numpy()
-    x_coords, y_coords = (tree_coords, time_coords) if vertical else (time_coords, tree_coords)
+    tree_coords = span_df[tracklet_id_key].replace_strict(tracklet_positions, return_dtype=pl.Float64).to_numpy()
+    time_coords = span_df[DEFAULT_ATTR_KEYS.T].replace_strict(time_axis_positions, return_dtype=pl.Float64).to_numpy()
+    span_x, span_y = (tree_coords, time_coords) if vertical else (time_coords, tree_coords)
 
-    node_coords = {
-        node_id: (x, y) for node_id, x, y in zip(nodes_df[DEFAULT_ATTR_KEYS.NODE_ID], x_coords, y_coords, strict=True)
-    }
+    # edge segments as (E, 2, 2) start/end points; the inner joins drop edges
+    # with an endpoint outside the span
+    node_id, source, target = DEFAULT_ATTR_KEYS.NODE_ID, DEFAULT_ATTR_KEYS.EDGE_SOURCE, DEFAULT_ATTR_KEYS.EDGE_TARGET
+    coords_df = pl.DataFrame({node_id: span_df[node_id], "x": span_x, "y": span_y})
+    segments_df = (
+        graph.edge_attrs(attr_keys=[])
+        .join(coords_df.rename({node_id: source, "x": "x0", "y": "y0"}), on=source)
+        .join(coords_df.rename({node_id: target, "x": "x1", "y": "y1"}), on=target)
+    )
+    segments = segments_df.select("x0", "y0", "x1", "y1").to_numpy().reshape(-1, 2, 2)
 
-    edges_df = graph.edge_attrs(attr_keys=[])
-    successors = dict(edges_df.group_by(DEFAULT_ATTR_KEYS.EDGE_SOURCE).agg(DEFAULT_ATTR_KEYS.EDGE_TARGET).iter_rows())
-    segments = _bridged_edge_segments(successors, node_coords)
+    # markers only at the displayed time points
+    is_shown = span_df[DEFAULT_ATTR_KEYS.T].is_in(shown_time_points).to_numpy()
+    nodes_df = span_df.filter(is_shown)
+    x_coords, y_coords = span_x[is_shown], span_y[is_shown]
 
     if ax is None:
         _, ax = plt.subplots()
@@ -578,12 +514,18 @@ def plot_lineage_tree(
     # scatter only colormaps `c`, so numeric edge colors are mapped here
     edge_cmap = plt.get_cmap(cmap) if edge_is_scalar else None
 
-    # resolve the size channel to one size per node: attribute name -> mapped
-    # range, callable -> raw sizes, number -> constant
+    # resolve the size channel to one size per node: attribute name -> linearly
+    # mapped into `size_range`, callable -> raw sizes, number -> constant
     if callable(size):
         size_values = np.asarray([size(row) for row in rows], dtype=float)
     elif isinstance(size, str):
-        size_values = _map_to_size_range(nodes_df[size].to_numpy(), size_norm, size_range)
+        if isinstance(size_norm, Normalize):
+            size_scale = size_norm
+        else:
+            # autoscales to the data range when no limits are given
+            size_scale = Normalize(*(size_norm or (None, None)), clip=True)
+        fraction = size_scale(np.ma.masked_invalid(nodes_df[size].to_numpy().astype(float)))
+        size_values = np.ma.filled(size_range[0] + fraction * (size_range[1] - size_range[0]), np.nan)
     else:
         size_values = np.full(len(nodes_df), float(size))
 
