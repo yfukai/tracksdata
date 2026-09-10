@@ -25,7 +25,7 @@ def _resolve_color_values(raw: list) -> tuple[Any, bool]:
     Parameters
     ----------
     raw : list
-        One value per node, as returned by a `color` callable.
+        One value per node, as returned by a `color`/`edge_color` callable.
 
     Returns
     -------
@@ -44,6 +44,40 @@ def _resolve_color_values(raw: list) -> tuple[Any, bool]:
         return arr, True
     # (N, 3) or (N, 4): literal RGB(A) colors, not colormap-able scalars
     return list(raw), False
+
+
+def _resolve_color_channel(
+    spec: "str | Callable[[Mapping[str, Any]], Any] | None",
+    nodes_df: Any,
+    rows: list[Mapping[str, Any]],
+) -> tuple[Any, bool]:
+    """
+    Resolve a `color`/`edge_color` specification into per-node color values.
+
+    Parameters
+    ----------
+    spec : str | Callable | None
+        An attribute name (loaded in `nodes_df`), a literal matplotlib color,
+        a callable of the node attribute row, or None.
+    nodes_df : pl.DataFrame
+        Displayed nodes with the attributes referenced by string specs loaded.
+    rows : list[Mapping[str, Any]]
+        Per-node attribute rows, fed to callables (unused otherwise).
+
+    Returns
+    -------
+    tuple[Any, bool]
+        `(values, is_scalar)` as in `_resolve_color_values`, or `(None, False)`
+        when `spec` is None. A literal color string becomes one entry per node.
+    """
+    if spec is None:
+        return None, False
+    if callable(spec):
+        return _resolve_color_values([spec(row) for row in rows])
+    if spec in nodes_df.columns:
+        return nodes_df[spec].to_numpy(), True
+    # validated upfront as a matplotlib color: same literal for every node
+    return [spec] * len(nodes_df), False
 
 
 def _tracklet_tree_layout(tracklet_graph: rx.PyDiGraph) -> dict[int, float]:
@@ -244,17 +278,16 @@ def plot_lineage_tree(
     ax: "Axes | None" = None,
     tracklet_id_key: str = DEFAULT_ATTR_KEYS.TRACKLET_ID,
     color: "str | Callable[[Mapping[str, Any]], Any] | None" = None,
+    edge_color: "str | Callable[[Mapping[str, Any]], Any] | None" = None,
     cmap: "str | Colormap" = "viridis",
     color_norm: "Normalize | tuple[float, float] | None" = None,
-    size: "str | Callable[[Mapping[str, Any]], float] | float | None" = None,
+    size: "str | Callable[[Mapping[str, Any]], float] | float" = 30.0,
     size_norm: tuple[float, float] | None = None,
     size_range: tuple[float, float] = (10.0, 100.0),
-    node_size: float = 30.0,
     marker: "str | Callable[[Mapping[str, Any]], str] | None" = None,
     text: "str | Callable[[Mapping[str, Any]], Any] | None" = None,
     text_kwargs: dict[str, Any] | None = None,
     attrs: Sequence[str] | None = None,
-    time_range: tuple[int, int] | None = None,
     time_points: Sequence[int] | None = None,
     time_positions: "Mapping[int, float] | ArrayLike | None" = None,
     orientation: Literal["vertical", "horizontal"] = "vertical",
@@ -271,11 +304,15 @@ def plot_lineage_tree(
     displayed descendants, bridging over the hidden time points so the lineage
     stays connected.
 
-    The `color`, `size`, `marker`, and `text` aesthetics each accept either a
-    fixed value or a callable, which is the main way to customize the markers:
+    The `color`, `edge_color`, `size`, `marker`, and `text` aesthetics each
+    accept either a fixed value or a callable, which is the main way to
+    customize the markers:
 
-    - As a string, `color`/`size`/`text` name a numeric node attribute, and
-      `marker` is a single matplotlib marker glyph applied to every node.
+    - As a string, `color`/`edge_color`/`size`/`text` name a numeric node
+      attribute, and `marker` is a single matplotlib marker glyph applied to
+      every node. A `color`/`edge_color` string that is not an attribute name
+      is taken as a literal matplotlib color (e.g. `"tab:red"`, `"none"`)
+      applied to every node.
     - As a callable, they receive each node's attribute row (a mapping of
       attribute key to value) and return that node's color, size, marker glyph,
       or text label. This allows categorical colors, per-node marker shapes,
@@ -284,7 +321,9 @@ def plot_lineage_tree(
     A colorbar-compatible mapping is available whenever `color` produces numeric
     values (a numeric attribute name, or a callable returning numbers) together
     with `cmap`. If a callable returns literal colors (names, hex, or RGB(A)),
-    those colors are used verbatim and no colorbar mapping exists.
+    those colors are used verbatim and no colorbar mapping exists. Numeric
+    `edge_color` values are mapped through the same `cmap`/`color_norm` as
+    `color`, so face and edge colors are directly comparable.
 
     Requires `matplotlib`, which is an optional dependency
     (`pip install "tracksdata[plot]"`).
@@ -306,22 +345,30 @@ def plot_lineage_tree(
         [BaseGraph.assign_tracklet_ids][tracksdata.graph.BaseGraph.assign_tracklet_ids]
         is called first.
     color : str | Callable | None, optional
-        Marker color. A string names a numeric node attribute mapped through
-        `cmap`/`color_norm` (a colorbar mapping is available). A callable
-        receives each node's attribute row and returns either a number (mapped
-        through `cmap`, colorbar available) or a literal color (used as-is, no
-        colorbar). If None, matplotlib's default color is used.
+        Marker face color. A string names a numeric node attribute mapped
+        through `cmap`/`color_norm` (a colorbar mapping is available); if it
+        is not an attribute name, it is a literal matplotlib color applied to
+        every node. A callable receives each node's attribute row and returns
+        either a number (mapped through `cmap`, colorbar available) or a
+        literal color (used as-is, no colorbar). If None, matplotlib's default
+        color is used.
+    edge_color : str | Callable | None, optional
+        Marker edge (border) color, resolved exactly like `color`: an attribute
+        name or numeric callable output is mapped through the shared
+        `cmap`/`color_norm`, a literal color or a callable returning literal
+        colors is used as-is. If None, edges take matplotlib's default (the
+        face color). Set the border width with `scatter_kwargs={"linewidths": ...}`.
     cmap : str | Colormap, optional
         Colormap used when `color` yields numeric values.
     color_norm : Normalize | tuple[float, float] | None, optional
         Normalization for numeric colors, either a matplotlib `Normalize`
         instance or a `(vmin, vmax)` tuple. If None, the data range is used.
         A single shared normalization is applied across all marker groups.
-    size : str | Callable | float | None, optional
+    size : str | Callable | float, optional
         Marker size. A string names a numeric node attribute mapped into
         `size_range`. A callable receives each node's attribute row and returns
-        the marker size in points**2 directly. A number sets a constant size.
-        If None, `node_size` is used.
+        the marker size in points**2 directly. A number sets a constant size
+        in points**2 for every node.
     size_norm : tuple[float, float] | None, optional
         The `(vmin, vmax)` attribute values mapped to the limits of
         `size_range`, used when `size` is an attribute name. If None, the data
@@ -329,8 +376,6 @@ def plot_lineage_tree(
     size_range : tuple[float, float], optional
         The marker sizes in points**2 assigned to the smallest and largest
         values when `size` is an attribute name.
-    node_size : float, optional
-        Marker size in points**2 used when `size` is None.
     marker : str | Callable | None, optional
         Marker shape. A string is a single matplotlib marker glyph (e.g. "s")
         applied to every node. A callable receives each node's attribute row
@@ -350,15 +395,11 @@ def plot_lineage_tree(
         warning is emitted and all node attributes are loaded, which may be slow
         or memory-heavy (e.g. mask attributes). Ignored keys already loaded for
         other reasons are harmless.
-    time_range : tuple[int, int] | None, optional
-        Inclusive `(start, end)` range of time points to display.
-        If None, all time points are displayed. Mutually exclusive with
-        `time_points`.
     time_points : Sequence[int] | None, optional
-        Explicit subset of time points to display, which need not be
-        contiguous (e.g. `[0, 5, 10]`). Edges bridge over the hidden time
+        Time points to display, e.g. `range(10, 21)` for a contiguous window
+        or `[0, 5, 10]` for a sparse subset. Edges bridge over the hidden time
         points, connecting each displayed node to its nearest displayed
-        descendants. Mutually exclusive with `time_range`.
+        descendants. If None, all time points are displayed.
     time_positions : Mapping[int, float] | ArrayLike | None, optional
         Exact positions of the time points along the time axis
         (e.g. acquisition timestamps). Either a mapping of time point to
@@ -369,7 +410,7 @@ def plot_lineage_tree(
         If "horizontal", time runs rightward along the x-axis.
     scatter_kwargs : dict[str, Any] | None, optional
         Additional keyword arguments forwarded to `Axes.scatter`,
-        e.g. `edgecolors` and `linewidths` to style the marker borders.
+        e.g. `linewidths` to set the marker border width or `alpha`.
     line_kwargs : dict[str, Any] | None, optional
         Additional keyword arguments forwarded to the edge
         `LineCollection` (e.g. `color`, `linewidth`).
@@ -407,6 +448,18 @@ def plot_lineage_tree(
     )
     ```
 
+    Outline dividing cells on top of a continuous face color:
+
+    ```python
+    ax = plot_lineage_tree(
+        graph,
+        color="area",
+        edge_color=lambda row: "black" if row["is_dividing"] else "none",
+        attrs=["is_dividing"],
+        scatter_kwargs={"linewidths": 1.5},
+    )
+    ```
+
     Categorical colors and per-node text labels:
 
     ```python
@@ -424,7 +477,7 @@ def plot_lineage_tree(
     ```python
     ax = plot_lineage_tree(
         graph,
-        time_range=(10, 20),
+        time_points=range(10, 21),
         time_positions={t: t * 30.0 for t in range(50)},
     )
     ```
@@ -432,7 +485,7 @@ def plot_lineage_tree(
     try:
         import matplotlib.pyplot as plt
         from matplotlib.collections import LineCollection
-        from matplotlib.colors import Normalize
+        from matplotlib.colors import Normalize, is_color_like
     except ImportError as e:
         raise ImportError(
             "matplotlib is required for `plot_lineage_tree`. "
@@ -442,49 +495,58 @@ def plot_lineage_tree(
     if orientation not in ("vertical", "horizontal"):
         raise ValueError(f"`orientation` must be 'vertical' or 'horizontal', got '{orientation}'.")
 
-    if tracklet_id_key not in graph.node_attr_keys():
+    node_attr_keys = graph.node_attr_keys()
+    if tracklet_id_key not in node_attr_keys:
         graph.assign_tracklet_ids(tracklet_id_key)
 
-    has_callable = any(callable(spec) for spec in (color, size, marker, text))
+    has_callable = any(callable(spec) for spec in (color, edge_color, size, marker, text))
+
+    # a `color`/`edge_color` string is an attribute name when one exists,
+    # otherwise it must be a literal matplotlib color
+    color_attr_keys = []
+    for spec in (color, edge_color):
+        if not isinstance(spec, str):
+            continue
+        if spec in node_attr_keys:
+            color_attr_keys.append(spec)
+        elif not is_color_like(spec):
+            raise ValueError(
+                f"Color '{spec}' not found in graph attributes and is not a valid matplotlib color. "
+                f"Expected a color or one of {node_attr_keys}"
+            )
 
     attr_keys = [DEFAULT_ATTR_KEYS.NODE_ID, DEFAULT_ATTR_KEYS.T, tracklet_id_key]
     if has_callable and attrs is None:
         warnings.warn(
-            "A `color`/`size`/`marker`/`text` callable was given without `attrs`; "
+            "A `color`/`edge_color`/`size`/`marker`/`text` callable was given without `attrs`; "
             "loading all node attributes, which may be slow or memory-heavy "
             "(e.g. mask attributes). Pass `attrs=[...]` to load only the keys the callables need.",
             stacklevel=2,
         )
-        for key in graph.node_attr_keys():
+        for key in node_attr_keys:
             if key not in attr_keys:
                 attr_keys.append(key)
     else:
         # attribute names referenced directly (string aesthetics) plus any
         # extra keys the callables need. `marker` as a string is a matplotlib
         # glyph, not an attribute name, so it is not loaded.
-        requested = [spec for spec in (color, size, text) if isinstance(spec, str)]
+        requested = color_attr_keys + [spec for spec in (size, text) if isinstance(spec, str)]
         if attrs is not None:
             requested.extend(attrs)
         for key in requested:
             if key in attr_keys:
                 continue
-            if key not in graph.node_attr_keys():
-                raise ValueError(f"Attribute '{key}' not found in graph. Expected one of {graph.node_attr_keys()}")
+            if key not in node_attr_keys:
+                raise ValueError(f"Attribute '{key}' not found in graph. Expected one of {node_attr_keys}")
             attr_keys.append(key)
-
-    if time_range is not None and time_points is not None:
-        raise ValueError("`time_range` and `time_points` are mutually exclusive, provide at most one.")
 
     nodes_df = graph.node_attrs(attr_keys=attr_keys)
 
-    if time_range is not None:
-        start, end = time_range
-        nodes_df = nodes_df.filter((nodes_df[DEFAULT_ATTR_KEYS.T] >= start) & (nodes_df[DEFAULT_ATTR_KEYS.T] <= end))
-    elif time_points is not None:
+    if time_points is not None:
         nodes_df = nodes_df.filter(nodes_df[DEFAULT_ATTR_KEYS.T].is_in(list(time_points)))
 
     if len(nodes_df) == 0:
-        raise ValueError("No nodes to plot. The graph is empty or `time_range`/`time_points` excluded all nodes.")
+        raise ValueError("No nodes to plot. The graph is empty or `time_points` excluded all nodes.")
 
     # tree-axis coordinate per tracklet, computed on the full graph so the
     # layout is independent of the displayed time range
@@ -525,32 +587,32 @@ def plot_lineage_tree(
     # per-node attribute rows, only materialized when a callable needs them
     rows = list(nodes_df.iter_rows(named=True)) if has_callable else []
 
-    # resolve the color channel to values passed to scatter's `c`
-    color_values: Any = None
-    color_is_scalar = False
-    if color is not None:
-        if callable(color):
-            color_values, color_is_scalar = _resolve_color_values([color(row) for row in rows])
-        else:
-            color_values = nodes_df[color].to_numpy()
-            color_is_scalar = True
+    # resolve the face color channel (scatter's `c`) and the edge color channel
+    color_values, color_is_scalar = _resolve_color_channel(color, nodes_df, rows)
+    edge_values, edge_is_scalar = _resolve_color_channel(edge_color, nodes_df, rows)
 
-    # a single shared normalization so colors are consistent across marker groups
+    # a single shared normalization so colors are consistent across marker
+    # groups and between face and edge colors
     norm: Normalize | None = None
-    if color_is_scalar:
+    scalar_channels = [
+        values for values, is_scalar in ((color_values, color_is_scalar), (edge_values, edge_is_scalar)) if is_scalar
+    ]
+    if scalar_channels:
         if color_norm is None:
-            norm = Normalize(vmin=float(np.nanmin(color_values)), vmax=float(np.nanmax(color_values)))
+            stacked = np.concatenate(scalar_channels)
+            norm = Normalize(vmin=float(np.nanmin(stacked)), vmax=float(np.nanmax(stacked)))
         elif isinstance(color_norm, tuple):
             norm = Normalize(*color_norm)
         else:
             norm = color_norm
 
+    # scatter only colormaps `c`, so numeric edge colors are mapped here
+    edge_cmap = plt.get_cmap(cmap) if edge_is_scalar else None
+
     # resolve the size channel: attribute name -> mapped range, callable -> raw
-    # sizes, number -> constant, None -> node_size default
-    if size is None:
-        size_values: Any = None
-    elif callable(size):
-        size_values = np.asarray([size(row) for row in rows], dtype=float)
+    # sizes, number -> constant
+    if callable(size):
+        size_values: Any = np.asarray([size(row) for row in rows], dtype=float)
     elif isinstance(size, str):
         size_values = _map_to_size_range(nodes_df[size].to_numpy(), size_norm, size_range)
     else:
@@ -574,9 +636,11 @@ def plot_lineage_tree(
             kwargs["norm"] = norm
         elif color_values is not None:
             kwargs["c"] = [color_values[i] for i in idx]
-        if size_values is None:
-            kwargs.setdefault("s", node_size)
-        elif np.isscalar(size_values):
+        if edge_is_scalar:
+            kwargs["edgecolors"] = edge_cmap(norm(edge_values[idx]))
+        elif edge_values is not None:
+            kwargs["edgecolors"] = [edge_values[i] for i in idx]
+        if np.isscalar(size_values):
             kwargs.setdefault("s", size_values)
         else:
             kwargs["s"] = size_values[idx]

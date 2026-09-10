@@ -114,11 +114,11 @@ def test_plot_lineage_tree_size_norm() -> None:
     np.testing.assert_allclose(sizes, expected)
 
 
-def test_plot_lineage_tree_time_range() -> None:
-    """Test that time_range limits the displayed nodes and edges."""
+def test_plot_lineage_tree_time_points_window() -> None:
+    """A contiguous `time_points` window (a range) limits the displayed nodes and edges."""
     graph = _dividing_graph()
 
-    ax = plot_lineage_tree(graph, time_range=(1, 2))
+    ax = plot_lineage_tree(graph, time_points=range(1, 3))
 
     lines, scatter = ax.collections
     # nodes: t=1 (tracklet 1) and t=2 (tracklets 2 and 3)
@@ -160,14 +160,6 @@ def test_plot_lineage_tree_time_points() -> None:
     np.testing.assert_array_equal(np.sort(np.unique(offsets[:, 1])), [0.0, 1.0])
     labels = [tick.get_text() for tick in ax.get_yticklabels()]
     assert labels == ["0", "3"]
-
-
-def test_plot_lineage_tree_time_points_mutually_exclusive() -> None:
-    """Test that time_range and time_points cannot be combined."""
-    graph = _dividing_graph()
-
-    with pytest.raises(ValueError, match="mutually exclusive"):
-        plot_lineage_tree(graph, time_range=(0, 2), time_points=[0, 1])
 
 
 def test_plot_lineage_tree_edge_colors() -> None:
@@ -259,7 +251,7 @@ def test_plot_lineage_tree_errors() -> None:
     graph = _dividing_graph()
 
     with pytest.raises(ValueError, match="No nodes to plot"):
-        plot_lineage_tree(graph, time_range=(10, 20))
+        plot_lineage_tree(graph, time_points=range(10, 21))
 
     with pytest.raises(ValueError, match="not found in graph"):
         plot_lineage_tree(graph, color="does_not_exist")
@@ -396,3 +388,81 @@ def test_plot_lineage_tree_callable_without_attrs_warns() -> None:
         ax = plot_lineage_tree(graph, color=lambda row: row["feature"])
 
     assert len(ax.collections[-1].get_offsets()) == graph.num_nodes()
+
+
+def test_plot_lineage_tree_color_literal() -> None:
+    """A `color` string that is not an attribute name is a literal color for every node."""
+    graph = _dividing_graph()
+
+    ax = plot_lineage_tree(graph, color="tab:blue")
+
+    scatter = ax.collections[-1]
+    assert scatter.get_array() is None
+    expected = np.tile(matplotlib.colors.to_rgba("tab:blue"), (graph.num_nodes(), 1))
+    np.testing.assert_allclose(scatter.get_facecolors(), expected)
+
+
+def test_plot_lineage_tree_edge_color_literal() -> None:
+    """A literal `edge_color` outlines every node without touching the face colors."""
+    graph = _dividing_graph()
+
+    ax = plot_lineage_tree(graph, color="feature", edge_color="red")
+
+    scatter = ax.collections[-1]
+    expected = np.tile([1.0, 0.0, 0.0, 1.0], (graph.num_nodes(), 1))
+    np.testing.assert_allclose(scatter.get_edgecolors(), expected)
+    np.testing.assert_array_equal(np.asarray(scatter.get_array()), graph.node_attrs(attr_keys=["feature"])["feature"])
+
+
+def test_plot_lineage_tree_edge_color_attribute_shares_cmap_and_norm() -> None:
+    """A numeric `edge_color` is mapped through the same colormap and normalization as `color`."""
+    graph = _dividing_graph()
+    feature = graph.node_attrs(attr_keys=["feature"])["feature"].to_numpy()
+
+    ax = plot_lineage_tree(graph, color="feature", edge_color="feature", cmap="magma")
+
+    scatter = ax.collections[-1]
+    expected = plt.get_cmap("magma")(matplotlib.colors.Normalize(0.0, 5.0)(feature))
+    np.testing.assert_allclose(scatter.get_edgecolors(), expected)
+    # colormapped face colors are only resolved when drawn
+    ax.figure.canvas.draw()
+    np.testing.assert_allclose(scatter.get_facecolors(), expected)
+
+    # the shared normalization spans the union of face and edge value ranges
+    _, ax2 = plt.subplots()
+    plot_lineage_tree(
+        graph,
+        ax=ax2,
+        color="feature",
+        edge_color=lambda row: 2.0 * row["feature"],
+        attrs=["feature"],
+    )
+    assert ax2.collections[-1].norm.vmin == 0.0
+    assert ax2.collections[-1].norm.vmax == 10.0
+
+
+def test_plot_lineage_tree_edge_color_callable_categorical() -> None:
+    """An `edge_color` callable returning literal colors is used per node, also across marker groups."""
+    graph = _dividing_graph()
+    feature = graph.node_attrs(attr_keys=["feature"])["feature"].to_numpy()
+
+    ax = plot_lineage_tree(
+        graph,
+        edge_color=lambda row: "red" if row["feature"] < 3.0 else "blue",
+        marker=lambda row: "s" if row["feature"] < 3.0 else "^",
+        attrs=["feature"],
+    )
+
+    red = np.array([1.0, 0.0, 0.0, 1.0])
+    blue = np.array([0.0, 0.0, 1.0, 1.0])
+    squares, triangles = ax.collections[1:]
+    np.testing.assert_allclose(squares.get_edgecolors(), np.tile(red, (int((feature < 3.0).sum()), 1)))
+    np.testing.assert_allclose(triangles.get_edgecolors(), np.tile(blue, (int((feature >= 3.0).sum()), 1)))
+
+
+def test_plot_lineage_tree_edge_color_invalid() -> None:
+    """An `edge_color` string that is neither an attribute nor a color is rejected."""
+    graph = _dividing_graph()
+
+    with pytest.raises(ValueError, match="not found in graph"):
+        plot_lineage_tree(graph, edge_color="does_not_exist")
